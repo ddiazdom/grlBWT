@@ -8,13 +8,6 @@ A grammar compressor for massive and repetitive datasets.
 The word LPG stands for the three key concepts underlying our technique,
 which are **L**MS-based suffix sorting, **P**airing and **G**rammar compression.  
 
-## Correction for DCC 2021 submission
-
-At the end of the results we claimed that the space overhead for LPG for random accession was between 3% and 5% of
-the compressed representation, but the actual value was between 14.4% and 19.50%. The error was generated due to we
-divided the overhead by the uncompressed size instead of the compressed size. In any case, even with that overhead we
-still beat BigRepair.  
-
 ## Why LPG?
 1. The memory footprint for compressing the input is low 
 2. Highly paralelizable
@@ -70,24 +63,6 @@ To keep the input or running with more threads please see the help (-h).
 ```
 ./lpg -d sample_file.txt.lpg
 ```
-
-## Building the BWT
-
-```
-./lpg -b sample_file.txt.lpg
-```
-
-For the moment, the command above only runs the GLex algorithm, not the full BWT algorithm. We are working to finish
-the code as soon as possible.
-
-## Testing random access to the strings
-
-```
-./lpg_read_acc_exp sample_file.txt.lpg
-```
-
-The code above will load an LPG grammar and then it will access at random the strings.
-It will measure the accession time and the space overhead on top of the compressed representation.
 
 ## Results
 
