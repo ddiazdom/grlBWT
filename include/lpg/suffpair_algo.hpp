@@ -173,18 +173,18 @@ void get_rep_suff_rules(i_file_stream<size_t>& rules, pairing_data& p_data, bv_t
     for(size_t i=0;i<uniq_nr_tmp.size();i++) uniq_nr[i] = uniq_nr_tmp[i]==1UL;
 }
 
-//insert the suffpair rules into R
+//insert the suff. pair rules into the grammar
 void update_grammar(pairing_data& p_data, gram_t& gram){
 
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
 
     compute_lms_as_sp(rules, p_data);
 
-    //repeated suff. pairs
-    bv_t rep_sr;
-    bv_t::rank_1_type rep_sr_rs;
-    get_rep_suff_rules(rules, p_data, rep_sr);
-    sdsl::util::init_support(rep_sr_rs, &rep_sr);
+    //mark which suff. pairs are unique to delete them
+    bv_t uniq_sr;
+    bv_t::rank_1_type uniq_sr_rs;
+    get_rep_suff_rules(rules, p_data, uniq_sr);
+    sdsl::util::init_support(uniq_sr_rs, &uniq_sr);
     //
 
     //collapsed rules
@@ -192,26 +192,90 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
     ivb col_rules(tr_file, std::ios::out, BUFFER_SIZE, p_data.s_width);
 
     //collapse compressed symbols
-    size_t n_av=0, tmp_sym;
+    size_t n_av=0, tmp_sym, sr_pos;
     for(size_t i=0; i < p_data.gsyms; i++){
-
-        tmp_sym = rules.read(i);
 
         if(i>p_data.sigma && p_data.r_lim[i-1]){
             p_data.r_lim[n_av-1] = true;
         }
 
+        tmp_sym = rules.read(i);
         if(tmp_sym != p_data.lim_id) {
-            col_rules.push_back(tmp_sym);
-            p_data.r_lim[n_av++] = i<p_data.sigma;
+
+            //I have to delete unique suff. nonterminals in the LMS phrases
+            //Example:
+            // suff phrase 4080
+            // LMS phrases: A -> 64 4080, B-> 65 65 4080
+            // Then we have:
+            //  A -> 64 4080, B-> 65 A
+            // Now the SP phrase 4080 has only one occurrence
+            if(tmp_sym>=p_data.tot_lms_rules &&
+               uniq_sr[tmp_sym-p_data.tot_lms_rules]){ //decompress unique suffix phrases
+
+                sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
+
+                while(true){
+                    //decompress as long as the last symbol is also unique
+                    col_rules.push_back(p_data.new_rules[sr_pos]);
+                    p_data.r_lim[n_av++] = false;
+
+                    tmp_sym = p_data.new_rules[sr_pos+1];
+                    if(tmp_sym>=p_data.tot_lms_rules &&
+                       uniq_sr[tmp_sym-p_data.tot_lms_rules]){
+                        sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
+                    }else{
+                        if(tmp_sym>=p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                        col_rules.push_back(tmp_sym);
+                        p_data.r_lim[n_av++] = true;
+                        break;
+                    }
+                }
+            }else{
+                if(tmp_sym>=tmp_sym-p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                col_rules.push_back(tmp_sym);
+                p_data.r_lim[n_av++] = i<p_data.sigma;
+            }
         }
     }
     p_data.r_lim[n_av-1]=true;
 
     //insert the symbols of the new_rules
-    for(size_t i=0;i<p_data.new_rules.size();i++){
-        col_rules.push_back(p_data.new_rules[i]);
-        p_data.r_lim[n_av++] = i & 1UL;
+    for(size_t i=0;i<p_data.new_rules.size();i+=2){
+
+        if(!uniq_sr[i>>1UL]){
+            col_rules.push_back(p_data.new_rules[i]);
+            p_data.r_lim[n_av++] = false;
+            tmp_sym = p_data.new_rules[i+1];
+
+            if(tmp_sym>=p_data.tot_lms_rules &&
+               uniq_sr[tmp_sym-p_data.tot_lms_rules]){//decompress unique suffix phrases
+
+                sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
+
+                while(true){
+                    //decompress as long as the
+                    // last symbol is also unique
+                    assert(p_data.new_rules[sr_pos]<p_data.tot_lms_rules);
+                    col_rules.push_back(p_data.new_rules[sr_pos]);
+                    p_data.r_lim[n_av++] = false;
+
+                    tmp_sym = p_data.new_rules[sr_pos+1];
+                    if(tmp_sym>=p_data.tot_lms_rules &&
+                       uniq_sr[tmp_sym-p_data.tot_lms_rules]){
+                        sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
+                    }else{
+                        if(tmp_sym>=p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                        col_rules.push_back(tmp_sym);
+                        p_data.r_lim[n_av++] = true;
+                        break;
+                    }
+                }
+            }else{
+                if(tmp_sym>=p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                col_rules.push_back(tmp_sym);
+                p_data.r_lim[n_av++] = true;
+            }
+        }
     }
 
     //put array C at the end of the new rules
@@ -225,17 +289,19 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
     col_rules.close();
     rules.close();
 
+    size_t eff_new_rules = uniq_sr.size()-uniq_sr_rs(uniq_sr.size());
+
     rename(col_rules.filename().c_str(), gram.rules_file.c_str());
     sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
 
     std::cout<<"  SuffPair stats:"<<std::endl;
     std::cout<<"    Grammar size before:         "<<gram.g - gram.sigma << std::endl;
     std::cout<<"    Grammar size after:          "<<n_av-gram.sigma<<std::endl;
-    std::cout<<"    Number of new nonterminals:  "<<p_data.new_rules.size()/2<<std::endl;
+    std::cout<<"    Number of new nonterminals:  "<<eff_new_rules<<std::endl;
     std::cout<<"    Compression ratio:           "<<double(n_av)/double(gram.g) << std::endl;
 
     gram.g = n_av;
-    gram.r += p_data.new_rules.size() / 2;
+    gram.r += eff_new_rules;
 }
 
 //change the width of R and compute the repeated symbols

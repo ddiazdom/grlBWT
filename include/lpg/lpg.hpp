@@ -257,7 +257,7 @@ public:
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
 
-        lpg_build::check_plain_grammar(g_file, input_file);
+        //lpg_build::check_plain_grammar(g_file, input_file);
 
         //plain representation of the grammar
         plain_grammar_t plain_gram;
