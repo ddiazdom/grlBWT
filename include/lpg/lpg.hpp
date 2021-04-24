@@ -46,6 +46,7 @@ private:
         std::chrono::duration<double> elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;
 
+
         std::cout<<"Suffix-pairing nonterminals"<<std::endl;
         start = std::chrono::high_resolution_clock::now();
         suffpair(g_file, config, n_threads, hbuff_size);

@@ -24,7 +24,7 @@ using pair_t = int_array<size_t>;
 using ivb = sdsl::int_vector_buffer<>;
 using ht_t =  bit_hash_table<size_t, 44>;
 using key_wrapper = lpg_build::key_wrapper;
-using gram_t = lpg_build::plain_grammar_t;
+using plain_gram_t = lpg_build::plain_grammar_t;
 
 struct pairing_data{
     size_t                    next_av_rule;
@@ -36,8 +36,8 @@ struct pairing_data{
     uint8_t                   s_width;
     uint8_t                   sigma;
 
-    std::string               pl_file;
     std::string               r_file;
+    std::string               nr_file;
     std::string               lmsg_as_sp_file;
     ivb                       new_rules;
 
@@ -49,7 +49,7 @@ struct pairing_data{
     bool                      first_run=true;
     size_t elms_frun          =0;
 
-    pairing_data(gram_t& gram_info, bv_t& rep_syms_, size_t n_treads_, size_t hbuff_size_, sdsl::cache_config& config_):
+    pairing_data(plain_gram_t& gram_info, bv_t& rep_syms_, size_t n_treads_, size_t hbuff_size_, sdsl::cache_config& config_):
             rep_sym(rep_syms_),
             config(config_){
 
@@ -62,9 +62,9 @@ struct pairing_data{
         s_width = sdsl::bits::hi(lim_id)+1;
         r_file = gram_info.rules_file;
         lmsg_as_sp_file = gram_info.lms_as_sp_file;
-        new_rules = ivb(sdsl::cache_file_name("nr_file", config), std::ios::out, BUFFER_SIZE);
+        nr_file = sdsl::cache_file_name("nr_file", config);
+        new_rules = ivb(nr_file, std::ios::out, BUFFER_SIZE);
         gsyms = gram_info.g - gram_info.c;
-        pl_file = sdsl::cache_file_name("pt_file", config);
 
         sdsl::load_from_file(r_lim, gram_info.rules_lim_file);
         sdsl::util::init_support(r_lim_rs, &r_lim);
@@ -174,7 +174,7 @@ void get_rep_suff_rules(i_file_stream<size_t>& rules, pairing_data& p_data, bv_t
 }
 
 //insert the suff. pair rules into the grammar
-void update_grammar(pairing_data& p_data, gram_t& gram){
+void update_grammar(pairing_data& p_data, plain_gram_t& gram){
 
     std::cout<<"  Updating the grammar"<<std::endl;
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
@@ -186,6 +186,9 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
     bv_t::rank_1_type uniq_sr_rs;
     get_rep_suff_rules(rules, p_data, uniq_sr);
     sdsl::util::init_support(uniq_sr_rs, &uniq_sr);
+    p_data.new_rules.close();
+    sdsl::int_vector<> new_rules;
+    sdsl::load_from_file(new_rules, p_data.nr_file);
     //
 
     std::cout<<"    Collapsing LMS rules"<<std::endl;
@@ -218,10 +221,10 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
 
                 while(true){
                     //decompress as long as the last symbol is also unique
-                    col_rules.push_back(p_data.new_rules[sr_pos]);
+                    col_rules.push_back(new_rules[sr_pos]);
                     p_data.r_lim[n_av++] = false;
 
-                    tmp_sym = p_data.new_rules[sr_pos+1];
+                    tmp_sym = new_rules[sr_pos+1];
                     if(tmp_sym>=p_data.tot_lms_rules &&
                        uniq_sr[tmp_sym-p_data.tot_lms_rules]){
                         sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
@@ -243,12 +246,12 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
 
     std::cout<<"    Collapsing new SuffPair rules"<<std::endl;
     //insert the symbols of the new_rules
-    for(size_t i=0;i<p_data.new_rules.size();i+=2){
+    for(size_t i=0;i<new_rules.size();i+=2){
 
         if(!uniq_sr[i>>1UL]){
-            col_rules.push_back(p_data.new_rules[i]);
+            col_rules.push_back(new_rules[i]);
             p_data.r_lim[n_av++] = false;
-            tmp_sym = p_data.new_rules[i+1];
+            tmp_sym = new_rules[i+1];
 
             if(tmp_sym>=p_data.tot_lms_rules &&
                uniq_sr[tmp_sym-p_data.tot_lms_rules]){//decompress unique suffix phrases
@@ -258,11 +261,11 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
                 while(true){
                     //decompress as long as the
                     // last symbol is also unique
-                    assert(p_data.new_rules[sr_pos]<p_data.tot_lms_rules);
-                    col_rules.push_back(p_data.new_rules[sr_pos]);
+                    assert(new_rules[sr_pos]<p_data.tot_lms_rules);
+                    col_rules.push_back(new_rules[sr_pos]);
                     p_data.r_lim[n_av++] = false;
 
-                    tmp_sym = p_data.new_rules[sr_pos+1];
+                    tmp_sym = new_rules[sr_pos+1];
                     if(tmp_sym>=p_data.tot_lms_rules &&
                        uniq_sr[tmp_sym-p_data.tot_lms_rules]){
                         sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
@@ -309,7 +312,7 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
 }
 
 //change the width of R and compute the repeated symbols
-void prepare_input(gram_t& gram_info, bv_t& rep_syms, sdsl::cache_config& config){
+void prepare_input(plain_gram_t& gram_info, bv_t& rep_syms, sdsl::cache_config& config){
 
     ivb r(gram_info.rules_file, std::ios::in);
 
@@ -748,7 +751,7 @@ void suffixpair_int(pairing_data& p_data) {
 void suffpair(std::string &g_file, sdsl::cache_config &config, size_t n_threads, size_t hbuff_size) {
 
     //Load the grammar information from file
-    gram_t gram_info;
+    plain_gram_t gram_info;
     gram_info.load_from_file(g_file);
 
     //prepare the grammar symbols for suffix pairing
