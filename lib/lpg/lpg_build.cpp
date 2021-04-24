@@ -148,7 +148,7 @@ sdsl::int_vector<2> lpg_build::compute_alphabet(std::string &i_file){
         }
     }
     return alphabet;
-};
+}
 
 void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
                             sdsl::cache_config &config, size_t hbuff_size, uint8_t sep_symbol) {
@@ -473,7 +473,7 @@ lpg_build::assign_ids(phrase_map_t &mp_map, static_map &tr_table, size_t &min_gs
         return key_w.compare(l, r);
     };
     auto access = [&](const size_t &val, size_t idx) -> size_t {
-        return key_w.read(val, key_w.size(val)-1);
+        return key_w.read(val, key_w.size(val)-1-idx);
     };
     parallel_str_sort(syms_file, compare, access, max_gsym-min_gsym+1, n_threads, config);
 

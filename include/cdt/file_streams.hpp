@@ -210,8 +210,8 @@ struct o_file_stream{
     }
 
     size_t read(size_t i) {
-        assert(i<=last_pos);
-        if(i<block_bg || (block_bg+(size_type)buffer.stream_size)<=i){
+        assert((size_type)i<=last_pos);
+        if((size_type)i<block_bg || (block_bg+(size_type)buffer.stream_size)<=(size_type)i){
 
             if(modified){
                 //write data

@@ -124,7 +124,7 @@ void create_new_rules(ht_t& ht, pairing_data& p_data){
 void compute_lms_as_sp(i_file_stream<size_t>& r, pairing_data& p_data){
     //mark which nonterminals have LMSg symbols as SP
     sdsl::int_vector_buffer<1> lmsg_as_sp(p_data.lmsg_as_sp_file, std::ios::out, BUFFER_SIZE);
-    long long j=0,k;
+    size_t j=0,k;
     //skip terminal symbols
     while(p_data.r_lim[j]) j++;
     size_t curr_rule=j;
@@ -163,7 +163,7 @@ void get_rep_suff_rules(i_file_stream<size_t>& rules, pairing_data& p_data, bv_t
             uniq_nr_tmp[p_data.new_rules[i] - p_data.tot_lms_rules]++;
         }
     }
-    for (long long i = 0; i < rules.size(); i++) {
+    for (size_t i = 0; i < rules.size(); i++) {
         if (rules.read(i) == p_data.lim_id) continue;
         if (rules.read(i) >= p_data.tot_lms_rules &&
             uniq_nr_tmp[rules.read(i) - p_data.tot_lms_rules] < 2) {
@@ -176,10 +176,11 @@ void get_rep_suff_rules(i_file_stream<size_t>& rules, pairing_data& p_data, bv_t
 //insert the suff. pair rules into the grammar
 void update_grammar(pairing_data& p_data, gram_t& gram){
 
+    std::cout<<"  Updating the grammar"<<std::endl;
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
-
     compute_lms_as_sp(rules, p_data);
 
+    std::cout<<"    Computing unique SuffPair"<<std::endl;
     //mark which suff. pairs are unique to delete them
     bv_t uniq_sr;
     bv_t::rank_1_type uniq_sr_rs;
@@ -187,6 +188,7 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
     sdsl::util::init_support(uniq_sr_rs, &uniq_sr);
     //
 
+    std::cout<<"    Collapsing LMS rules"<<std::endl;
     //collapsed rules
     std::string tr_file = sdsl::cache_file_name("col_rules", p_data.config);
     ivb col_rules(tr_file, std::ios::out, BUFFER_SIZE, p_data.s_width);
@@ -239,6 +241,7 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
     }
     p_data.r_lim[n_av-1]=true;
 
+    std::cout<<"    Collapsing new SuffPair rules"<<std::endl;
     //insert the symbols of the new_rules
     for(size_t i=0;i<p_data.new_rules.size();i+=2){
 
@@ -278,6 +281,7 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
         }
     }
 
+    std::cout<<"    Inserting the compressed string"<<std::endl;
     //put array C at the end of the new rules
     for(size_t i=p_data.gsyms; i < rules.size(); i++){
         col_rules.push_back(rules.read(i));
