@@ -209,7 +209,7 @@ struct o_file_stream{
         return file;
     }
 
-    size_t read(size_type i) {
+    size_t read(size_t i) {
         assert(i<=last_pos);
         if(i<block_bg || (block_bg+(size_type)buffer.stream_size)<=i){
 

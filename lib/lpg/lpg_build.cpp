@@ -9,15 +9,16 @@
 
 pthread_mutex_t thread_mutex=PTHREAD_MUTEX_INITIALIZER;
 
-void lpg_build::check_grammar(std::string& g_file, std::string& uncom_seq) {
+void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_file) {
 
-    plain_grammar_t r_data;
-    r_data.load_from_file(g_file);
+    plain_grammar_t p_gram;
+    p_gram.load_from_file(g_file);
 
     sdsl::int_vector<> r;
+
     bv_t r_lim;
-    sdsl::load_from_file(r, r_data.rules_file);
-    sdsl::load_from_file(r_lim, r_data.rules_lim_file);
+    sdsl::load_from_file(r, p_gram.rules_file);
+    sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
     bv_t::select_1_type r_lim_ss;
     sdsl::util::init_support(r_lim_ss, &r_lim);
 
@@ -25,14 +26,14 @@ void lpg_build::check_grammar(std::string& g_file, std::string& uncom_seq) {
 
     std::vector<size_t> tmp_decomp;
 
-    i_file_stream<uint8_t> if_stream(uncom_seq, BUFFER_SIZE);
+    i_file_stream<uint8_t> if_stream(uncomp_file, BUFFER_SIZE);
     uint8_t buff_symbol;
 
     size_t pos=0, curr_sym, start, end;
     std::stack<size_t> stack;
 
-    size_t f = r_lim_ss(r_data.r - 1) + 1;
-    size_t l = r_lim_ss(r_data.r);
+    size_t f = r_lim_ss(p_gram.r - 1) + 1;
+    size_t l = r_lim_ss(p_gram.r);
 
     for(size_t i=f; i <= l; i++){
 
@@ -74,7 +75,7 @@ void lpg_build::check_grammar(std::string& g_file, std::string& uncom_seq) {
             buff_symbol = if_stream.read(pos++);
             //std::cout<<r_data.symbols_map.size()<<std::endl;
             //std::cout<<tmp_sym<<" "<<(int)r_data.symbols_map[tmp_sym]<<" "<<(int)buff_symbol<<std::endl;
-            assert(r_data.symbols_map[tmp_sym] == buff_symbol);
+            assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
         }
     }
 
@@ -238,7 +239,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
 
     /*
     //std::cout<<"Checking the grammar";
-    //check_grammar(r_data, i_file);*/
+    //check_plain_grammar(r_data, i_file);*/
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -953,7 +954,7 @@ void lpg_build::collapse_grammar(plain_grammar_t &r_data, size_t &n_iter, sdsl::
 
     //TODO : checking the grammar
     //sdsl::util::assign(r_lim_ss, &r_lim);
-    //check_grammar(r, r_lim_ss, r_data, "../tests/plain_reads.txt");
+    //check_plain_grammar(r, r_lim_ss, r_data, "../tests/plain_reads.txt");
     //
     //sdsl::store_to_file(r, r_data.rules_file);
 

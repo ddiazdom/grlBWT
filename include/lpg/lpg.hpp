@@ -244,11 +244,11 @@ public:
         //build the uncompressed version of the grammar
         std::ifstream is (input_file, std::ifstream::binary);
         is.seekg (0, std::ifstream::end);
-        size_t n_chars = is.tellg();
+        auto n_chars = is.tellg();
         is.close();
 
         //maximum amount of RAM allowed to spend in parallel for the hashing step
-        auto hbuff_size = size_t(std::ceil(n_chars*hbuff_frac));
+        auto hbuff_size = size_t(std::ceil(float(n_chars)*hbuff_frac));
 
         std::cout<<"Input file contains "<<n_chars<<" symbols"<<std::endl;
 
@@ -256,6 +256,8 @@ public:
         build_grammar(input_file, g_file, sep_symbol, config, n_threads, hbuff_size);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
+
+        lpg_build::check_plain_grammar(g_file, input_file);
 
         //plain representation of the grammar
         plain_grammar_t plain_gram;

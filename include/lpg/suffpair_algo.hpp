@@ -31,9 +31,10 @@ struct pairing_data{
     size_t                    lim_id;
     size_t                    n_threads;
     size_t                    hbuff_size;
-    size_t                    tot_rules;
+    size_t                    tot_lms_rules;
     size_t                    gsyms;
     uint8_t                   s_width;
+    uint8_t                   sigma;
 
     std::string               pl_file;
     std::string               r_file;
@@ -52,10 +53,11 @@ struct pairing_data{
             rep_sym(rep_syms_),
             config(config_){
 
+        sigma = gram_info.sigma;
         hbuff_size = hbuff_size_;
         n_threads = n_treads_;
-        next_av_rule = gram_info.r - 1;
-        tot_rules = gram_info.r - 1;
+        next_av_rule = gram_info.r - 1; //I subtract one as the last rule is the compressed string
+        tot_lms_rules = gram_info.r - 1; // the same
         lim_id = 2*gram_info.g - gram_info.r;
         s_width = sdsl::bits::hi(lim_id)+1;
         r_file = gram_info.rules_file;
@@ -106,7 +108,6 @@ struct thread_data{
 void create_new_rules(ht_t& ht, pairing_data& p_data){
     key_wrapper key_w{p_data.s_width, ht.description_bits(), ht.get_data()};
     ht_t::val_type val=0;
-    //size_t p=0;
     for(auto elm : ht){
         ht.get_value_from(elm, val);
 
@@ -120,34 +121,26 @@ void create_new_rules(ht_t& ht, pairing_data& p_data){
     }
 }
 
-//insert the suffpair rules into R
-void update_grammar(pairing_data& p_data, gram_t& gram){
-
-    size_t new_syms = p_data.new_rules.size();
-    o_file_stream<size_t> r(p_data.r_file, BUFFER_SIZE, std::ios::in | std::ios::out);
-
+void compute_lms_as_sp(i_file_stream<size_t>& r, pairing_data& p_data){
     //mark which nonterminals have LMSg symbols as SP
     sdsl::int_vector_buffer<1> lmsg_as_sp(p_data.lmsg_as_sp_file, std::ios::out, BUFFER_SIZE);
-    size_t j=0,k, curr_rule;
-
+    long long j=0,k;
     //skip terminal symbols
     while(p_data.r_lim[j]) j++;
-    curr_rule=j;
-
+    size_t curr_rule=j;
     while(j<p_data.gsyms){
         while(!p_data.r_lim[j])j++;
         k=j;
         while(r.read(k)==p_data.lim_id) k--;
-        if(k<j && r.read(k)<p_data.tot_rules){
+        if(k<j && r.read(k)<p_data.tot_lms_rules){
             lmsg_as_sp[curr_rule] = true;
         }
         curr_rule++;
         j++;
     }
-
     curr_rule+=(p_data.elms_frun/2);
     for(size_t i=p_data.elms_frun+1;i<p_data.new_rules.size();i+=2){
-        if(p_data.new_rules[i]<p_data.tot_rules){
+        if(p_data.new_rules[i]<p_data.tot_lms_rules){
             lmsg_as_sp[curr_rule] = true;
         }else{
             lmsg_as_sp[curr_rule] = false;
@@ -156,75 +149,99 @@ void update_grammar(pairing_data& p_data, gram_t& gram){
     }
     lmsg_as_sp[curr_rule] = false; //we are not considering the compressed string!!
     //
+}
 
-    //put array C at the end of the new rules
-    for(size_t i=p_data.gsyms; i < r.size(); i++){
-        p_data.new_rules.push_back(r.read(i));
+void get_rep_suff_rules(i_file_stream<size_t>& rules, pairing_data& p_data, bv_t& uniq_nr){
+    //mark the new suff. phrases with one occurrence
+    sdsl::int_vector<2> uniq_nr_tmp(p_data.new_rules.size() / 2, 0);
+    uniq_nr.resize(p_data.new_rules.size()/2);
+
+    for (size_t i = 0; i < p_data.new_rules.size(); i++) {
+        if (i & 1UL &&
+            p_data.new_rules[i] >= p_data.tot_lms_rules &&
+            uniq_nr_tmp[p_data.new_rules[i] - p_data.tot_lms_rules] < 2) {
+            uniq_nr_tmp[p_data.new_rules[i] - p_data.tot_lms_rules]++;
+        }
     }
-
-    std::string tr_file = sdsl::cache_file_name("tmp_r", p_data.config);
-    ivb tmp_r(tr_file, std::ios::out, BUFFER_SIZE, p_data.s_width);
-
-    //collapse symbols
-    //find the next available position
-    size_t n_av=0;
-    while(n_av< p_data.gsyms && r.read(n_av) != p_data.lim_id){
-        tmp_r.push_back(r.read(n_av));
-        n_av++;
+    for (long long i = 0; i < rules.size(); i++) {
+        if (rules.read(i) == p_data.lim_id) continue;
+        if (rules.read(i) >= p_data.tot_lms_rules &&
+            uniq_nr_tmp[rules.read(i) - p_data.tot_lms_rules] < 2) {
+            uniq_nr_tmp[rules.read(i) - p_data.tot_lms_rules]++;
+        }
     }
+    for(size_t i=0;i<uniq_nr_tmp.size();i++) uniq_nr[i] = uniq_nr_tmp[i]==1UL;
+}
 
-    for(size_t i=n_av; i < p_data.gsyms; i++){
-        if(p_data.r_lim[i]==0 && p_data.r_lim[i-1]!=0){
+//insert the suffpair rules into R
+void update_grammar(pairing_data& p_data, gram_t& gram){
+
+    i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
+
+    compute_lms_as_sp(rules, p_data);
+
+    //repeated suff. pairs
+    bv_t rep_sr;
+    bv_t::rank_1_type rep_sr_rs;
+    get_rep_suff_rules(rules, p_data, rep_sr);
+    sdsl::util::init_support(rep_sr_rs, &rep_sr);
+    //
+
+    //collapsed rules
+    std::string tr_file = sdsl::cache_file_name("col_rules", p_data.config);
+    ivb col_rules(tr_file, std::ios::out, BUFFER_SIZE, p_data.s_width);
+
+    //collapse compressed symbols
+    size_t n_av=0, tmp_sym;
+    for(size_t i=0; i < p_data.gsyms; i++){
+
+        tmp_sym = rules.read(i);
+
+        if(i>p_data.sigma && p_data.r_lim[i-1]){
             p_data.r_lim[n_av-1] = true;
         }
 
-        if(r.read(i) != p_data.lim_id) {
-            tmp_r.push_back(r.read(i));
-            p_data.r_lim[n_av] = false;
-            n_av++;
+        if(tmp_sym != p_data.lim_id) {
+            col_rules.push_back(tmp_sym);
+            p_data.r_lim[n_av++] = i<p_data.sigma;
         }
     }
     p_data.r_lim[n_av-1]=true;
 
-    //insert the symbols of new_rules
+    //insert the symbols of the new_rules
     for(size_t i=0;i<p_data.new_rules.size();i++){
-        tmp_r.push_back(p_data.new_rules[i]);
-        if(i<new_syms){
-            p_data.r_lim[n_av] = i % 2;
-        }else{
-            p_data.r_lim[n_av] = false;
-        }
-        n_av++;
+        col_rules.push_back(p_data.new_rules[i]);
+        p_data.r_lim[n_av++] = i & 1UL;
+    }
+
+    //put array C at the end of the new rules
+    for(size_t i=p_data.gsyms; i < rules.size(); i++){
+        col_rules.push_back(rules.read(i));
+        p_data.r_lim[n_av++] = false;
     }
     p_data.r_lim[n_av-1] = true;
     p_data.r_lim.resize(n_av);
-    tmp_r.close();
-    r.close();
 
-    rename(tmp_r.filename().c_str(), gram.rules_file.c_str());
+    col_rules.close();
+    rules.close();
+
+    rename(col_rules.filename().c_str(), gram.rules_file.c_str());
     sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
 
     std::cout<<"  SuffPair stats:"<<std::endl;
-    std::cout << "    Grammar size before:         " << gram.g - gram.sigma << std::endl;
+    std::cout<<"    Grammar size before:         "<<gram.g - gram.sigma << std::endl;
     std::cout<<"    Grammar size after:          "<<n_av-gram.sigma<<std::endl;
-    std::cout<<"    Number of new nonterminals:  "<<new_syms/2<<std::endl;
-    std::cout << "    Compression ratio:           " <<double(n_av)/gram.g << std::endl;
+    std::cout<<"    Number of new nonterminals:  "<<p_data.new_rules.size()/2<<std::endl;
+    std::cout<<"    Compression ratio:           "<<double(n_av)/double(gram.g) << std::endl;
 
     gram.g = n_av;
-    gram.r += new_syms / 2;
-
-    /*sdsl::int_vector<> tmp;
-    sdsl::load_from_file(tmp, gram.rules_file);
-    bv_t::select_1_type r_lim_ss;
-    sdsl::util::init_support(r_lim_ss, &r_lim);
-    lpg_build::check_grammar(tmp, r_lim_ss, gram, "../tests/plain_reads.txt");*/
+    gram.r += p_data.new_rules.size() / 2;
 }
 
 //change the width of R and compute the repeated symbols
 void prepare_input(gram_t& gram_info, bv_t& rep_syms, sdsl::cache_config& config){
 
     ivb r(gram_info.rules_file, std::ios::in);
-
 
     std::string tmp_string = sdsl::cache_file_name("tmp_rules", config);
     o_file_stream<size_t> tmp_r(tmp_string,  BUFFER_SIZE, std::ios::out);
@@ -233,50 +250,6 @@ void prepare_input(gram_t& gram_info, bv_t& rep_syms, sdsl::cache_config& config
         tmp_r.push_back(sym);
         if(tmp_rep[sym]<2) tmp_rep[sym]++;
     }
-
-    //TODO testing
-    /*sdsl::bit_vector lims;
-    sdsl::load_from_file(lims, gram_info.rules_lim_file);
-    sdsl::bit_vector::select_1_type lim_ss(&lims);
-    size_t head = r[0], s=1, red=0;
-    bit_hash_table<size_t, 44> ht;
-    int_array<size_t> phrase(2, 32);
-    for(size_t j=1;j<r.size();j++){
-        if(r[j]!=head){
-            if(s>1){
-                phrase.write(0, head);
-                phrase.write(1, s);
-                auto res = ht.insert(phrase.data(), phrase.n_bits(), 1);
-                if(!res.second){//the pair already exists
-                    size_t val = res.first.value()+1;
-                    ht.insert_value_at(*res.first, val);
-                }
-                red+=s;
-            }
-            head = r[j];
-            s=0;
-        }
-        s++;
-    }
-    std::cout<<ht.size()<<" new rules "<<std::endl;
-    std::cout<<"aprox red space: "<<100*(double(red)/r.size())<<"% "<<std::endl;
-    size_t to_be_removed=0;
-    for(size_t j=gram_info.sigma;j<gram_info.r;j++){
-        size_t b = lim_ss(j)+1;
-        size_t e = lim_ss(j+1);
-        bool to_remove=true;
-        for(size_t k=b;k<=e;k++){
-            if(tmp_rep[r[k]]==2){
-                to_remove=false;
-                break;
-            }
-        }
-        if(to_remove){
-            to_be_removed++;
-        }
-    }
-    std::cout<<gram_info.r<<" "<<to_be_removed<<" "<<(100*double(to_be_removed)/gram_info.r)<<std::endl;*/
-    //
 
     r.close(true);
     tmp_r.close();
@@ -604,7 +577,7 @@ void suffixpair_int(pairing_data& p_data) {
 
     std::vector<thread_data> threads_data;
     std::vector<pthread_t> threads(p_data.n_threads);
-    size_t rules_per_thread = INT_CEIL(p_data.tot_rules, p_data.n_threads);
+    size_t rules_per_thread = INT_CEIL(p_data.tot_lms_rules, p_data.n_threads);
     size_t pos=0, tmp=0, tmp_rules, start, end;
     ht_t ht;
     rem_threads = p_data.n_threads;
@@ -617,7 +590,7 @@ void suffixpair_int(pairing_data& p_data) {
 
     for(size_t i=0;i<p_data.n_threads;i++) {
         start = pos;
-        tmp_rules = std::min<size_t>(((i + 1) * rules_per_thread), p_data.tot_rules);
+        tmp_rules = std::min<size_t>(((i + 1) * rules_per_thread), p_data.tot_lms_rules);
         while(tmp<tmp_rules){
             if(p_data.r_lim[pos++]){
                 tmp++;

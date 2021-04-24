@@ -109,7 +109,7 @@ public:
      * @param g_file : file with the plain grammar
      * @param uncomp_file : original input text
      */
-    static void check_grammar(std::string& g_file, std::string& uncomp_file);
+    static void check_plain_grammar(std::string& g_file, std::string& uncomp_file);
 private:
 
     struct static_map{
