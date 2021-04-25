@@ -45,7 +45,6 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
             curr_sym = stack.top() ;
             stack.pop();
 
-            //std::cout<<curr_sym<<" - ";
             if(curr_sym==0){
                 start = 0;
             }else{
@@ -55,7 +54,6 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
             end = r_lim_ss(curr_sym+1);
 
             if(r[start] == curr_sym){
-                //std::cout<<curr_sym<<std::endl;
                 assert((end-start+1)==1);
                 tmp_decomp.push_back(curr_sym);
             }else{
@@ -63,11 +61,6 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
                 for(size_t j=end+1; j-->start;){
                     stack.push(r[j]);
                 }
-                /*std::cout<<start<<"-"<<end<<" = ";
-                for(size_t j=start;j<=end;j++){
-                    std::cout<<r[j]<<" ";
-                }
-                std::cout<<" "<<std::endl;*/
             }
         }
 
@@ -78,54 +71,6 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
             assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
         }
     }
-
-    /*bool greater=false;
-    std::h_vec<uint32_t > prev_seq;
-    for(auto const& sym : top_rules){
-        if(sym!=1) {
-            tmp_decomp.clear();
-            prev_dc_step.clear();
-            decomp=false;
-
-            for (auto const &smaller_sym : rules[sym]) {
-                prev_dc_step.push_back(smaller_sym);
-            }
-
-            while(!decomp){
-                decomp = true;
-                for(auto const& tmp_sym : prev_dc_step){
-                    if(tmp_sym>=6){
-                        for(auto const& smaller_sym : rules[tmp_sym]){
-                            if(smaller_sym>=6) decomp = false;
-                            tmp_decomp.push_back(smaller_sym);
-                        }
-                    }else{
-                        tmp_decomp.push_back(tmp_sym);
-                    }
-                }
-
-                if(!decomp){
-                    std::swap(tmp_decomp, prev_dc_step);
-                    tmp_decomp.clear();
-                }
-            }
-
-            greater = false;
-            if(!prev_seq.empty()){
-                bool is_prefix=false;
-                for(size_t i=0;i<std::min(tmp_decomp.size(), prev_seq.size());i++){
-                    if(tmp_decomp[i]!=prev_seq[i]){
-                        is_prefix=true;
-                        greater = tmp_decomp[i]>prev_seq[i];
-                        break;
-                    }
-                }
-                if(!is_prefix) greater = true;
-                assert(greater);
-            }
-            std::swap(tmp_decomp, prev_seq);
-        }
-    }*/
     std::cout<<"\tGrammar is correct!!"<<std::endl;
 }
 
@@ -142,7 +87,6 @@ sdsl::int_vector<2> lpg_build::compute_alphabet(std::string &i_file){
 
     for(size_t i=0;i<if_stream.tot_cells;i++){
         tmp_symbol = if_stream.read(i);
-        //READ_SYMBOL(if_stream, i, tmp_symbol);
         if(alphabet[tmp_symbol]<2){
             alphabet[tmp_symbol]++;
         }
@@ -151,28 +95,29 @@ sdsl::int_vector<2> lpg_build::compute_alphabet(std::string &i_file){
 }
 
 void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
-                            sdsl::cache_config &config, size_t hbuff_size, uint8_t sep_symbol) {
-
-    std::cout<<"Computing the alphabet"<<std::endl;
-    auto symbol_desc = compute_alphabet(i_file);
+                            sdsl::cache_config &config, size_t hbuff_size,
+                            alpha_t& alphabet) {
 
     std::string rules_file = sdsl::cache_file_name("rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
     std::string lmsg_as_sp_file = sdsl::cache_file_name("lmsg_as_sp", config);
 
     plain_grammar_t p_gram(rules_file, rules_len_file, lmsg_as_sp_file);
+    p_gram.sigma = alphabet.size();
 
-    size_t max_symbol=0, min_symbol=0;
-    for(size_t i=0;i<symbol_desc.size();i++){
-        if(symbol_desc[i]!=0){
-            p_gram.symbols_map.push_back(i);
-            p_gram.sigma++;
-            max_symbol = i;
-            symbol_desc[i]--;
-        }
+    // given an index i in symbol_desc
+    //0 symbol i is in alphabet is unique
+    //1 symbol i is repeated
+    //>2 symbol i is sep symbol
+    sdsl::int_vector<2> symbol_desc(alphabet.back().first+1,0);
+
+    size_t max_symbol=alphabet.back().first, min_symbol=0;
+    for(auto & sym : alphabet){
+        p_gram.symbols_map.push_back(sym.first);
+        symbol_desc[sym.first] = sym.second > 1;
     }
     p_gram.r = max_symbol + 1;
-    symbol_desc[sep_symbol]+=2;
+    symbol_desc[alphabet[0].first]+=2;
 
     ivb_t rules(p_gram.rules_file, std::ios::out, BUFFER_SIZE);
     bvb_t rules_lim(p_gram.rules_lim_file, std::ios::out);
@@ -283,7 +228,6 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
                                   mp_table, tr_table,
                                   range.first, range.second,
                                   loop_alph, hb_bytes, tmp_addr + (k*hb_bytes), phrase_desc);
-        //std::cout<<uintptr_t(tmp_addr)<<" "<<k*hb_bytes<<" "<<"-"<<((k+1)*hb_bytes)-1<<" "<<hbuff_size<<std::endl;
         k++;
     }
 
@@ -447,18 +391,6 @@ lpg_build::assign_ids(phrase_map_t &mp_map, static_map &tr_table, size_t &min_gs
 
     //some aliases to make the code more readable
     size_t &n_rules = r_data.r;
-
-    //sort phrases
-    /*std::vector<size_t> k_list; //list of keys (hash_table_offset, key bits)
-    k_list.reserve(mp_map.size());
-
-    for (auto const &phrase : mp_map) {
-        k_list.emplace_back(phrase);
-    }
-    std::sort(k_list.begin(), k_list.end(),
-              [key_w](auto &left, auto &right) {
-        return key_w.compare(left, right);
-    });*/
 
     //TODO this is new
     std::string syms_file = sdsl::cache_file_name("syms_file", config);
@@ -951,13 +883,6 @@ void lpg_build::collapse_grammar(plain_grammar_t &r_data, size_t &n_iter, sdsl::
         std::cout<<"Aborting"<<std::endl;
         exit(1);
     }
-
-    //TODO : checking the grammar
-    //sdsl::util::assign(r_lim_ss, &r_lim);
-    //check_plain_grammar(r, r_lim_ss, r_data, "../tests/plain_reads.txt");
-    //
-    //sdsl::store_to_file(r, r_data.rules_file);
-
     sdsl::store_to_file(r_lim, r_data.rules_lim_file);
 }
 

@@ -121,34 +121,48 @@ void create_new_rules(ht_t& ht, pairing_data& p_data){
     }
 }
 
-void compute_lms_as_sp(i_file_stream<size_t>& r, pairing_data& p_data){
-    //mark which nonterminals have LMSg symbols as SP
-    sdsl::int_vector_buffer<1> lmsg_as_sp(p_data.lmsg_as_sp_file, std::ios::out, BUFFER_SIZE);
-    size_t j=0,k;
-    //skip terminal symbols
-    while(p_data.r_lim[j]) j++;
-    size_t curr_rule=j;
-    while(j<p_data.gsyms){
-        while(!p_data.r_lim[j])j++;
-        k=j;
-        while(r.read(k)==p_data.lim_id) k--;
-        if(k<j && r.read(k)<p_data.tot_lms_rules){
-            lmsg_as_sp[curr_rule] = true;
+void compute_lms_as_sp(ivb& rules,
+                       pairing_data& p_data,
+                       std::string& r_lim_file,
+                       size_t lpg_syms){
+    bv_t new_r_lim;
+    sdsl::load_from_file(new_r_lim, r_lim_file);
+    bv_t::select_1_type new_r_lim_ss(&new_r_lim);
+
+    bv_t lms_as_sp;
+    sdsl::load_from_file(lms_as_sp, p_data.lmsg_as_sp_file);
+
+    bv_t tmp_bv(lms_as_sp.size(), false);
+
+    size_t l1,l2, i=p_data.sigma, j=p_data.sigma, curr_rule=p_data.sigma;
+
+    while(i<lpg_syms){
+        l1=1; l2=1;
+        while(!new_r_lim[i++]) l1++;
+        while(!p_data.r_lim[j++]) l2++;
+        if(l1!=l2){//check if the rule was compressed
+            size_t tmp_sym = rules[i-1];
+            if(tmp_sym>=p_data.tot_lms_rules){
+                size_t parent=tmp_sym, start, end, len;
+                while(l1<l2){
+                    start = new_r_lim_ss(tmp_sym)+1;
+                    end = new_r_lim_ss(tmp_sym+1);
+                    len = end-start+1;
+                    l1 = l1-1 + len;
+
+                    if(tmp_sym<p_data.tot_lms_rules && l1<l2){
+                        tmp_bv[parent] = true;
+                    }
+                    parent = tmp_sym;
+                    tmp_sym = rules[end];
+                }
+            }else{
+                tmp_bv[curr_rule] = true;
+            }
         }
         curr_rule++;
-        j++;
     }
-    curr_rule+=(p_data.elms_frun/2);
-    for(size_t i=p_data.elms_frun+1;i<p_data.new_rules.size();i+=2){
-        if(p_data.new_rules[i]<p_data.tot_lms_rules){
-            lmsg_as_sp[curr_rule] = true;
-        }else{
-            lmsg_as_sp[curr_rule] = false;
-        }
-        curr_rule++;
-    }
-    lmsg_as_sp[curr_rule] = false; //we are not considering the compressed string!!
-    //
+    sdsl::store_to_file(tmp_bv, p_data.lmsg_as_sp_file);
 }
 
 void get_rep_suff_rules(i_file_stream<size_t>& rules, pairing_data& p_data, bv_t& uniq_nr){
@@ -178,10 +192,15 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
 
     std::cout<<"  Updating the grammar"<<std::endl;
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
-    compute_lms_as_sp(rules, p_data);
+
+    sdsl::int_vector_buffer<1> r_lim(gram.rules_lim_file, std::ios::out);
+
+    //TODO this is useful for building the ext. BWT,
+    //compute_lms_as_sp(rules, p_data);
+
+    bv_t lmsg_as_sp(p_data.tot_lms_rules+(p_data.new_rules.size()/2), 0);
 
     std::cout<<"    Computing unique SuffPair"<<std::endl;
-    //mark which suff. pairs are unique to delete them
     bv_t uniq_sr;
     bv_t::rank_1_type uniq_sr_rs;
     get_rep_suff_rules(rules, p_data, uniq_sr);
@@ -197,14 +216,25 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
     ivb col_rules(tr_file, std::ios::out, BUFFER_SIZE, p_data.s_width);
 
     //collapse compressed symbols
-    size_t n_av=0, tmp_sym, sr_pos;
+    size_t n_av=0, tmp_sym, sr_pos, prev_sym, curr_nt=p_data.sigma;
     for(size_t i=0; i < p_data.gsyms; i++){
 
         if(i>p_data.sigma && p_data.r_lim[i-1]){
-            p_data.r_lim[n_av-1] = true;
+            r_lim[n_av-1] = true;
+
+            //TODO only useful for building the BWT
+            if(prev_sym==p_data.lim_id &&
+               col_rules[col_rules.size()-1]<p_data.tot_lms_rules){
+                //std::cout<<curr_nt<<" "<<lmsg_as_sp[curr_nt]<<std::endl;
+                lmsg_as_sp[curr_nt] = true;
+            }
+            curr_nt++;
+            //
         }
 
         tmp_sym = rules.read(i);
+        prev_sym = tmp_sym;
+
         if(tmp_sym != p_data.lim_id) {
 
             //I have to delete unique suff. nonterminals in the LMS phrases
@@ -222,85 +252,126 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
                 while(true){
                     //decompress as long as the last symbol is also unique
                     col_rules.push_back(new_rules[sr_pos]);
-                    p_data.r_lim[n_av++] = false;
+                    r_lim[n_av++] = false;
 
                     tmp_sym = new_rules[sr_pos+1];
                     if(tmp_sym>=p_data.tot_lms_rules &&
                        uniq_sr[tmp_sym-p_data.tot_lms_rules]){
                         sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
                     }else{
-                        if(tmp_sym>=p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                        if(tmp_sym>=p_data.tot_lms_rules){
+                            //update symbol if tmp_sym is a suff. nonterminal
+                            tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                        }
                         col_rules.push_back(tmp_sym);
-                        p_data.r_lim[n_av++] = true;
+                        r_lim[n_av++] = true;
                         break;
                     }
                 }
             }else{
-                if(tmp_sym>=tmp_sym-p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                if(tmp_sym>=p_data.tot_lms_rules){
+                    tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                }
                 col_rules.push_back(tmp_sym);
-                p_data.r_lim[n_av++] = i<p_data.sigma;
+                r_lim[n_av++] = i<p_data.sigma;
             }
         }
     }
-    p_data.r_lim[n_av-1]=true;
+    r_lim[n_av-1]=true;
+
+    //TODO only useful for building the BWT
+    size_t lmsg_syms = n_av;
+    if(prev_sym==p_data.lim_id &&
+       col_rules[col_rules.size()-1]<p_data.tot_lms_rules){
+        lmsg_as_sp[curr_nt] = true;
+    }
+    curr_nt++;
+    //
 
     std::cout<<"    Collapsing new SuffPair rules"<<std::endl;
+
+    //TODO only useful for building the ext. BWT
+    size_t frun_sp = (p_data.elms_frun/2)-uniq_sr_rs(p_data.elms_frun/2);
+    size_t suff_idx=0, parent_idx;
+    //
+
     //insert the symbols of the new_rules
     for(size_t i=0;i<new_rules.size();i+=2){
 
         if(!uniq_sr[i>>1UL]){
+
             col_rules.push_back(new_rules[i]);
-            p_data.r_lim[n_av++] = false;
+            r_lim[n_av++] = false;
             tmp_sym = new_rules[i+1];
 
             if(tmp_sym>=p_data.tot_lms_rules &&
                uniq_sr[tmp_sym-p_data.tot_lms_rules]){//decompress unique suffix phrases
 
-                sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
+                parent_idx = tmp_sym-p_data.tot_lms_rules;
+                sr_pos = 2*(parent_idx);
 
                 while(true){
                     //decompress as long as the
                     // last symbol is also unique
                     assert(new_rules[sr_pos]<p_data.tot_lms_rules);
                     col_rules.push_back(new_rules[sr_pos]);
-                    p_data.r_lim[n_av++] = false;
+                    r_lim[n_av++] = false;
 
                     tmp_sym = new_rules[sr_pos+1];
+
                     if(tmp_sym>=p_data.tot_lms_rules &&
                        uniq_sr[tmp_sym-p_data.tot_lms_rules]){
-                        sr_pos = 2*(tmp_sym-p_data.tot_lms_rules);
+                        parent_idx = tmp_sym-p_data.tot_lms_rules;
+                        sr_pos = 2*(parent_idx);
                     }else{
-                        if(tmp_sym>=p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                        if(tmp_sym>=p_data.tot_lms_rules){
+                            tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                        }else if(parent_idx>=(p_data.elms_frun/2)){//TODO only useful for computing the ext. BWT
+                            //std::cout<<lmsg_as_sp[curr_nt+parent_idx]<<" "<<tmp_sym<<std::endl;
+                            lmsg_as_sp[curr_nt+suff_idx] = true;
+                        }
                         col_rules.push_back(tmp_sym);
-                        p_data.r_lim[n_av++] = true;
+                        r_lim[n_av++] = true;
                         break;
                     }
                 }
             }else{
-                if(tmp_sym>=p_data.tot_lms_rules) tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                if(tmp_sym>=p_data.tot_lms_rules){
+                    tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
+                }else if(suff_idx>=frun_sp){//TODO only useful for computing the ext. BWT
+                    //std::cout<<lmsg_as_sp[curr_nt+(i/2)]<<" "<<tmp_sym<<" "<<suff_idx<<" "<<frun_sp<<" "<<p_data.tot_lms_rules<<std::endl;
+                    lmsg_as_sp[curr_nt+suff_idx] = true;
+                }
                 col_rules.push_back(tmp_sym);
-                p_data.r_lim[n_av++] = true;
+                r_lim[n_av++] = true;
             }
+            suff_idx++;
         }
     }
+
+    //TODO only useful for compute the ext. BWT
+    lmsg_as_sp[curr_nt+suff_idx] = true;
+    lmsg_as_sp.resize(curr_nt+suff_idx+1);
+    sdsl::store_to_file(lmsg_as_sp, p_data.lmsg_as_sp_file);
+    //
+
 
     std::cout<<"    Inserting the compressed string"<<std::endl;
     //put array C at the end of the new rules
     for(size_t i=p_data.gsyms; i < rules.size(); i++){
         col_rules.push_back(rules.read(i));
-        p_data.r_lim[n_av++] = false;
+        r_lim[n_av++] = false;
     }
-    p_data.r_lim[n_av-1] = true;
-    p_data.r_lim.resize(n_av);
+    r_lim[n_av-1] = true;
 
+    r_lim.close();
+    compute_lms_as_sp(col_rules, p_data, gram.rules_lim_file, lmsg_syms);
     col_rules.close();
     rules.close();
+    rename(col_rules.filename().c_str(), gram.rules_file.c_str());
+
 
     size_t eff_new_rules = uniq_sr.size()-uniq_sr_rs(uniq_sr.size());
-
-    rename(col_rules.filename().c_str(), gram.rules_file.c_str());
-    sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
-
     std::cout<<"  SuffPair stats:"<<std::endl;
     std::cout<<"    Grammar size before:         "<<gram.g - gram.sigma << std::endl;
     std::cout<<"    Grammar size after:          "<<n_av-gram.sigma<<std::endl;
@@ -348,6 +419,7 @@ void collect_pairs(thread_data* d, i_file_stream<size_t>& p_list, o_file_stream<
 
         tmp_pair.write(0, r.read(pos));
         tmp_pair.write(1, r.read(pos+1));
+
 
         //check if the pair covers an entire rule
         id = d->p_data.r_lim[pos-1]? (d->p_data.r_lim_rs(pos)<<1UL) : 0;
@@ -535,51 +607,6 @@ void * suffpair_thread(void * data) {
         std::cout<<"Error trying to remove "<<p_list.filename()<<std::endl;
     }
     pthread_exit(nullptr);
-}
-
-void merge_pointer_data(std::vector<thread_data>& t_data, std::string& pl_file){
-
-    //concatenate the files
-    std::ofstream of(pl_file, std::ofstream::binary);
-    size_t buff_size = BUFFER_SIZE/sizeof(size_t);
-    size_t len, rem, to_read;
-    auto *buffer = new size_t[buff_size];
-
-    //collect the pointers to the pairs
-    for(auto & data : t_data){
-
-        std::ifstream i_file(data.pl_chunk_file, std::ifstream::binary);
-
-        i_file.seekg (0, std::ifstream::end);
-        len = i_file.tellg()/sizeof(size_t);
-        i_file.seekg (0, std::ifstream::beg);
-
-        rem=len;
-        to_read = std::min<size_t>(buff_size, len);
-
-        while(true){
-
-            i_file.seekg( (rem - to_read) * sizeof(size_t));
-            i_file.read((char *)buffer, sizeof(size_t)*to_read);
-            assert(i_file.good());
-
-            of.write((char *)buffer, sizeof(size_t)*to_read);
-            assert(of.good());
-
-            rem -= i_file.gcount()/sizeof(size_t);
-            to_read = std::min<size_t>(buff_size, rem);
-            if(to_read == 0) break;
-        }
-        i_file.close();
-
-        if(remove(data.pl_chunk_file.c_str())){
-            std::cout<<"Error trying to remove temporal file"<<std::endl;
-            std::cout<<"Aborting"<<std::endl;
-            exit(1);
-        }
-    }
-    delete[] buffer;
-    of.close();
 }
 
 void merge_ht_data(std::vector<thread_data>& t_data){

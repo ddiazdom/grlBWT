@@ -19,6 +19,7 @@ class lpg{
 
 private:
     typedef typename lpg_build::plain_grammar_t         plain_grammar_t;
+    typedef typename lpg_build::alpha_t                 alpha_t;
     louds_tree                                          m_tree;
     label_arr_type                                      m_l_labels;
     sdsl::int_vector<8>                                 symbols_map;
@@ -36,16 +37,15 @@ private:
     };
 
 
-    static void build_grammar(std::string &i_file, std::string &g_file, uint8_t sep_symbol,
+    static void build_grammar(std::string &i_file, std::string &g_file, alpha_t& alphabet,
                               sdsl::cache_config &config, size_t n_threads, size_t hbuff_size){
 
         std::cout<<"Computing the LPG grammar"<<std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        lpg_build::compute_LPG(i_file, g_file, n_threads, config, hbuff_size, sep_symbol);
+        lpg_build::compute_LPG(i_file, g_file, n_threads, config, hbuff_size, alphabet);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;
-
 
         std::cout<<"Suffix-pairing nonterminals"<<std::endl;
         start = std::chrono::high_resolution_clock::now();
@@ -169,10 +169,8 @@ private:
         sdsl::register_cache_file("l_labels", config);
     };
 
-    //static void check_uncomp_grammar(plain_grammar_t &r_data, std::string uncom_seq);
-
     void check_grammar(std::string &uncom_seq){
-        std::cout<<"Checking the grammar produces the exact input string"<<std::endl;
+        std::cout<<"Checking the grammar tree rep. produces the exact input string"<<std::endl;
 
         std::vector<uint32_t > tmp_decomp;
         std::vector<uint32_t > prev_dc_step;
@@ -194,6 +192,7 @@ private:
             tmp_node = m_tree.child(2, i);
             decompress_node(buff, tmp_node);
             for(unsigned char j : buff){
+                assert(pos<len);
                 assert(j==buffer[pos]);
                 pos++;
             }
@@ -213,6 +212,36 @@ private:
         std::swap(m_l_labels, other.m_l_labels);
     }
 
+    alpha_t get_alphabet(std::string& i_file){
+
+        std::cout<<"Reading input file"<<std::endl;
+
+        //TODO this can be done in parallel if the input is too big
+        size_t alph_frq[256] = {0};
+        alpha_t alphabet;
+
+        i_file_stream<uint8_t> if_stream(i_file, BUFFER_SIZE);
+        for(size_t i=0;i<if_stream.tot_cells;i++){
+            alph_frq[if_stream.read(i)]++;
+        }
+
+        for(size_t i=0;i<256;i++){
+            if(alph_frq[i]>0) alphabet.emplace_back(i, alph_frq[i]);
+        }
+
+        std::cout<<"  Number of characters: "<<if_stream.size()<<std::endl;
+        std::cout<<"  Alphabet:             "<<alphabet.size()<<std::endl;
+        std::cout<<"  Smallest symbol:      "<<(int)alphabet[0].first<<std::endl;
+        std::cout<<"  Greatest symbol:      "<<(int)alphabet.back().first<<std::endl;
+
+        if(if_stream.read(if_stream.size()-1)!=alphabet[0].first){
+            std::cout<<"Error: sep. symbol "<<alphabet[0].first <<" differs from last symbol in file "
+                     <<if_stream.read(if_stream.size()-1)<<std::endl;
+            exit(1);
+        }
+        return alphabet;
+    }
+
 public:
     typedef size_t                        size_type;
     static constexpr size_t root          = 2;
@@ -221,10 +250,13 @@ public:
     const uint8_t&          sigma         = m_sigma;
     const size_t&           max_degree    = m_max_degree;
 
-    lpg(std::string &input_file, std::string &tmp_folder,
-        uint8_t sep_symbol, size_t n_threads, float hbuff_frac){
+    lpg(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac){
 
         std::cout<<"Input file: "<<input_file<<std::endl;
+        auto alphabet =  get_alphabet(input_file);
+
+        size_t n_chars = 0;
+        for(auto const sym : alphabet) n_chars+=sym.second;
 
         //create a temporary folder
         std::string tmp_path = tmp_folder+"/lpg.XXXXXX";
@@ -239,26 +271,19 @@ public:
         //
 
         sdsl::cache_config config(false, temp);
-
         std::string g_file = sdsl::cache_file_name("g_file", config);
-
-        //build the uncompressed version of the grammar
-        std::ifstream is (input_file, std::ifstream::binary);
-        is.seekg (0, std::ifstream::end);
-        auto n_chars = is.tellg();
-        is.close();
 
         //maximum amount of RAM allowed to spend in parallel for the hashing step
         auto hbuff_size = size_t(std::ceil(float(n_chars)*hbuff_frac));
 
-        std::cout<<"Input file contains "<<n_chars<<" symbols"<<std::endl;
-
         auto start = std::chrono::high_resolution_clock::now();
-        build_grammar(input_file, g_file, sep_symbol, config, n_threads, hbuff_size);
+        build_grammar(input_file, g_file, alphabet, config, n_threads, hbuff_size);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
 
-        //lpg_build::check_plain_grammar(g_file, input_file);
+        //TODO testing
+        lpg_build::check_plain_grammar(g_file, input_file);
+        //
 
         //plain representation of the grammar
         plain_grammar_t plain_gram;
@@ -290,6 +315,10 @@ public:
         std::cout <<"    Space usage (MB):   "<<sdsl::size_in_mega_bytes(*this)<<std::endl;
         std::cout <<"    Compression ratio:  "<<double(n_chars)/sdsl::size_in_bytes(*this)<<std::endl;
         std::cout <<"  Elap. time (secs):  "<<elapsed.count()<<std::endl;
+
+        //TODO testing
+        check_grammar(input_file);
+        //
     }
 
     lpg(): m_sigma(0), m_max_degree(0){};

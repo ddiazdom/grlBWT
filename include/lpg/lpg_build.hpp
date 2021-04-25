@@ -20,6 +20,7 @@
 #define BUFFER_SIZE 8388608 //8MB of buffer
 
 class lpg_build {
+
     typedef sdsl::bit_vector                             bv_t;
     typedef sdsl::int_vector_buffer<1>                   bvb_t;
     typedef sdsl::int_vector_buffer<64>                  ivb_t;
@@ -29,6 +30,7 @@ class lpg_build {
     typedef typename string_map_t::buff_t                buff_t;
 
 public:
+    typedef std::vector<std::pair<uint8_t, size_t>>      alpha_t;
 
     struct plain_grammar_t{
         uint8_t                   sigma{}; // terminal's alphabet
@@ -102,7 +104,7 @@ public:
      */
     static void compute_LPG(std::string &i_file, std::string &p_gram_file,
                             size_t n_threads, sdsl::cache_config &config,
-                            size_t hbuff_size, uint8_t sep_symbol);
+                            size_t hbuff_size, alpha_t& alphabet);
 
     /***
      * check if the grammar is correct
@@ -134,7 +136,7 @@ private:
         o_file_stream<size_t>      ofs;
         const sdsl::int_vector<2>& phrase_desc;
 
-        phrase_map_t&                  m_map;
+        phrase_map_t&              m_map;
         static_map&                tr_map;
 
         size_t                     start;

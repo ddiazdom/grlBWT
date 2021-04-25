@@ -11,7 +11,6 @@ struct arguments{
     size_t n_threads{};
     bool comp=false;
     bool decomp=false;
-    char sep_symbol='\n';
     float hbuff_frac=0.5;
 
     bool keep=false;
@@ -47,10 +46,6 @@ static void parse_app(CLI::App& app, struct arguments& args){
                    "Output file")->type_name("");
 
     app.add_flag("-k,--keep", args.keep, "Keep input file");
-
-    app.add_option("-s,--separator",
-                   args.sep_symbol, "Separator symbol for string collections (def. '\\n')")->
-                   excludes(decom);
 
     app.add_option("-t,--threads",
                    args.n_threads,
@@ -91,8 +86,7 @@ int main(int argc, char** argv) {
     if(!args.comp && !args.decomp) args.comp = true;
 
     if(args.comp) {
-        lpg<huff_vector<>> g(args.input_file, args.tmp_dir, args.sep_symbol,
-                                 args.n_threads, args.hbuff_frac);
+        lpg<huff_vector<>> g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
 
         if(args.output_file.empty()){
             args.output_file = args.input_file;
