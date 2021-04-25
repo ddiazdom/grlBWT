@@ -365,8 +365,10 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
         do {
             in.read(&buffer[0], BUFFER_SIZE);
             out.write(&buffer[0], in.gcount());
+            psize+=in.gcount();
         } while (in.gcount() > 0);
         free(buffer);
+        psize/=sizeof(sym_type);
 
         //remove remaining files
         for(size_t i=0;i<threads_data.size();i++){

@@ -282,7 +282,7 @@ public:
         std::chrono::duration<double> elapsed = end - start;
 
         //TODO testing
-        lpg_build::check_plain_grammar(g_file, input_file);
+        //lpg_build::check_plain_grammar(g_file, input_file);
         //
 
         //plain representation of the grammar
@@ -317,7 +317,7 @@ public:
         std::cout <<"  Elap. time (secs):  "<<elapsed.count()<<std::endl;
 
         //TODO testing
-        check_grammar(input_file);
+        //check_grammar(input_file);
         //
     }
 

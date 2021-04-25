@@ -46,9 +46,6 @@ struct pairing_data{
     const bv_t&               rep_sym;
     const sdsl::cache_config& config;
 
-    bool                      first_run=true;
-    size_t elms_frun          =0;
-
     pairing_data(plain_gram_t& gram_info, bv_t& rep_syms_, size_t n_treads_, size_t hbuff_size_, sdsl::cache_config& config_):
             rep_sym(rep_syms_),
             config(config_){
@@ -121,18 +118,17 @@ void create_new_rules(ht_t& ht, pairing_data& p_data){
     }
 }
 
-void compute_lms_as_sp(ivb& rules,
+void compute_lms_as_sp(plain_gram_t & gram,
                        pairing_data& p_data,
-                       std::string& r_lim_file,
                        size_t lpg_syms){
     bv_t new_r_lim;
-    sdsl::load_from_file(new_r_lim, r_lim_file);
+    sdsl::load_from_file(new_r_lim, gram.rules_lim_file);
     bv_t::select_1_type new_r_lim_ss(&new_r_lim);
 
-    bv_t lms_as_sp;
-    sdsl::load_from_file(lms_as_sp, p_data.lmsg_as_sp_file);
+    sdsl::int_vector<> rules;
+    sdsl::load_from_file(rules, gram.rules_file);
 
-    bv_t tmp_bv(lms_as_sp.size(), false);
+    bv_t tmp_bv(gram.r+1, false);
 
     size_t l1,l2, i=p_data.sigma, j=p_data.sigma, curr_rule=p_data.sigma;
 
@@ -146,7 +142,9 @@ void compute_lms_as_sp(ivb& rules,
                 size_t parent=tmp_sym, start, end, len;
                 while(l1<l2){
                     start = new_r_lim_ss(tmp_sym)+1;
-                    end = new_r_lim_ss(tmp_sym+1);
+                    end = start;
+                    while(!new_r_lim[end]) end++;
+
                     len = end-start+1;
                     l1 = l1-1 + len;
 
@@ -195,11 +193,6 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
 
     sdsl::int_vector_buffer<1> r_lim(gram.rules_lim_file, std::ios::out);
 
-    //TODO this is useful for building the ext. BWT,
-    //compute_lms_as_sp(rules, p_data);
-
-    bv_t lmsg_as_sp(p_data.tot_lms_rules+(p_data.new_rules.size()/2), 0);
-
     std::cout<<"    Computing unique SuffPair"<<std::endl;
     bv_t uniq_sr;
     bv_t::rank_1_type uniq_sr_rs;
@@ -216,24 +209,14 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
     ivb col_rules(tr_file, std::ios::out, BUFFER_SIZE, p_data.s_width);
 
     //collapse compressed symbols
-    size_t n_av=0, tmp_sym, sr_pos, prev_sym, curr_nt=p_data.sigma;
+    size_t n_av=0, tmp_sym, sr_pos;
     for(size_t i=0; i < p_data.gsyms; i++){
 
         if(i>p_data.sigma && p_data.r_lim[i-1]){
             r_lim[n_av-1] = true;
-
-            //TODO only useful for building the BWT
-            if(prev_sym==p_data.lim_id &&
-               col_rules[col_rules.size()-1]<p_data.tot_lms_rules){
-                //std::cout<<curr_nt<<" "<<lmsg_as_sp[curr_nt]<<std::endl;
-                lmsg_as_sp[curr_nt] = true;
-            }
-            curr_nt++;
-            //
         }
 
         tmp_sym = rules.read(i);
-        prev_sym = tmp_sym;
 
         if(tmp_sym != p_data.lim_id) {
 
@@ -278,23 +261,10 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
         }
     }
     r_lim[n_av-1]=true;
-
-    //TODO only useful for building the BWT
-    size_t lmsg_syms = n_av;
-    if(prev_sym==p_data.lim_id &&
-       col_rules[col_rules.size()-1]<p_data.tot_lms_rules){
-        lmsg_as_sp[curr_nt] = true;
-    }
-    curr_nt++;
-    //
+    size_t lms_syms= n_av;
 
     std::cout<<"    Collapsing new SuffPair rules"<<std::endl;
-
-    //TODO only useful for building the ext. BWT
-    size_t frun_sp = (p_data.elms_frun/2)-uniq_sr_rs(p_data.elms_frun/2);
-    size_t suff_idx=0, parent_idx;
-    //
-
+    size_t parent_idx;
     //insert the symbols of the new_rules
     for(size_t i=0;i<new_rules.size();i+=2){
 
@@ -326,9 +296,6 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
                     }else{
                         if(tmp_sym>=p_data.tot_lms_rules){
                             tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
-                        }else if(parent_idx>=(p_data.elms_frun/2)){//TODO only useful for computing the ext. BWT
-                            //std::cout<<lmsg_as_sp[curr_nt+parent_idx]<<" "<<tmp_sym<<std::endl;
-                            lmsg_as_sp[curr_nt+suff_idx] = true;
                         }
                         col_rules.push_back(tmp_sym);
                         r_lim[n_av++] = true;
@@ -338,48 +305,39 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
             }else{
                 if(tmp_sym>=p_data.tot_lms_rules){
                     tmp_sym -= uniq_sr_rs(tmp_sym-p_data.tot_lms_rules);
-                }else if(suff_idx>=frun_sp){//TODO only useful for computing the ext. BWT
-                    //std::cout<<lmsg_as_sp[curr_nt+(i/2)]<<" "<<tmp_sym<<" "<<suff_idx<<" "<<frun_sp<<" "<<p_data.tot_lms_rules<<std::endl;
-                    lmsg_as_sp[curr_nt+suff_idx] = true;
                 }
                 col_rules.push_back(tmp_sym);
                 r_lim[n_av++] = true;
             }
-            suff_idx++;
         }
     }
 
-    //TODO only useful for compute the ext. BWT
-    lmsg_as_sp[curr_nt+suff_idx] = true;
-    lmsg_as_sp.resize(curr_nt+suff_idx+1);
-    sdsl::store_to_file(lmsg_as_sp, p_data.lmsg_as_sp_file);
-    //
-
-
-    std::cout<<"    Inserting the compressed string"<<std::endl;
     //put array C at the end of the new rules
     for(size_t i=p_data.gsyms; i < rules.size(); i++){
         col_rules.push_back(rules.read(i));
         r_lim[n_av++] = false;
     }
     r_lim[n_av-1] = true;
-
     r_lim.close();
-    compute_lms_as_sp(col_rules, p_data, gram.rules_lim_file, lmsg_syms);
+    sdsl::util::clear(new_rules);
+
+    size_t eff_new_rules = uniq_sr.size()-uniq_sr_rs(uniq_sr.size());
+    gram.r += eff_new_rules;
+
     col_rules.close();
     rules.close();
     rename(col_rules.filename().c_str(), gram.rules_file.c_str());
 
+    //TODO this is only useful for computing the ext. BWT
+    compute_lms_as_sp(gram, p_data, lms_syms);
+    //
 
-    size_t eff_new_rules = uniq_sr.size()-uniq_sr_rs(uniq_sr.size());
     std::cout<<"  SuffPair stats:"<<std::endl;
     std::cout<<"    Grammar size before:         "<<gram.g - gram.sigma << std::endl;
     std::cout<<"    Grammar size after:          "<<n_av-gram.sigma<<std::endl;
     std::cout<<"    Number of new nonterminals:  "<<eff_new_rules<<std::endl;
     std::cout<<"    Compression ratio:           "<<double(n_av)/double(gram.g) << std::endl;
-
     gram.g = n_av;
-    gram.r += eff_new_rules;
 }
 
 //change the width of R and compute the repeated symbols
@@ -732,12 +690,6 @@ void suffixpair_int(pairing_data& p_data) {
 
         merge_ht_data(threads_data);
         create_new_rules(ht, p_data);
-
-        //store how many elements were created in the first run
-        if(p_data.first_run){
-            p_data.elms_frun = p_data.new_rules.size();
-            p_data.first_run = false;
-        }
 
         {// tell the worker they can replace the pairs by
          // their values
