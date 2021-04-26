@@ -37,7 +37,7 @@ public:
         size_t                    r{}; //r: number of rules
         size_t                    c{}; //c: length of the right-hand of the start symbol
         size_t                    g{}; //g: sum of the rules' right-hand sides
-        std::vector<uint8_t>      symbols_map; // map compressed alphabet to original symbols
+        std::vector<uint8_t>      symbols_map; // map compressed symbols to original symbols
         std::string               rules_file; // rules are concatenated in this array
         std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
         std::string               lms_as_sp_file;
@@ -102,9 +102,8 @@ public:
      * @param hbuff_size : buffer size for the hashing step
      * @param sep_symbol : string delimiter in the input text
      */
-    static void compute_LPG(std::string &i_file, std::string &p_gram_file,
-                            size_t n_threads, sdsl::cache_config &config,
-                            size_t hbuff_size, alpha_t& alphabet);
+    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
+                            size_t hbuff_size, alpha_t &alphabet, bool simp, bool rl_comp);
 
     /***
      * check if the grammar is correct
@@ -275,6 +274,6 @@ private:
     template<class sym_t>
     static void * record_phrases(void *data);
     static void collapse_grammar(plain_grammar_t &r_data, size_t &n_iter, sdsl::cache_config &config);
-    static sdsl::int_vector<2> compute_alphabet(std::string &i_file);
+    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config);
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H

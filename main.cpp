@@ -11,6 +11,9 @@ struct arguments{
     size_t n_threads{};
     bool comp=false;
     bool decomp=false;
+    bool simp=false;
+    bool rl=false;
+    bool plain=false;
     float hbuff_frac=0.5;
 
     bool keep=false;
@@ -29,7 +32,6 @@ static void parse_app(CLI::App& app, struct arguments& args){
 
     fmt->column_width(23);
     app.formatter(fmt);
-    int max_thread = (int)std::thread::hardware_concurrency();
 
     app.add_option("FILE",
                    args.input_file,
@@ -45,13 +47,25 @@ static void parse_app(CLI::App& app, struct arguments& args){
                    args.output_file,
                    "Output file")->type_name("");
 
-    app.add_flag("-k,--keep", args.keep, "Keep input file");
+    app.add_flag("-k,--keep",
+                 args.keep,
+                 "Keep input file");
+
+    app.add_flag("-p,--plain",
+                 args.simp,
+                 "Output the plain grammar representation")->excludes(decom);
+
+    app.add_flag("-s,--simp",
+                 args.simp,
+                 "Simplify grammar")->excludes(decom);
+
+    app.add_flag("-r,--run-length",
+                 args.rl,
+                 "Make the grammar run-length compressed")->excludes(decom);
 
     app.add_option("-t,--threads",
                    args.n_threads,
-                   "Maximum number of threads (def. [1-n_cores]=1)")->
-                   check(CLI::Range(1, max_thread))->
-                   default_val(1);
+                   "Maximum number of threads")->default_val(1);
 
     app.add_option("-f,--hashing-buffer",
                    args.hbuff_frac,
@@ -86,7 +100,7 @@ int main(int argc, char** argv) {
     if(!args.comp && !args.decomp) args.comp = true;
 
     if(args.comp) {
-        lpg<huff_vector<>> g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
+        lpg<huff_vector<>> g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac, args.simp, args.rl);
 
         if(args.output_file.empty()){
             args.output_file = args.input_file;

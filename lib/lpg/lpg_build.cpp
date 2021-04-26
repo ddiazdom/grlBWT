@@ -36,7 +36,6 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
     size_t l = r_lim_ss(p_gram.r);
 
     for(size_t i=f; i <= l; i++){
-
         tmp_decomp.clear();
         stack.push(r[i]);
 
@@ -55,48 +54,49 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
 
             if(r[start] == curr_sym){
                 assert((end-start+1)==1);
+                if(i-p_gram.sigma==1969577){
+                    std::cout<<curr_sym<<std::endl;
+                }
                 tmp_decomp.push_back(curr_sym);
             }else{
                 assert((end-start+1)>1);
+
+                if(i-p_gram.sigma==1969577) {
+                    std::cout << curr_sym << " -> ";
+                }
                 for(size_t j=end+1; j-->start;){
+                    if(i-p_gram.sigma==1969577){
+                        std::cout<<r[j]<<", ";
+                    }
                     stack.push(r[j]);
+                }
+                if(i-p_gram.sigma==1969577){
+                    std::cout<<" "<<std::endl;
                 }
             }
         }
 
+        /*for(auto const& tmp_sym : tmp_decomp){
+            std::cout<<p_gram.symbols_map[tmp_sym]<<"";
+        }
+        std::cout<<""<<std::endl;*/
+
+        size_t c=0;
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            //std::cout<<r_data.symbols_map.size()<<std::endl;
-            //std::cout<<tmp_sym<<" "<<(int)r_data.symbols_map[tmp_sym]<<" "<<(int)buff_symbol<<std::endl;
+            if(p_gram.symbols_map[tmp_sym] != buff_symbol){
+                std::cout<<c<<" Error -> text. pos:"<<pos-1<<" comp gram symbol:"<<tmp_sym<<" uncomp sym gram:"
+                <<(int)p_gram.symbols_map[tmp_sym]<<" uncomp sym text:"<<(int)buff_symbol<<std::endl;
+            }
             assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
+            c++;
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
 }
 
-//0 symbol doesn't exists
-//1 symbol exists but it is unique
-//2 symbol appears more than once
-sdsl::int_vector<2> lpg_build::compute_alphabet(std::string &i_file){
-    //TODO this can be done in parallel if the input is too big
-    sdsl::int_vector<2> alphabet(256,0);
-    for(size_t i=0;i<256;i++) alphabet[i]=0;
-
-    i_file_stream<uint8_t> if_stream(i_file, BUFFER_SIZE);
-    uint8_t tmp_symbol;
-
-    for(size_t i=0;i<if_stream.tot_cells;i++){
-        tmp_symbol = if_stream.read(i);
-        if(alphabet[tmp_symbol]<2){
-            alphabet[tmp_symbol]++;
-        }
-    }
-    return alphabet;
-}
-
-void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
-                            sdsl::cache_config &config, size_t hbuff_size,
-                            alpha_t& alphabet) {
+void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
+                            size_t hbuff_size, alpha_t &alphabet, bool simp, bool rl_comp) {
 
     std::string rules_file = sdsl::cache_file_name("rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
@@ -180,11 +180,20 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     std::cout<<"  Collapsing nonterminal rules"<<std::endl;
     collapse_grammar(p_gram, iter, config);
 
+    if(simp){
+        std::cout<<"  Simplifying the grammar"<<std::endl;
+        simplify_grammar(p_gram, config);
+    }
+
+    if(rl_comp){
+        std::cout<<"  Creating run-length compressed nonterminals"<<std::endl;
+    }
+
     p_gram.save_to_file(p_gram_file);
 
-    /*
-    //std::cout<<"Checking the grammar";
-    //check_plain_grammar(r_data, i_file);*/
+    //TODO testing
+    check_plain_grammar(p_gram_file, i_file);
+    //
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -911,6 +920,140 @@ std::vector<std::pair<size_t, size_t>> lpg_build::compute_thread_ranges(size_t n
     }
     is.close();
     return thread_ranges;
+}
+
+void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config) {
+
+    bv_t r_lim;
+    sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
+    bv_t::select_1_type r_lim_ss(&r_lim);
+
+    sdsl::int_vector<> rules;
+    sdsl::load_from_file(rules, p_gram.rules_file);
+
+    sdsl::int_vector_buffer<> new_rules(p_gram.rules_file, std::ios::out);
+    sdsl::int_vector_buffer<1> new_r_lim(p_gram.rules_lim_file, std::ios::out);
+
+    //sym desc
+    // 1 : nonterminal is unique in the grammar
+    // 2 : nonterminal is repeated in the grammar
+    // 3 : nontemrinal is unique and removed from the grammar
+    sdsl::int_vector<2> sym_desc(p_gram.r + p_gram.sigma + 1, 0);
+    for(size_t i=p_gram.sigma;i<rules.size();i++){
+        if(sym_desc[rules[i]] < 2) sym_desc[rules[i]]++;
+    }
+
+    size_t len, rep, prev_pos, start, pos;
+    std::vector<size_t> tmp_rule, dc_rule;
+
+    //inspect first which are the nonterminals I can delete
+    //I have to do it before creating the new rules array so
+    // I know which are those I have to discard
+    for(size_t i=p_gram.sigma;i<rules.size();){
+        assert(r_lim[i-1]);
+        rep = 0; len = 0; prev_pos = i;
+        while(!r_lim[i]){
+            rep += sym_desc[rules[i++]];
+            len++;
+        }
+        rep += sym_desc[rules[i++]];
+        len++;
+        if(rep==len){
+            for(size_t k=prev_pos;k<i;k++){
+                sym_desc[rules[k]] = 3;
+            }
+        }
+    }
+
+    for(size_t k=0;k<p_gram.sigma;k++){
+        new_r_lim.push_back(true);
+        new_rules.push_back(k);
+    }
+
+    bool exp;
+    for(size_t i=p_gram.sigma,curr_rule=p_gram.sigma;i<rules.size();curr_rule++){
+
+        assert(r_lim[i-1]);
+        prev_pos = i, exp=true;
+        while(!r_lim[i]){
+            if(sym_desc[rules[i]]!=3) exp = false;
+            i++;
+        }
+        if(sym_desc[rules[i]]!=3) exp = false;
+        i++;
+
+        if(sym_desc[curr_rule]==3) continue;
+
+        if(exp){
+            assert(r_lim[i-1]);
+            tmp_rule.clear();
+            for(size_t k=prev_pos;k<i;k++){
+                tmp_rule.push_back(rules[k]);
+            }
+
+            //recursively simplify the nonterminal
+            size_t cont=0;
+            while(exp){
+                for(unsigned long & parent_sym : tmp_rule){
+                    assert(sym_desc[parent_sym]==3);
+                    start = r_lim_ss(parent_sym) + 1;
+                    pos = start;
+                    while(!r_lim[pos]){
+                        if(sym_desc[rules[pos]]!=3) exp = false;
+                        dc_rule.push_back(rules[pos++]);
+                    }
+                    if(sym_desc[rules[pos]]!=3) exp = false;
+                    dc_rule.push_back(rules[pos]);
+                }
+                cont++;
+                std::swap(tmp_rule, dc_rule);
+                dc_rule.clear();
+            }
+
+            //insert the decompressed phrase
+            for(auto const& sym : tmp_rule){
+                new_rules.push_back(sym);
+            }
+            new_r_lim[new_rules.size()-1] = true;
+            assert(curr_rule!=p_gram.r-1);
+
+        }else {
+            //insert the original phrase
+            for(size_t k=prev_pos;k<i;k++){
+                new_rules.push_back(rules[k]);
+            }
+            assert(r_lim[i-1]);
+            new_r_lim[new_rules.size()-1] = true;
+        }
+    }
+
+    /*sdsl::util::clear(rules);
+    sdsl::util::clear(r_lim);
+    sdsl::util::clear(r_lim_ss);*/
+
+    bv_t rules_del(sym_desc.size(),0);
+    for(size_t k=0;k<sym_desc.size();k++){
+        if(sym_desc[k]==3) rules_del[k] = true;
+    }
+    sdsl::util::clear(sym_desc);
+
+    bv_t::rank_1_type del_rs(&rules_del);
+    for(auto && new_rule : new_rules){
+        if((new_rule-del_rs(new_rule))==84192){
+            std::cout<<new_rule<<" "<<del_rs(new_rule)<<std::endl;
+            start = r_lim_ss(new_rule)+1;
+            while(!r_lim[start]){
+                std::cout<<rules[start++]<<" ";
+            }
+            std::cout<<rules[start]<<" "<<std::endl;
+        }
+        new_rule -= del_rs(new_rule);
+    }
+
+    size_t del_nts = del_rs(rules_del.size());
+    std::cout<<"    Number of deleted nonterminals: "<<del_nts<<" ("<<(float(del_nts)/float(p_gram.r))*100<<"%)"<<std::endl;
+    p_gram.r -= del_nts;
+    p_gram.g = new_rules.size();
 }
 
 void lpg_build::plain_grammar_t::save_to_file(std::string& output_file){

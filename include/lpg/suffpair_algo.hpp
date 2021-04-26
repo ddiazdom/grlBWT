@@ -347,7 +347,7 @@ void prepare_input(plain_gram_t& gram_info, bv_t& rep_syms, sdsl::cache_config& 
 
     std::string tmp_string = sdsl::cache_file_name("tmp_rules", config);
     o_file_stream<size_t> tmp_r(tmp_string,  BUFFER_SIZE, std::ios::out);
-    sdsl::int_vector<2> tmp_rep(gram_info.r - 1, false);
+    sdsl::int_vector<2> tmp_rep(gram_info.r - 1, 0);
     for (auto const &sym : r){
         tmp_r.push_back(sym);
         if(tmp_rep[sym]<2) tmp_rep[sym]++;

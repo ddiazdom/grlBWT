@@ -37,12 +37,12 @@ private:
     };
 
 
-    static void build_grammar(std::string &i_file, std::string &g_file, alpha_t& alphabet,
-                              sdsl::cache_config &config, size_t n_threads, size_t hbuff_size){
+    static void build_grammar(std::string &i_file, std::string &g_file, alpha_t &alphabet, sdsl::cache_config &config,
+                              size_t n_threads, size_t hbuff_size, bool simp, bool rl_comp) {
 
         std::cout<<"Computing the LPG grammar"<<std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        lpg_build::compute_LPG(i_file, g_file, n_threads, config, hbuff_size, alphabet);
+        lpg_build::compute_LPG(i_file, g_file, n_threads, config, hbuff_size, alphabet, simp, rl_comp);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;
@@ -250,7 +250,7 @@ public:
     const uint8_t&          sigma         = m_sigma;
     const size_t&           max_degree    = m_max_degree;
 
-    lpg(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac){
+    lpg(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac, bool simp, bool rl_comp) {
 
         std::cout<<"Input file: "<<input_file<<std::endl;
         auto alphabet =  get_alphabet(input_file);
@@ -277,7 +277,7 @@ public:
         auto hbuff_size = size_t(std::ceil(float(n_chars)*hbuff_frac));
 
         auto start = std::chrono::high_resolution_clock::now();
-        build_grammar(input_file, g_file, alphabet, config, n_threads, hbuff_size);
+        build_grammar(input_file, g_file, alphabet, config, n_threads, hbuff_size, simp, rl_comp);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
 
