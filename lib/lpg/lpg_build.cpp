@@ -23,6 +23,9 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
     sdsl::util::init_support(r_lim_ss, &r_lim);
 
     std::cout<<"Checking the grammar produces the exact input string"<<std::endl;
+    std::cout<<"  Terminals:              "<<(size_t)p_gram.sigma<<std::endl;
+    std::cout<<"  Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
+    std::cout<<"  Compressed string:      "<<p_gram.c<<std::endl;
 
     std::vector<size_t> tmp_decomp;
 
@@ -54,42 +57,18 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
 
             if(r[start] == curr_sym){
                 assert((end-start+1)==1);
-                if(i-p_gram.sigma==1969577){
-                    std::cout<<curr_sym<<std::endl;
-                }
                 tmp_decomp.push_back(curr_sym);
             }else{
-                assert((end-start+1)>1);
-
-                if(i-p_gram.sigma==1969577) {
-                    std::cout << curr_sym << " -> ";
-                }
                 for(size_t j=end+1; j-->start;){
-                    if(i-p_gram.sigma==1969577){
-                        std::cout<<r[j]<<", ";
-                    }
                     stack.push(r[j]);
                 }
-                if(i-p_gram.sigma==1969577){
-                    std::cout<<" "<<std::endl;
-                }
             }
         }
 
-        /*for(auto const& tmp_sym : tmp_decomp){
-            std::cout<<p_gram.symbols_map[tmp_sym]<<"";
-        }
-        std::cout<<""<<std::endl;*/
-
-        size_t c=0;
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            if(p_gram.symbols_map[tmp_sym] != buff_symbol){
-                std::cout<<c<<" Error -> text. pos:"<<pos-1<<" comp gram symbol:"<<tmp_sym<<" uncomp sym gram:"
-                <<(int)p_gram.symbols_map[tmp_sym]<<" uncomp sym text:"<<(int)buff_symbol<<std::endl;
-            }
-            assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
-            c++;
+            assert(tmp_sym == buff_symbol);
+            //assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
@@ -111,18 +90,17 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     //>2 symbol i is sep symbol
     sdsl::int_vector<2> symbol_desc(alphabet.back().first+1,0);
 
-    size_t max_symbol=alphabet.back().first, min_symbol=0;
     for(auto & sym : alphabet){
         p_gram.symbols_map.push_back(sym.first);
         symbol_desc[sym.first] = sym.second > 1;
     }
-    p_gram.r = max_symbol + 1;
+    p_gram.r = alphabet.back().first + 1;
     symbol_desc[alphabet[0].first]+=2;
 
     ivb_t rules(p_gram.rules_file, std::ios::out, BUFFER_SIZE);
     bvb_t rules_lim(p_gram.rules_lim_file, std::ios::out);
     for(size_t i=0;i<p_gram.r; i++){
-        rules.push_back(0);
+        rules.push_back(i);
         rules_lim.push_back(true);
     }
     for(unsigned char i : p_gram.symbols_map){
@@ -134,10 +112,11 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
 
     size_t iter=1;
     size_t rem_phrases;
+
+
     std::cout<<"  Iteration "<<iter++<<std::endl;
     rem_phrases = compute_LPG_int<uint8_t>(i_file, tmp_i_file,
                                            n_threads, hbuff_size,
-                                           min_symbol, max_symbol,
                                            p_gram, rules, rules_lim,
                                            symbol_desc, config);
 
@@ -145,7 +124,6 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
         std::cout<<"  Iteration "<<iter++<<std::endl;
         rem_phrases = compute_LPG_int<size_t>(tmp_i_file, output_file,
                                               n_threads, hbuff_size,
-                                              min_symbol, max_symbol,
                                               p_gram, rules, rules_lim,
                                               symbol_desc, config);
         remove(tmp_i_file.c_str());
@@ -160,13 +138,15 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
         c_vec.seekg(0, std::ifstream::beg);
         auto *buffer = reinterpret_cast<size_t*>(malloc(BUFFER_SIZE));
         size_t read_bytes =0;
+        p_gram.c=0;
         while(read_bytes<tot_bytes){
             c_vec.read((char *) buffer, BUFFER_SIZE);
             read_bytes+=c_vec.gcount();
             assert((c_vec.gcount() % sizeof(size_t))==0);
             for(size_t i=0;i<c_vec.gcount()/sizeof(size_t);i++){
-                rules.push_back(min_symbol + buffer[i]);
+                rules.push_back(buffer[i]);
                 rules_lim.push_back(false);
+                p_gram.c++;
             }
         }
         rules_lim[rules_lim.size() - 1] = true;
@@ -177,13 +157,19 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     rules.close();
     rules_lim.close();
 
+    //TODO testing
+    p_gram.save_to_file(p_gram_file);
+    check_plain_grammar(p_gram_file, i_file);
+    exit(1);
+    //
+
     std::cout<<"  Collapsing nonterminal rules"<<std::endl;
     collapse_grammar(p_gram, iter, config);
 
-    if(simp){
+    /*if(simp){
         std::cout<<"  Simplifying the grammar"<<std::endl;
         simplify_grammar(p_gram, config);
-    }
+    }*/
 
     if(rl_comp){
         std::cout<<"  Creating run-length compressed nonterminals"<<std::endl;
@@ -201,19 +187,16 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
 }
 
 template<class sym_type>
-size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                  size_t &min_symbol, size_t &max_symbol, plain_grammar_t &p_gram, ivb_t &rules,
+size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
+                                  size_t n_threads, size_t hbuff_size,
+                                  plain_grammar_t &p_gram, ivb_t &rules,
                                   bvb_t &rules_lim, sdsl::int_vector<2> &phrase_desc,
                                   sdsl::cache_config &config) {
-
-    static_map tr_table;
-    tr_table.bv = bv_t(max_symbol - min_symbol + 1, false);
 
     phrase_map_t mp_table(0, "", 0.85);
     size_t rem_phrases=0;
 
     auto thread_ranges = compute_thread_ranges<sym_type>(n_threads, i_file, phrase_desc);
-    size_t loop_alph = max_symbol-min_symbol+1;
 
     std::vector<lms_info<sym_type>> threads_data;
     threads_data.reserve(thread_ranges.size());
@@ -233,10 +216,8 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
         std::stringstream ss;
         ss << o_file.substr(0, o_file.size() - 5) << "_range_" << range.first << "_" << range.second;
         std::string tmp_o_file = ss.str();
-        threads_data.emplace_back(i_file, tmp_o_file,
-                                  mp_table, tr_table,
-                                  range.first, range.second,
-                                  loop_alph, hb_bytes, tmp_addr + (k*hb_bytes), phrase_desc);
+        threads_data.emplace_back(i_file, tmp_o_file, mp_table, range.first, range.second,
+                                  p_gram.r, hb_bytes, tmp_addr + (k*hb_bytes), phrase_desc);
         k++;
     }
 
@@ -267,12 +248,10 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
     }
     join_thread_phrases(mp_table, phrases_files);
 
-    size_t nnt=0, tr=0, psize=0;//<- for the iter stats
+    size_t psize=0;//<- for the iter stats
     if(mp_table.size()>0){
 
-        sdsl::util::init_support(tr_table.bv_rs, &tr_table.bv);
-
-        size_t width = sdsl::bits::hi(max_symbol-min_symbol+1)+1;
+        size_t width = sdsl::bits::hi(p_gram.r+1)+1;
         const bitstream<buff_t>& stream = mp_table.get_data();
         key_wrapper key_w{width, mp_table.description_bits(), stream};
 
@@ -282,8 +261,7 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
 
         //rename phrases according to their lexicographical ranks
         std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
-        assign_ids(mp_table, tr_table, min_symbol, max_symbol, p_gram, key_w, rules, rules_lim,
-                   n_threads, config);
+        assign_ids(mp_table, p_gram.r-1,  key_w, rules, rules_lim, n_threads, config);
 
         //reload the hash table
         mp_table.load_table(st_table);
@@ -325,8 +303,7 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
 
         {
             //keep track of the lms phrases that have to be rephrased
-            sdsl::int_vector<2> new_phrase_desc(max_symbol-min_symbol+1, false);
-
+            phrase_desc.resize(p_gram.r+mp_table.size());
             std::cout << "    Updating symbols status" << std::endl;
             auto it = mp_table.begin();
             auto it_end = mp_table.end();
@@ -339,7 +316,6 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
                 //more than one occurrence of the phrase
                 if (val & 1UL) {
                     tmp_value += 1;
-                    rem_phrases++;
                 }
 
                 //read the (reversed) last symbol
@@ -348,25 +324,11 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
                     tmp_value += 2;
                 }
 
-                new_phrase_desc[val >> 1UL] = tmp_value;
+                phrase_desc[val >> 1UL] = tmp_value;
                 ++it;
             }
-
-            for (size_t i = 0; i < tr_table.bv.size(); i++) {
-                if (tr_table.bv[i]) {
-                    new_phrase_desc[tr_table[i]] = phrase_desc[i];
-                }
-            }
-            phrase_desc.swap(new_phrase_desc);
         }
-        nnt = mp_table.size();
-        tr = tr_table.size();
     }else{ //just copy the input
-
-        sdsl::util::clear(phrase_desc);
-        sdsl::util::clear(tr_table.bv);
-        sdsl::util::clear(tr_table.map_vector);
-
         std::ifstream in(i_file, std::ios_base::binary);
         std::ofstream out(o_file, std::ios_base::binary);
 
@@ -386,22 +348,20 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file, size
                 std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
             }
         }
+        rem_phrases=0;
     }
 
+    p_gram.r +=mp_table.size();
     std::cout<<"    Iter. stats:"<<std::endl;
     std::cout<<"      Parse size:          "<<psize<<std::endl;
-    std::cout<<"      New nonterminals:    "<<nnt<<std::endl;
-    std::cout<<"      Transferred symbols: "<<tr<<std::endl;
+    std::cout<<"      New nonterminals:    "<<mp_table.size()<<std::endl;
 
-    return rem_phrases;
+    return mp_table.size();
 }
 
 void
-lpg_build::assign_ids(phrase_map_t &mp_map, static_map &tr_table, size_t &min_gsym, size_t &max_gsym, plain_grammar_t &r_data,
-                      key_wrapper &key_w, ivb_t &r, bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
-
-    //some aliases to make the code more readable
-    size_t &n_rules = r_data.r;
+lpg_build::assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r,
+                      bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
 
     //TODO this is new
     std::string syms_file = sdsl::cache_file_name("syms_file", config);
@@ -418,7 +378,7 @@ lpg_build::assign_ids(phrase_map_t &mp_map, static_map &tr_table, size_t &min_gs
     auto access = [&](const size_t &val, size_t idx) -> size_t {
         return key_w.read(val, key_w.size(val)-1-idx);
     };
-    parallel_str_sort(syms_file, compare, access, max_gsym-min_gsym+1, n_threads, config);
+    parallel_str_sort(syms_file, compare, access, max_sym+1, n_threads, config);
 
     sdsl::int_vector<> k_list;
     sdsl::load_from_file(k_list, syms_file);
@@ -428,87 +388,23 @@ lpg_build::assign_ids(phrase_map_t &mp_map, static_map &tr_table, size_t &min_gs
     }
     //
 
-    size_t idx_uniq=0;
-    for(size_t i=0;i<tr_table.bv.size();i++){
-        if(tr_table.bv[i]){
-            idx_uniq=i;
-            break;
-        }
-    }
-
-    tr_table.map_vector.width(sdsl::bits::hi(mp_map.size()+ tr_table.size())+1);
-    tr_table.map_vector.resize(tr_table.size());
-
-    n_rules += mp_map.size() + tr_table.size();
-
-    size_t m_pos=0, s_pos=0, rank=0;
-    while(s_pos < tr_table.size() && m_pos < mp_map.size()){
+    for(size_t m_pos=0; m_pos < mp_map.size(); m_pos++){
 
         size_t len = key_w.size(k_list[m_pos]);
-        size_t first_sym = key_w.read(k_list[m_pos], len-1);
-
-        if(idx_uniq < first_sym){
-            r.push_back(min_gsym+idx_uniq);
-            r_lim.push_back(true);
-
-            tr_table.map_vector[tr_table.bv_rs(idx_uniq)] = rank;
-
-            idx_uniq++, s_pos++;
-            while(idx_uniq < tr_table.bv.size() && !tr_table.bv[idx_uniq]) idx_uniq++;
-        }else{
-
-            for(size_t i=len; i-- > 1;){
-                r.push_back(min_gsym + key_w.read(k_list[m_pos], i));
-                r_lim.push_back(false);
-            }
-            r.push_back(min_gsym + key_w.read(k_list[m_pos], 0));
-            r_lim.push_back(true);
-
-            //modify the key value
-            phrase_map_t::val_type val=0;
-            mp_map.get_value_from(k_list[m_pos], val);
-            val |= rank<<1UL;
-            mp_map.insert_value_at(k_list[m_pos], val);
-            //
-
-            m_pos++;
-        }
-        rank++;
-    }
-
-    while(s_pos < tr_table.size()){
-        r.push_back(min_gsym+idx_uniq);
-        r_lim.push_back(true);
-
-        tr_table.map_vector[tr_table.bv_rs(idx_uniq)] = rank;
-
-        idx_uniq++; rank++; s_pos++;
-        while(idx_uniq < tr_table.bv.size() && !tr_table.bv[idx_uniq]) idx_uniq++;
-    }
-
-    while(m_pos < mp_map.size()){
-
-        size_t len = key_w.size(k_list[m_pos]);
-
         for(size_t i=len; i-- > 1;){
-            r.push_back(min_gsym + key_w.read(k_list[m_pos], i));
+            r.push_back(key_w.read(k_list[m_pos], i));
             r_lim.push_back(false);
         }
-        r.push_back(min_gsym + key_w.read(k_list[m_pos], 0));
+        r.push_back( key_w.read(k_list[m_pos], 0));
         r_lim.push_back(true);
 
         //modify the key value
         phrase_map_t::val_type val=0;
         mp_map.get_value_from(k_list[m_pos], val);
-        val |= rank<<1UL;
+        val |= (max_sym+m_pos+1)<<1UL;
         mp_map.insert_value_at(k_list[m_pos], val);
         //
-
-        rank++; m_pos++;
     }
-
-    min_gsym = max_gsym+1;
-    max_gsym += mp_map.size() + tr_table.size();
 }
 
 void lpg_build::join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files) {
@@ -566,37 +462,27 @@ void * lpg_build::hash_phrases(void * data) {
 
     auto lms_data = (lms_info<sym_t> *) data;
 
-    //temporal data structures used by the thread
-    //std::string dump_file = lms_data->ofs.file + "_phrases";
-    //string_map_t tmp_m_map(lms_data->buff_size, dump_file);
-    //
-
     bool s_type, prev_s_type = S_TYPE;
     sym_t curr_sym, prev_sym;
 
     string_t curr_lms(2, lms_data->sym_width);
 
-    //assert(lms_data->start==0 || lms_data->is_suffix(lms_data->ifs.read(lms_data->start - 1)));
-
     prev_sym = lms_data->ifs.read(lms_data->end);
-    //READ_SYMBOL(lms_data->ifs, lms_data->end, prev_sym)
-
-    //assert(lms_data->is_suffix(prev_sym));
     curr_lms.push_back(prev_sym);
 
     for(size_t i = lms_data->end; i-- > lms_data->start;){
 
         curr_sym = lms_data->ifs.read(i);
-        //READ_SYMBOL(lms_data->ifs, i, curr_sym)
 
         //                                     L_TYPE   S_TYPE*
         //                                        ---- ----
         //this is a junction between two strings = ...$ $...
         if(lms_data->is_suffix(curr_sym)){
-            if(!curr_lms.empty()){
+            bool full_str = curr_lms.size()==1 && lms_data->is_suffix(curr_lms[0]);
+            if(!curr_lms.empty() && !full_str){
                 lms_data->hash_phrase(curr_lms);
-                curr_lms.clear();
             }
+            curr_lms.clear();
             s_type = S_TYPE;
         } else {
             if (curr_sym < prev_sym) {//S_TYPE type
@@ -606,7 +492,7 @@ void * lpg_build::hash_phrases(void * data) {
             } else {//L_TYPE type
                 s_type = L_TYPE;
 
-                if(prev_s_type == S_TYPE) {//Left-most suffix
+                if(prev_s_type == S_TYPE) {//Leftmost S-type suffix
                     curr_lms.pop_back();
                     if(!curr_lms.empty()){
                         lms_data->hash_phrase(curr_lms);
@@ -622,21 +508,13 @@ void * lpg_build::hash_phrases(void * data) {
     }
 
     assert(curr_lms[0]!=1);
-    if(!curr_lms.empty()){
+    bool full_str = curr_lms.size()==1 &&
+                    lms_data->is_suffix(curr_lms[0]) &&
+                    (lms_data->start==0 || lms_data->is_suffix(lms_data->ifs.read(lms_data->start-1)));
+    if(!curr_lms.empty() && !full_str){
         lms_data->hash_phrase(curr_lms);
     }
-
-
-    pthread_mutex_lock(&thread_mutex);
-    for(size_t i=0;i<lms_data->thread_tr_bv.size();i++){
-        if(lms_data->thread_tr_bv[i]){
-            lms_data->tr_map.bv[i] = true;
-        }
-    }
-    pthread_mutex_unlock(&thread_mutex);
-
     lms_data->thread_map.flush();
-    sdsl::util::clear(lms_data->thread_tr_bv);
 
     pthread_exit(nullptr);
 }
@@ -716,20 +594,12 @@ void * lpg_build::record_phrases(void *data) {
     sym_t curr_sym, prev_sym;
 
     string_t curr_lms(2, lms_data->sym_width);
-
-    //assert(lms_data->start==0 || lms_data->is_suffix(lms_data->ifs.read(lms_data->start - 1)));
-
     prev_sym = lms_data->ifs.read(lms_data->end);
-    //READ_SYMBOL(lms_data->ifs, lms_data->end, prev_sym)
-
-    //assert(lms_data->is_suffix(prev_sym));
-
     curr_lms.push_back(prev_sym);
 
     for(size_t i = lms_data->end; i-- > lms_data->start;){
 
         curr_sym = lms_data->ifs.read(i);
-        //READ_SYMBOL(lms_data->ifs, i, curr_sym)
 
         //                                     L_TYPE   S_TYPE*
         //                                        ---- ----
@@ -737,8 +607,8 @@ void * lpg_build::record_phrases(void *data) {
         if(lms_data->is_suffix(curr_sym)){
             if(!curr_lms.empty()){
                 lms_data->store_phrase(curr_lms);
-                curr_lms.clear();
             }
+            curr_lms.clear();
             s_type = S_TYPE;
         } else {
             if (curr_sym < prev_sym) {//S_TYPE type
@@ -754,6 +624,7 @@ void * lpg_build::record_phrases(void *data) {
                         lms_data->store_phrase(curr_lms);
                         curr_lms.clear();
                     }
+                    curr_lms.clear();
                     curr_lms.push_back(prev_sym);
                 }
             }
@@ -898,7 +769,8 @@ void lpg_build::collapse_grammar(plain_grammar_t &r_data, size_t &n_iter, sdsl::
 }
 
 template<class sym_type>
-std::vector<std::pair<size_t, size_t>> lpg_build::compute_thread_ranges(size_t n_threads, std::string& i_file, sdsl::int_vector<2>& phrase_desc) {
+std::vector<std::pair<size_t, size_t>> lpg_build::compute_thread_ranges(size_t n_threads, std::string& i_file,
+                                                                        sdsl::int_vector<2>& phrase_desc) {
     std::vector<std::pair<size_t, size_t>> thread_ranges;
 
     i_file_stream<sym_type> is(i_file, BUFFER_SIZE);

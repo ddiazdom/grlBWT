@@ -23,7 +23,7 @@ class lpg_build {
 
     typedef sdsl::bit_vector                             bv_t;
     typedef sdsl::int_vector_buffer<1>                   bvb_t;
-    typedef sdsl::int_vector_buffer<64>                  ivb_t;
+    typedef sdsl::int_vector_buffer<>                    ivb_t;
     typedef int_array<size_t>                            string_t;
     typedef bit_hash_table<bool,1>                       string_map_t;
     typedef bit_hash_table<size_t,44>                    phrase_map_t;
@@ -113,21 +113,6 @@ public:
     static void check_plain_grammar(std::string& g_file, std::string& uncomp_file);
 private:
 
-    struct static_map{
-        bv_t bv;
-        bv_t::rank_1_type bv_rs;
-        sdsl::int_vector<> map_vector;
-
-        inline size_t operator[](size_t idx) const {
-            assert(bv[idx]);
-            return map_vector[bv_rs(idx)];
-        }
-
-        inline size_t size() const{
-            return bv_rs(bv.size());
-        }
-    };
-
     template<class sym_type>
     struct lms_info {
 
@@ -136,16 +121,12 @@ private:
         const sdsl::int_vector<2>& phrase_desc;
 
         phrase_map_t&              m_map;
-        static_map&                tr_map;
-
         size_t                     start;
         size_t                     end;
         const uint8_t              sym_width;
         string_map_t               thread_map;
-        bv_t                       thread_tr_bv;
 
-        lms_info(std::string &i_file_, std::string &o_file_,
-                 phrase_map_t &m_map_, static_map &tr_map_,
+        lms_info(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
                  size_t start_, size_t end_,
                  const size_t &alph,
                  const size_t &hb_size, void *hb_addr,
@@ -153,55 +134,28 @@ private:
                                                             ofs(o_file_, BUFFER_SIZE, std::ios::out),
                                                             phrase_desc(phrase_desc_),
                                                             m_map(m_map_),
-                                                            tr_map(tr_map_),
                                                             start(start_),
                                                             end(end_),
                                                             sym_width(sdsl::bits::hi(alph)+1),
-                                                            thread_map(hb_size, o_file_+"_phrases", 0.8, hb_addr),
-                                                            thread_tr_bv(alph, false){
+                                                            thread_map(hb_size, o_file_+"_phrases", 0.8, hb_addr) {
 
             //TODO for the moment the input string has to have a sep_symbol appended at the end
             //TODO assertion : sep_symbols cannot be consecutive
         };
 
         inline void hash_phrase(string_t& phrase) {
-
-            bool is_multi = false;
-            size_t len = phrase.size();
-
-            if(len>1){
-                for(size_t i=0; i < len; i++){
-                    //we check if all the symbols are repeated in the phrase
-                    if(phrase_desc[phrase[i]] & 1U){
-                        is_multi = true;
-                        break;
-                    }
-                }
-            }
-
-            if(is_multi){
-                phrase.mask_tail();
-                auto res = thread_map.insert(phrase.data(), phrase.n_bits(), false);
-                if(!res.second){//key already exists
-                    thread_map.insert_value_at(*res.first, true);
-                }
-            }else{
-                for(size_t i=0; i < len; i++){
-                    thread_tr_bv[phrase[i]] = true;
-                }
-            }
+            phrase.mask_tail();
+            auto res = thread_map.insert(phrase.data(), phrase.n_bits(), false);
         };
 
         inline void store_phrase(string_t& phrase){
             phrase.mask_tail();
-
             auto res = m_map.find(phrase.data(), phrase.n_bits());
             if(res.second){
                 ofs.push_back(res.first.value()>>1UL);
             }else{
-                for(size_t k=0; k < phrase.size(); k++){
-                    ofs.push_back(tr_map[phrase[k]]);
-                }
+                assert(phrase.size()==1 && is_suffix(phrase[0]));
+                ofs.push_back(phrase[0]);
             }
         };
 
@@ -259,11 +213,11 @@ private:
     template<class sym_type>
     static size_t
     compute_LPG_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                    size_t &min_symbol, size_t &max_symbol, plain_grammar_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
+                    plain_grammar_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
                     sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
     static void
-    assign_ids(phrase_map_t &mp_map, static_map &tr_table, size_t &min_gsym, size_t &max_gsym, plain_grammar_t &r_data,
-               key_wrapper &key_w, ivb_t &r, bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config);
+    assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r, bvb_t &r_lim,
+               size_t n_threads, sdsl::cache_config &config);
 
     static void join_parse_chunks(const std::string &output_file,
                                   std::vector<std::string> &chunk_files);
