@@ -67,8 +67,8 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
 
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            assert(tmp_sym == buff_symbol);
-            //assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
+            //assert(tmp_sym == buff_symbol);
+            assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
@@ -157,8 +157,10 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     rules.close();
     rules_lim.close();
 
-    //TODO testing
+    simplify_grammar(p_gram, config);
     p_gram.save_to_file(p_gram_file);
+
+    //TODO testing
     check_plain_grammar(p_gram_file, i_file);
     exit(1);
     //
@@ -355,7 +357,6 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
     std::cout<<"    Iter. stats:"<<std::endl;
     std::cout<<"      Parse size:          "<<psize<<std::endl;
     std::cout<<"      New nonterminals:    "<<mp_table.size()<<std::endl;
-
     return mp_table.size();
 }
 
@@ -363,7 +364,6 @@ void
 lpg_build::assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r,
                       bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
 
-    //TODO this is new
     std::string syms_file = sdsl::cache_file_name("syms_file", config);
     {
         sdsl::int_vector_buffer<> syms_buff(syms_file, std::ios::out);
@@ -386,7 +386,6 @@ lpg_build::assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, 
     if(remove(syms_file.c_str())){
         std::cout<<"Error trying to remove file "<<syms_file<<std::endl;
     }
-    //
 
     for(size_t m_pos=0; m_pos < mp_map.size(); m_pos++){
 
@@ -794,7 +793,35 @@ std::vector<std::pair<size_t, size_t>> lpg_build::compute_thread_ranges(size_t n
     return thread_ranges;
 }
 
+void lpg_build::decomp(size_t nt, sdsl::int_vector<>& rules,
+                       bv_t& r_lim, bv_t::select_1_type& rlim_ss,
+                       bv_t& rem_nt, bv_t::rank_1_type& rm_nt_rs,
+                       ivb_t & buff){
+
+    std::stack<size_t> stack;
+    stack.push(nt);
+
+    size_t start, end, tmp;
+    while(!stack.empty()){
+
+        tmp = stack.top();
+        stack.pop();
+
+        if(rem_nt[tmp]){
+            start = rlim_ss(tmp)+1;
+            end = rlim_ss(tmp+1);
+            for(size_t j=end+1;j-->start;){
+                stack.push(rules[j]);
+            }
+        }else{
+            buff.push_back(tmp-rm_nt_rs(tmp));
+        }
+    }
+}
+
 void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config) {
+
+    std::cout<<"  Simplifying the grammar"<<std::endl;
 
     bv_t r_lim;
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
@@ -803,128 +830,69 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, sdsl::cache
     sdsl::int_vector<> rules;
     sdsl::load_from_file(rules, p_gram.rules_file);
 
-    sdsl::int_vector_buffer<> new_rules(p_gram.rules_file, std::ios::out);
+    size_t max_tsym = p_gram.symbols_map.back();
+
+    ivb_t new_rules(p_gram.rules_file, std::ios::out);
     sdsl::int_vector_buffer<1> new_r_lim(p_gram.rules_lim_file, std::ios::out);
 
-    //sym desc
-    // 1 : nonterminal is unique in the grammar
-    // 2 : nonterminal is repeated in the grammar
-    // 3 : nontemrinal is unique and removed from the grammar
-    sdsl::int_vector<2> sym_desc(p_gram.r + p_gram.sigma + 1, 0);
-    for(size_t i=p_gram.sigma;i<rules.size();i++){
-        if(sym_desc[rules[i]] < 2) sym_desc[rules[i]]++;
-    }
-
-    size_t len, rep, prev_pos, start, pos;
-    std::vector<size_t> tmp_rule, dc_rule;
-
-    //inspect first which are the nonterminals I can delete
-    //I have to do it before creating the new rules array so
-    // I know which are those I have to discard
-    for(size_t i=p_gram.sigma;i<rules.size();){
-        assert(r_lim[i-1]);
-        rep = 0; len = 0; prev_pos = i;
-        while(!r_lim[i]){
-            rep += sym_desc[rules[i++]];
-            len++;
+    bv_t rem_nts(p_gram.r + 1, false);
+    {//mark duplicated nonterminals
+        sdsl::int_vector<2> rep_nts(p_gram.r + 1, 0);
+        for(size_t i=max_tsym+1;i<rules.size();i++){
+            if(rep_nts[rules[i]]<2) rep_nts[rules[i]]++;
         }
-        rep += sym_desc[rules[i++]];
-        len++;
-        if(rep==len){
-            for(size_t k=prev_pos;k<i;k++){
-                sym_desc[rules[k]] = 3;
-            }
+        //mark the grammar symbols to remove
+        for(size_t i=0;i<p_gram.r;i++){
+            rem_nts[i] = rep_nts[i]==0 || (rep_nts[i]==1 && i > max_tsym);
         }
     }
+
+    //unmark unique nonterminals that
+    // appear in the compressed string
+    size_t pos;
+    for(size_t i=r_lim_ss(p_gram.r-1)+1; i<rules.size();i++){
+        rem_nts[rules[i]] = false;
+        //unmark the children of a nonterimnal
+        // that appear in the compressed string
+        pos = r_lim_ss(rules[i])+1;
+        while(!r_lim[pos]){
+            rem_nts[rules[pos++]]=false;
+        }
+        rem_nts[rules[pos]]=false;
+    }
+    rem_nts[p_gram.r-1] = false;//unmark the compressed string
+
+    bv_t::rank_1_type rem_nts_rs(&rem_nts);
+    float rm_per = float(rem_nts_rs(rem_nts.size()))/float(p_gram.r)*100;
+    std::cout<<"    "<<rm_per<<"% of the rules will be removed"<<std::endl;
 
     for(size_t k=0;k<p_gram.sigma;k++){
         new_r_lim.push_back(true);
         new_rules.push_back(k);
     }
 
-    bool exp;
-    for(size_t i=p_gram.sigma,curr_rule=p_gram.sigma;i<rules.size();curr_rule++){
-
+    //rules are one-based
+    for(size_t i=max_tsym+1,curr_rule=max_tsym+1;i<rules.size();curr_rule++){
         assert(r_lim[i-1]);
-        prev_pos = i, exp=true;
-        while(!r_lim[i]){
-            if(sym_desc[rules[i]]!=3) exp = false;
-            i++;
-        }
-        if(sym_desc[rules[i]]!=3) exp = false;
+        pos = i;
+        while(!r_lim[i]) i++;
         i++;
 
-        if(sym_desc[curr_rule]==3) continue;
-
-        if(exp){
-            assert(r_lim[i-1]);
-            tmp_rule.clear();
-            for(size_t k=prev_pos;k<i;k++){
-                tmp_rule.push_back(rules[k]);
-            }
-
-            //recursively simplify the nonterminal
-            size_t cont=0;
-            while(exp){
-                for(unsigned long & parent_sym : tmp_rule){
-                    assert(sym_desc[parent_sym]==3);
-                    start = r_lim_ss(parent_sym) + 1;
-                    pos = start;
-                    while(!r_lim[pos]){
-                        if(sym_desc[rules[pos]]!=3) exp = false;
-                        dc_rule.push_back(rules[pos++]);
-                    }
-                    if(sym_desc[rules[pos]]!=3) exp = false;
-                    dc_rule.push_back(rules[pos]);
+        if(!rem_nts[curr_rule]){
+            for(size_t j=pos;j<i;j++){
+                if(rem_nts[rules[j]]){
+                    decomp(rules[j], rules, r_lim, r_lim_ss, rem_nts, rem_nts_rs, new_rules);
+                }else{
+                    new_rules.push_back(rules[j]-rem_nts_rs(rules[j]));
                 }
-                cont++;
-                std::swap(tmp_rule, dc_rule);
-                dc_rule.clear();
             }
-
-            //insert the decompressed phrase
-            for(auto const& sym : tmp_rule){
-                new_rules.push_back(sym);
-            }
-            new_r_lim[new_rules.size()-1] = true;
-            assert(curr_rule!=p_gram.r-1);
-
-        }else {
-            //insert the original phrase
-            for(size_t k=prev_pos;k<i;k++){
-                new_rules.push_back(rules[k]);
-            }
-            assert(r_lim[i-1]);
-            new_r_lim[new_rules.size()-1] = true;
+            new_r_lim[new_rules.size()-1]=true;
         }
     }
 
-    /*sdsl::util::clear(rules);
-    sdsl::util::clear(r_lim);
-    sdsl::util::clear(r_lim_ss);*/
-
-    bv_t rules_del(sym_desc.size(),0);
-    for(size_t k=0;k<sym_desc.size();k++){
-        if(sym_desc[k]==3) rules_del[k] = true;
-    }
-    sdsl::util::clear(sym_desc);
-
-    bv_t::rank_1_type del_rs(&rules_del);
-    for(auto && new_rule : new_rules){
-        if((new_rule-del_rs(new_rule))==84192){
-            std::cout<<new_rule<<" "<<del_rs(new_rule)<<std::endl;
-            start = r_lim_ss(new_rule)+1;
-            while(!r_lim[start]){
-                std::cout<<rules[start++]<<" ";
-            }
-            std::cout<<rules[start]<<" "<<std::endl;
-        }
-        new_rule -= del_rs(new_rule);
-    }
-
-    size_t del_nts = del_rs(rules_del.size());
-    std::cout<<"    Number of deleted nonterminals: "<<del_nts<<" ("<<(float(del_nts)/float(p_gram.r))*100<<"%)"<<std::endl;
-    p_gram.r -= del_nts;
+    new_rules.close();
+    new_r_lim.close();
+    p_gram.r -= rem_nts_rs(rem_nts.size());
     p_gram.g = new_rules.size();
 }
 

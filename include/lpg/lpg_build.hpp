@@ -229,5 +229,9 @@ private:
     static void * record_phrases(void *data);
     static void collapse_grammar(plain_grammar_t &r_data, size_t &n_iter, sdsl::cache_config &config);
     static void simplify_grammar(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config);
+    static void decomp(size_t nt, sdsl::int_vector<>& rules,
+            bv_t& r_lim, bv_t::select_1_type& rlim_ss,
+            bv_t& rem_nt, bv_t::rank_1_type& rem_nt_rs,
+            ivb_t & dec);
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H
