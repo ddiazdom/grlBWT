@@ -53,6 +53,7 @@ private:
         end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;
+        exit(0);
     }
 
     void build_grammar_tree(plain_grammar_t &p_gram, sdsl::cache_config& config){
@@ -78,7 +79,7 @@ private:
 
             bv_t lmsg_as_sp_bv;
             bool lmsg_as_sp;
-            sdsl::load_from_file(lmsg_as_sp_bv, p_gram.lms_as_sp_file);
+            sdsl::load_from_file(lmsg_as_sp_bv, "");
             g_queue.push_back((p_gram.r - 1) << 1UL);
 
             //load the succinct (uncompressed) grammar

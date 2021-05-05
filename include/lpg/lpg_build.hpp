@@ -40,13 +40,15 @@ public:
         std::vector<uint8_t>      symbols_map; // map compressed symbols to original symbols
         std::string               rules_file; // rules are concatenated in this array
         std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
-        std::string               lms_as_sp_file;
+        std::vector<size_t>       rules_per_level; // number of rules generated in every parsing round
+        std::string               lvl_breaks_file; //file with the LMS breaks per level
 
         plain_grammar_t() = default;
-        plain_grammar_t(std::string& r_file_, std::string& r_lim_file_,
-                        std::string& lms_as_sp_file_): rules_file(r_file_),
-                                                       rules_lim_file(r_lim_file_),
-                                                       lms_as_sp_file(lms_as_sp_file_){}
+        plain_grammar_t(std::string& r_file_,
+                        std::string& r_lim_file_,
+                        std::string& lvl_breaks_file_): rules_file(r_file_),
+                                                        rules_lim_file(r_lim_file_),
+                                                        lvl_breaks_file(lvl_breaks_file_){}
 
         void save_to_file(std::string& output_file);
         void load_from_file(std::string &g_file);
@@ -227,11 +229,22 @@ private:
     static void * hash_phrases(void * data);
     template<class sym_t>
     static void * record_phrases(void *data);
-    static void collapse_grammar(plain_grammar_t &r_data, size_t &n_iter, sdsl::cache_config &config);
-    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config);
-    static void decomp(size_t nt, sdsl::int_vector<>& rules,
-            bv_t& r_lim, bv_t::select_1_type& rlim_ss,
-            bv_t& rem_nt, bv_t::rank_1_type& rem_nt_rs,
-            ivb_t & dec);
+
+    //mark the nonterminals that can be removed from the grammar
+    static bv_t mark_nonterimnals(plain_grammar_t& p_gram);
+    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram,
+                                 bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs,
+                                 sdsl::cache_config &config);
+    static void decomp(size_t nt, sdsl::int_vector<>& rules, bv_t& r_lim, bv_t::select_1_type& rlim_ss,
+                       bv_t& rem_nt, bv_t::rank_1_type& rem_nt_rs, ivb_t & dec);
+    //these functions are to build the index
+    static void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts,
+                                  bv_t::rank_1_type &rem_nts_rs, sdsl::cache_config &config);
+    static std::vector<uint8_t> rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<>& rules,
+                                       bv_t& rem_nts, bv_t& r_lim, bv_t::select_1_type &r_lim_ss);
+    static void rec_dc_int(size_t nt, uint8_t lev, size_t& pos, bool rm, sdsl::int_vector<>& rules,
+                           bv_t& rem_nts, bv_t::select_1_type &r_lim_ss,
+                           std::vector<uint8_t> &breaks);
+    static void colex_nt_sort(plain_grammar_t& p_gram, sdsl::cache_config& config);
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H

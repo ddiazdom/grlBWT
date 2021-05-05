@@ -58,7 +58,6 @@ struct pairing_data{
         lim_id = 2*gram_info.g - gram_info.r;
         s_width = sdsl::bits::hi(lim_id)+1;
         r_file = gram_info.rules_file;
-        lmsg_as_sp_file = gram_info.lms_as_sp_file;
         nr_file = sdsl::cache_file_name("nr_file", config);
         new_rules = ivb(nr_file, std::ios::out, BUFFER_SIZE);
         gsyms = gram_info.g - gram_info.c;
@@ -327,10 +326,6 @@ void update_grammar(pairing_data& p_data, plain_gram_t& gram){
     col_rules.close();
     rules.close();
     rename(col_rules.filename().c_str(), gram.rules_file.c_str());
-
-    //TODO this is only useful for computing the ext. BWT
-    compute_lms_as_sp(gram, p_data, lms_syms);
-    //
 
     std::cout<<"  SuffPair stats:"<<std::endl;
     std::cout<<"    Grammar size before:         "<<gram.g - gram.sigma << std::endl;
