@@ -9,23 +9,20 @@
 
 //pthread_mutex_t thread_mutex=PTHREAD_MUTEX_INITIALIZER;
 
-void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_file) {
-
-    plain_grammar_t p_gram;
-    p_gram.load_from_file(g_file);
+void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp_file) {
 
     sdsl::int_vector<> r;
-
     bv_t r_lim;
     sdsl::load_from_file(r, p_gram.rules_file);
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
     bv_t::select_1_type r_lim_ss;
     sdsl::util::init_support(r_lim_ss, &r_lim);
 
-    std::cout<<"Checking the grammar produces the exact input string"<<std::endl;
-    std::cout<<"  Terminals:              "<<(size_t)p_gram.sigma<<std::endl;
-    std::cout<<"  Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
-    std::cout<<"  Compressed string:      "<<p_gram.c<<std::endl;
+    std::cout<<"  Checking the grammar produces the exact input string"<<std::endl;
+    std::cout<<"    This step is optional and for debugging purposes"<<std::endl;
+    std::cout<<"    Terminals:              "<<(size_t)p_gram.sigma<<std::endl;
+    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
+    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     std::vector<size_t> tmp_decomp;
 
@@ -57,6 +54,7 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
 
             if(r[start] == curr_sym){
                 assert((end-start+1)==1);
+                assert(tmp_decomp.size()<=if_stream.size());
                 tmp_decomp.push_back(curr_sym);
             }else{
                 for(size_t j=end+1; j-->start;){
@@ -74,8 +72,8 @@ void lpg_build::check_plain_grammar(std::string& g_file, std::string& uncomp_fil
     std::cout<<"\tGrammar is correct!!"<<std::endl;
 }
 
-void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
-                            size_t hbuff_size, alpha_t &alphabet, bool simp, bool rl_comp) {
+void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
+                            sdsl::cache_config &config, size_t hbuff_size, alpha_t &alphabet, bool rl_comp) {
 
     std::string rules_file = sdsl::cache_file_name("rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
@@ -112,7 +110,6 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
 
     size_t iter=1;
     size_t rem_phrases;
-
 
     std::cout<<"  Iteration "<<iter++<<std::endl;
     rem_phrases = compute_LPG_int<uint8_t>(i_file, tmp_i_file,
@@ -157,26 +154,29 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     rules.close();
     rules_lim.close();
 
+
     bv_t rem_nts = mark_nonterimnals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
 
     create_lvl_breaks(p_gram, rem_nts, rem_nts_rs, config);
-
     simplify_grammar(p_gram, rem_nts, rem_nts_rs, config);
+    //TODO testing
+    //check_plain_grammar(p_gram, i_file);
+    //
+
     sdsl::util::clear(rem_nts_rs);
     sdsl::util::clear(rem_nts);
 
     colex_nt_sort(p_gram, config);
-
     p_gram.save_to_file(p_gram_file);
+
+    //TODO testing
+    check_plain_grammar(p_gram, i_file);
+    //
 
     if(rl_comp){
         std::cout<<"  Creating run-length compressed nonterminals"<<std::endl;
     }
-
-    //TODO testing
-    check_plain_grammar(p_gram_file, i_file);
-    //
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -191,7 +191,6 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
                                   sdsl::cache_config &config) {
 
     phrase_map_t mp_table(0, "", 0.85);
-    size_t rem_phrases=0;
 
     auto thread_ranges = compute_thread_ranges<sym_type>(n_threads, i_file, phrase_desc);
 
@@ -346,14 +345,18 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
                 std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
             }
         }
-        rem_phrases=0;
     }
 
     p_gram.r +=mp_table.size();
     std::cout<<"    Iter. stats:"<<std::endl;
     std::cout<<"      Parse size:          "<<psize<<std::endl;
     std::cout<<"      New nonterminals:    "<<mp_table.size()<<std::endl;
-    return mp_table.size();
+
+    if(psize>1){
+        return mp_table.size();
+    }else{
+        return 0;
+    }
 }
 
 void
@@ -617,7 +620,6 @@ void * lpg_build::record_phrases(void *data) {
                     curr_lms.pop_back();
                     if(!curr_lms.empty()){
                         lms_data->store_phrase(curr_lms);
-                        curr_lms.clear();
                     }
                     curr_lms.clear();
                     curr_lms.push_back(prev_sym);
@@ -826,6 +828,7 @@ void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::
                 auto breaks = rec_dc(curr_rule, lev, rules, rem_nts, r_lim, r_lim_ss);
                 breaks_buff.push_back(curr_rule-rem_nts_rs(curr_rule));
                 breaks_buff.push_back(breaks.size());
+                assert(!breaks.empty());
                 for(auto const& lvl : breaks){
                     breaks_buff.push_back(lvl);
                 }
@@ -996,9 +999,9 @@ void lpg_build::colex_nt_sort(lpg_build::plain_grammar_t &p_gram, sdsl::cache_co
     while(k<lvl_breaks.size()){
         lvl_breaks[k] = renames[lvl_breaks[k]];
         k++;
-        k+=lvl_breaks[k];
+        k+=lvl_breaks[k]+1;
     }
-
+    assert(k==lvl_breaks.size());
     lvl_breaks.close();
     new_rules.close();
     new_rlim.close();

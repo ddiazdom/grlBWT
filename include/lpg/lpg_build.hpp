@@ -42,6 +42,7 @@ public:
         std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
         std::vector<size_t>       rules_per_level; // number of rules generated in every parsing round
         std::string               lvl_breaks_file; //file with the LMS breaks per level
+        uint8_t                   lms_rounds{}; // rounds of LMS parsing
 
         plain_grammar_t() = default;
         plain_grammar_t(std::string& r_file_,
@@ -104,15 +105,16 @@ public:
      * @param hbuff_size : buffer size for the hashing step
      * @param sep_symbol : string delimiter in the input text
      */
-    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
-                            size_t hbuff_size, alpha_t &alphabet, bool simp, bool rl_comp);
+    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
+                            sdsl::cache_config &config, size_t hbuff_size, alpha_t &alphabet,
+                            bool rl_comp);
 
     /***
      * check if the grammar is correct
      * @param g_file : file with the plain grammar
      * @param uncomp_file : original input text
      */
-    static void check_plain_grammar(std::string& g_file, std::string& uncomp_file);
+    static void check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp_file);
 private:
 
     template<class sym_type>
