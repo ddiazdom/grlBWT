@@ -33,6 +33,7 @@ public:
     typedef std::vector<std::pair<uint8_t, size_t>>      alpha_t;
 
     struct plain_grammar_t{
+//        size_t                    l; // l: text length
         uint8_t                   sigma{}; // terminal's alphabet
         size_t                    r{}; //r: number of rules
         size_t                    c{}; //c: length of the right-hand of the start symbol
@@ -53,6 +54,77 @@ public:
 
         void save_to_file(std::string& output_file);
         void load_from_file(std::string &g_file);
+
+        void print_grammar(){
+            std::cout<<"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"<<std::endl;
+            std::cout<<"terminal's alphabet "<<(uint)sigma<<std::endl;
+            std::cout<<"number of rules "<<r<<std::endl;
+            std::cout<<"length of the right-hand of the start symbol "<<c<<std::endl;
+            std::cout<<" sum of the rules' right-hand sides "<<g<<std::endl;
+            std::cout<<"map compressed symbols to original symbols ("<<symbols_map.size()<<")"<<std::endl;
+            int c = 0;
+            for (const auto &item : symbols_map) {
+                std::cout<<c<<" ["<<item<<"]\n";
+                ++c;
+            }
+            std::cout<<std::endl;
+            std::cout<<"Rules"<<std::endl;
+
+
+            uint* len_rules = new uint [r];
+            for (int i = 0; i < r ; ++i) {
+                len_rules[i] = 1;
+            }
+
+
+            ivb_t rules_buff(rules_file);
+            bvb_t rules_lim_buff(rules_lim_file);
+            c =0;
+            int len = 0;
+            std::cout<<c+sigma<<"->";
+            for (int i = (uint)sigma; i < rules_lim_buff.size(); ++i) {
+                ++len;
+                std::cout<<rules_buff[i]<<" ";
+                if(rules_lim_buff[i] == 1){
+                    len_rules[c+sigma] = len;
+                    std::cout<<"["<<len_rules[c+sigma]<<"]"<<std::endl;
+                    len = 0;
+                    if(c+1+sigma < rules_lim_buff.size()){
+
+                        std::cout<<c+1+sigma<<"->";
+                        c++;
+                    }
+
+
+                }
+
+            }
+
+            c = 0;
+            for (const auto &item : rules_per_level) {
+                std::cout<<"level "<< c++<< " -> "<<item <<" elements "<<std::endl;
+            }
+
+
+            std::cout<<"file with the LMS breaks per level"<<std::endl;
+            ivb_t breaks_buff(lvl_breaks_file);
+            int i = 0;
+            while ( i < breaks_buff.size()) {
+//                    std::cout<<breaks_buff[i]<<" ";
+//                    i++;
+                uint rule = breaks_buff[i];
+                uint l = len_rules[rule];
+                std::cout<<rule<<"["<<l<<"]"<<"-> L | ";
+                for (int j = 1; j <= l; ++j) {
+                    std::cout<<breaks_buff[i+j]<<" ";
+                }
+                std::cout<<std::endl;
+                i += l + 1;
+            }
+
+        }
+
+
     };
 
     // the phrases are stored in a bit compressed hash table:
