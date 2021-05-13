@@ -81,10 +81,7 @@ public:
 
 
     grammar_tree_t() = default;
-    grammar_tree_t(const grammar_tree_t& _g):T(_g.T),Z(_g.Z),X(_g.X),F(_g.F),L(_g.L),alp(_g.alp){
-          compute_aux_st();
-    }
-
+    grammar_tree_t(const grammar_tree_t& _g):T(_g.T),Z(_g.Z),X(_g.X),F(_g.F),L(_g.L),alp(_g.alp){compute_aux_st();}
     virtual ~grammar_tree_t() = default;
 
     void load(std::istream &in){
@@ -140,6 +137,7 @@ public:
         return written_bytes;
     }
 
+
     void build(utils::nav_grammar& NG, const plain_grammar& Gr, const size_t& text_length,utils::lenght_rules& rules_off){
         std::cout<<"utils::nav_grammar NG = utils::build_nav_grammar(Gr);\n";
         build_tree(Gr,NG,text_length,rules_off);
@@ -147,9 +145,32 @@ public:
         compute_aux_st();
         std::cout<<"compute_aux_st();\n";
     }
+    const top_tree& getT()const {return T;}
+    size_type first_occ_preorder_node(const size_type& preorder)const {
+        // preorder has to be a non-terminal leaf
+        if(!Z[preorder - 1]){
+            //check if it is not a first mention
+            size_type _x = X[preorder - rank1_Z(preorder) - 1 ];
+            return select1_Z(F[_x]) + 1;
+        }
+    }
+    size_type first_occ_from_rule(const size_type& _x)const {
+        // preorder has to be a non-terminal leaf
+        return select1_Z(F[_x]) + 1;
+    }
+    inline bool isLeaf(const size_type& preorder)const {
+        size_type node = T[preorder];
+        return T.isleaf(node);
+    }
+    inline size_type get_rule_from_node(const size_type& preorder) const {
 
-    const top_tree& getT(){return T;}
-
+        if(!Z[preorder - 1]){ //second mention case
+            return X[preorder - rank1_Z(preorder) - 1 ];
+        }
+        //first mention case
+        return F_inv[rank1_Z(preorder)];
+    }
+    inline size_type get_size_rules()const {return F.size();}
 protected:
 
 

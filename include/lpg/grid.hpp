@@ -205,6 +205,7 @@ public:
     size_type first_label_col(const size_type  & col) const{
         return labels[sb.select(1,col)];
     }
+    size_type size_cols(){ return sb.size();}
 
     void search_2d(const query& q,std::vector<size_type>& R){
         size_t p1,p2;
@@ -224,6 +225,8 @@ class grid_t {
 
 public:
     typedef grid                                            _grid;
+    typedef sdsl::int_vector<>                                 vi;
+
     typedef size_t                                      size_type;
     typedef grid_point                                     point;
     typedef grid_query                                     query;
@@ -231,7 +234,9 @@ public:
 
 
 protected:
-    std::vector<grid> grid_levels{};
+    std::vector<_grid> grid_levels{};
+    vi  level_columns_map;
+
 
 public:
 
@@ -241,6 +246,7 @@ public:
         for (uint32_t i = 0; i < _g.grid_levels.size() ; ++i) {
             grid_levels[i] = _g.grid_levels[i];
         }
+        level_columns_map = _g.level_columns_map;
     }
 
     grid_t (const std::vector<point>& _points,const uint32_t &_l) {
@@ -249,11 +255,20 @@ public:
             grid_levels[i].build(_points,i+1);
             std::cout<<"grid-level-"<<i+1<<std::endl;
         }
+        sdsl::int_vector<> V(_points.size(),0);
+        for (size_type i = 0; i < _points.size() ; ++i) {
+            V[i] = _points[i].level;
+        }
+        sdsl::util::bit_compress(V);
+        level_columns_map = vi(V);
+
     }
 
     virtual ~ grid_t() {}
 
     void load(std::istream &in) {
+
+        sdsl::load(level_columns_map,in);
         size_type levels;
         sdsl::load(levels,in);
         grid_levels.resize(levels);
@@ -267,6 +282,7 @@ public:
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const {
 //        sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
+        written_bytes += sdsl::serialize(level_columns_map,out);
         size_type levels = grid_levels.size();
         written_bytes += sdsl::serialize(levels,out);
         for (uint32_t i = 0; i < levels; ++i) {
@@ -274,6 +290,31 @@ public:
         }
         return written_bytes;
     }
+
+
+    size_type get_preorder_node_from_suffix(const size_type & sfx, const uint32_t& level){
+        // if the sfx is in level it should be a point
+        if(level_columns_map[sfx] != level)
+            return 0;
+        return grid_levels[level-1].first_label_col(sfx);
+    }
+
+    /**
+     * O(G) this is linear on G but can reduce the number of extraction rules expanded to compares
+     */
+    void map_suffixes_levels(const uint32_t& level,std::vector<size_type>&V){
+        size_type len = grid_levels[level-1].size_cols();
+        V.resize(len,0);
+        size_type j = 0;
+        for (size_type i = 0; i < level_columns_map.size(); ++i) {
+            if(level_columns_map[i] == level){
+                V[j] = i+1;
+                ++j;
+            }
+        }
+    }
+
+
 
 protected:
 //    void safe_delete() {

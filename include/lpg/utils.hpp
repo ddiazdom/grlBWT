@@ -379,6 +379,58 @@ namespace utils {
         }
         std::cout<<std::endl;
     }
+
+    template<typename K>
+    bool lower_bound( uint64_t &lr,uint64_t  hr, const K &f)  {
+        bool found = false;
+        while(lr < hr){
+            uint64_t mid = (lr+hr)/2;
+            int c = f(mid); // return 1 if  str < x
+            if(c > 0){
+                hr = mid -1;
+            }else{
+                if(c < 0) // return -1 if x > str
+                    lr = mid+1;
+                else{
+                    hr = mid;
+                    found = true;
+                }
+            }
+        }
+        if(found) return true;
+
+        if(!found && lr == hr && f(lr) == 0 ) {
+            return true;
+        }
+        return false;
+    }
+
+    template<typename K>
+    bool upper_bound(uint64_t  lr,uint64_t  &hr, const K &f)  {
+        bool found = false;
+        while(lr < hr){
+            uint64_t mid = ceil((lr+hr)/2.0);
+            int c = f(mid);
+            if(c > 0){
+                hr = mid -1;
+            }else{
+                if(c < 0)
+                    lr = mid+1;
+                else{
+                    lr = mid;
+                    found = true;
+                }
+            }
+        }
+        if(found) return true;
+
+        if(!found && lr == hr && f(lr) == 0 ) {
+            return true;
+        }
+        return false;
+
+    }
+
 }
 
 

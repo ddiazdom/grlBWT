@@ -37,7 +37,8 @@ private:
         grammar_tree.build(NG,p_gram,text_length,lenghts);
 
         std::vector<utils::sfx> grammar_sfx;
-        utils::compute_grammar_sfx(NG,p_gram,grammar_tree.getT(),lenghts,grammar_sfx);
+        const auto& T = grammar_tree.getT();
+        utils::compute_grammar_sfx(NG,p_gram,T,lenghts,grammar_sfx);
         NG.clear();
         utils::sort_suffixes(i_file,grammar_sfx);
         std::vector<grid_point> points;
@@ -325,5 +326,186 @@ public:
         written_bytes += sdsl::write_member(rl_compressed, out, child, "sigma");
         return written_bytes;
     }
+
+    template<typename F>
+    bool dfs_leaf_base_case(const uint64_t &preorder_node, const uint64_t &node, const F &f){
+        size_type _x = grammar_tree.get_rule_from_node(preorder_node);//get the rule of the leaf
+        if(isTerminal(_x)){//check if the rule is a terminal symbol
+            //terminal case
+            bool keep = f(preorder_node, node,_x);//call process function
+            return keep; // keep says if we must to stop the expansion of the rule
+        }
+        //second occ.
+        auto fpre_node = grammar_tree.first_occ_from_rule(_x);//get preorder of first mention node
+        const auto&T = grammar_tree.getT();
+        auto fnode = T[fpre_node];//preorder select
+
+        return dfs_mirror_leaf(fpre_node, fnode, f); // call recursive in the new node...
+    }
+
+    template<typename F>
+    bool dfs_mirror_leaf(const uint64_t &preorder_node, const uint64_t &node, const F &f) {
+            if (grammar_tree.isLeaf(preorder_node)) { //leaf case
+                return dfs_leaf_base_case(preorder_node,node,f);
+            } else {
+                    const auto&T = grammar_tree.getT();
+                    uint32_t n = T.children(node); //number of children
+                    for (uint32_t i = n; i > 0; --i) { // from right to left
+                        auto chnode = T.child(node, i); //get i-child node
+                        bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode, f);// compute preorder and visit recursively
+                        if (!keep) return keep; // keep says if we must to stop the expansion of the rule
+                    }
+                    return true;
+            }
+    }
+
+    template<typename F>
+    bool dfs_leaf(const uint64_t &preorder_node, const uint64_t &node, const F &f) {
+        if (grammar_tree.isLeaf(preorder_node)) { //leaf case
+            return dfs_leaf_base_case(preorder_node,node,f);
+        }  else {
+
+            const auto&T = grammar_tree.getT();
+            uint32_t n = T.children(node); //number of children
+
+            for (uint32_t i = 0; i > n; ++i) { // from left to right
+                auto chnode = T.child(node, i+1); //get i-child node
+                bool keep = dfs_leaf(T.pre_order(chnode), chnode, f);// compute preorder and visit recursively
+                if (!keep) return keep; // keep says if we must to stop the expansion of the rule
+            }
+            return true;
+        }
+    }
+
+    int cmp_prefix_rule(const size_type &preorder_node, const std::string& str, const uint32_t &i) {
+        long ii = i;
+        int r = 0;
+        bool match = false;
+        const auto& m_tree = grammar_tree.getT();
+        auto node = m_tree[preorder_node];
+        auto cmp = [&str, &r, &match, &ii, this](const size_type &preorder_node, const size_type &node, const size_type &X) {
+            // X is a terminal rule
+            auto c1 = (unsigned char) symbols_map[X];
+            auto c2 = (unsigned char) str[ii];
+            if (c1 > c2) {r = 1;return false;}
+            if (c1 < c2) {r = -1;return false;}
+            --ii;
+            if ( ii < 0 ) {match = true;return false;}
+            return true;
+        };
+        dfs_mirror_leaf(preorder_node, node, cmp);
+        // case : rev(grammar rule)  is longer than the rev(string prefix) and rev(string prefix)  is prefix of rev(grammar rule)
+        if (r == 0 && match) return 0;
+        // case : rev(string prefix) is longer than the rev(grammar rule) and rev(grammar rule) is prefix of rev(string prefix)
+        if (r == 0 && !match) return -1;
+        // in other case they have a at least a symbol diferent
+        return r;
+
+    }
+    int cmp_suffix_grammar(const size_type &preorder_node, const std::string& str, const uint32_t &i) {
+        uint32_t ii = i, sfx_len = str.size();
+        int r = 0;
+        bool match = false;
+        const auto& T = grammar_tree.getT();
+        auto node = T[preorder_node];//preorder select
+        auto cmp = [&str, &r, &match, &ii, &sfx_len, this](const uint64_t &prenode, const uint64_t &node, const uint64_t &X) {
+            auto c1 = (unsigned char) symbols_map[X];
+            auto c2 = (unsigned char) str[ii];
+            if (c1 > c2) {r = 1;return false;}
+            if (c1 < c2) {r = -1;return false;}
+            ii++;
+            if (ii == sfx_len) {match = true;return false;}
+            return true;
+        };
+
+        auto fopen = T.bps.find_open(node - 1); // this is to compute parent and childrank
+        auto parent = T.pred0(fopen) + 1;//  compute parent
+        uint32_t ch = T.children(parent);//  compute children
+        uint32_t chr = T.succ0(fopen) - fopen;//  compute childrank
+
+
+        for (uint32_t j = chr; j <= ch; ++j) {
+            auto cnode = T.child(parent, j);
+            auto pcnode = T.pre_order(cnode);
+            dfs_leaf(pcnode, cnode, cmp);
+            // if they have a at least a symbol diferent return r
+            if (r != 0) return r;
+            // case : grammar sfx  is longer than the string sfx and string sfx  is prefix of grammar sfx
+            if (r == 0 && match) return 0;
+            // if r == 0 and !match we process next sibling
+        }
+        // case : string sfx is longer than the grammar sfx and grammar sfx is prefix of string sfx
+        if (r == 0 && !match) return -1;
+        // in other case they have a at least a symbol diferent
+        return r;
+    }
+    inline bool isTerminal(const size_type& X) const{ return X < m_sigma;}
+
+    /**
+     * Find the grid range to search
+     * @return grid_query
+     * */
+
+    bool search_grid_range(const char* pattern ,const uint32_t & len,const uint32_t & p,const uint32_t & level,grid_query& q) {
+        // search rules range....
+        auto cmp_rev_prefix_rule = [&p, &pattern,this](const size_type &rule_id) {
+            // compute node definiton preorder of the rule
+            uint64_t prenode = grammar_tree.first_occ_from_rule(rule_id);
+            return cmp_prefix_rule(prenode, pattern, p - 1);
+        };
+        uint64_t row_1 = 1, row_2 = grammar_tree.get_size_rules();
+        //search lower
+        if (!utils::lower_bound(row_1, row_2, cmp_rev_prefix_rule)) return false;
+        q.row1 = row_1;
+        //search upper
+        row_2 = grammar_tree.get_size_rules();
+        if (!utils::upper_bound(row_1, row_2, cmp_rev_prefix_rule)) return false;
+        q.row2 = row_2;
+        //search suffixes
+        auto cmp_suffix_grammar_rule = [ &level, &p, &pattern,this](const uint64_t &suffix_id) {
+            // compute node definiton preorder of the rule
+            uint64_t prenode = grid.get_preorder_node_from_suffix(suffix_id,level);
+            return cmp_suffix_grammar(prenode, pattern, p);
+        };
+
+        std::vector<size_type> sfx_by_level;
+        this->grid.map_suffixes_levels(level,sfx_by_level);
+        //search lower
+        auto it_low = std::lower_bound(sfx_by_level.begin(),sfx_by_level.end(),cmp_suffix_grammar_rule);
+        //check we found a match...
+        if(it_low == sfx_by_level.end() || cmp_suffix_grammar_rule(*it_low) != 0) return false;
+        q.col1 = *it_low;
+        //search upper
+        //remove elements less than lower bound
+        sfx_by_level.erase(sfx_by_level.begin(),it_low);
+        auto it_upper = std::lower_bound(sfx_by_level.begin(),sfx_by_level.end(),cmp_suffix_grammar_rule);
+        //check we found a match...
+        if(it_upper == sfx_by_level.end() || cmp_suffix_grammar_rule(*it_upper) != 0) return false;
+        q.col2 = *it_upper;
+        return true;
+    }
+
+
+    void locate(const char* pattern,const uint64_t & len, std::set<uint64_t> &pos){
+
+        std::set<uint32_t> partitions;
+        findPartition(pattern,len, partitions);
+        for (const auto &item : partitions) {
+                //find primary occ
+                lc::grid_range range;
+                //range search
+                if(findGridRanges(pattern,len,item + 1, range,indice)){
+                    std::vector<lc::primaryOcc> pOcc;
+                    // grid search
+                    gridSearch(range,item,pOcc,indice);
+                    // find secondary occ
+                    for (const auto &occ : pOcc) {
+                       findSecondaryOcc(occ,len,pos,indice);
+                    }
+                }
+
+            }
+    }
+
 };
 #endif //LMS_GRAMMAR_REP_HPP
