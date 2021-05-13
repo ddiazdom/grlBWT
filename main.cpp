@@ -102,8 +102,8 @@ int main(int argc, char** argv) {
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the LPG index"<<std::endl;
         lpg_index g;
-        /*sdsl::load_from_file(g, args.input_file);
-        if(args.output_file.empty()){
+        sdsl::load_from_file(g, args.input_file);
+        /*if(args.output_file.empty()){
             args.output_file = args.input_file.substr(0, args.input_file.size()-3);
         }*/
         std::cout<<"Searching for the patterns "<<std::endl;

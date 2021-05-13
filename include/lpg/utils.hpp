@@ -156,8 +156,7 @@ namespace utils {
 
     void sort_suffixes(const std::string& i_file, std::vector<sfx> &grammar_sfx) {
         unsigned char * text = nullptr;
-        size_type len;
-        len = readFile(i_file, &text);
+        readFile(i_file, &text);
 
         if(text == nullptr) throw "ERROR TEXT INVALID";
 
@@ -328,6 +327,11 @@ namespace utils {
         for(size_t i=0;i<if_stream.tot_cells;i++){
             (*text)[i] = if_stream.read(i);
         }
+        std::cout<<"TEXT"<<std::endl;
+        for (int i = 0; i <if_stream.tot_cells ; ++i) {
+           std::cout<<(*text)[i];
+        }
+        std::cout<<std::endl;
         return if_stream.tot_cells;
     }
     template<typename O>
@@ -430,6 +434,17 @@ namespace utils {
         return false;
 
     }
+
+    struct primaryOcc{
+
+        size_type node;
+        size_type preorder;
+        size_type  off_pattern;
+        size_type  off_node;
+
+        primaryOcc() = default;
+        primaryOcc(const size_type& n,const size_type&p, const size_type& o,const size_type& op):node(n),preorder(p),off_node(o),off_pattern(op){}
+    };
 
 }
 

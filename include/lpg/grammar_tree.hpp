@@ -60,28 +60,17 @@ protected:
     vi                              F;
     inv_vi                          F_inv;
     /**
-     *  @Y is a bitvector of length g that marks which rules are terminal ( Xi -> a)
-     * */
-    bv_y                            Y; // todo esto quizas no hace falta las reglas son X.id < sigma... problema para buscar patrones de
-    bv_y::rank_1_type               rank_Y;
-    bv_y::select_1_type             select_Y;
-    /**
      *  @L is a bitvector of length |T| that the start position on the text of the phrases created by the grammar tree
      *  (or the start posititon on the text of the leaves of the grammar tree )
      * */
     bv_l                            L; // marks the init position of each Xi in T
-    bv_l::rank_1_type               rank_L;
     bv_l::select_1_type             select_L;
-    /**
-     * @alp is a array with the alphabeth symbols.
-     * */
-    vi_alp alp;
 
 public:
 
 
     grammar_tree_t() = default;
-    grammar_tree_t(const grammar_tree_t& _g):T(_g.T),Z(_g.Z),X(_g.X),F(_g.F),L(_g.L),alp(_g.alp){compute_aux_st();}
+    grammar_tree_t(const grammar_tree_t& _g):T(_g.T),Z(_g.Z),X(_g.X),F(_g.F),L(_g.L){compute_aux_st();}
     virtual ~grammar_tree_t() = default;
 
     void load(std::istream &in){
@@ -98,12 +87,8 @@ public:
         sdsl::load(F,in);
         sdsl::load(F_inv,in);
 
-        sdsl::load(Y,in);
-        sdsl::load(rank_Y,in);
-        sdsl::load(select_Y,in);
 
         sdsl::load(L,in);
-        sdsl::load(rank_L,in);
         sdsl::load(select_L,in);
 
         compute_aux_st();
@@ -124,13 +109,7 @@ public:
         written_bytes += sdsl::serialize(F,out);
         written_bytes += sdsl::serialize(F_inv,out);
 
-        written_bytes += sdsl::serialize(Y,out);
-        written_bytes += sdsl::serialize(rank_Y,out);
-        written_bytes += sdsl::serialize(select_Y,out);
-
-
         written_bytes += sdsl::serialize(L,out);
-        written_bytes += sdsl::serialize(rank_L,out);
         written_bytes += sdsl::serialize(select_L,out);
 
 
@@ -162,7 +141,7 @@ public:
         size_type node = T[preorder];
         return T.isleaf(node);
     }
-    inline size_type get_rule_from_node(const size_type& preorder) const {
+    inline size_type get_rule_from_preorder_node(const size_type& preorder) const {
 
         if(!Z[preorder - 1]){ //second mention case
             return X[preorder - rank1_Z(preorder) - 1 ];
@@ -170,7 +149,25 @@ public:
         //first mention case
         return F_inv[rank1_Z(preorder)];
     }
+
     inline size_type get_size_rules()const {return F.size();}
+    inline size_type offset_node(const size_type& node) const {
+        size_type leaf = T.leafrank(node);
+        return select_L(leaf);
+    }
+
+    template<typename F>
+    void visit_secondary_occ(const size_type& preorder_node, const F& f) const {
+        size_type  x = get_rule_from_preorder_node(preorder_node);
+        size_type num_occ = X.rank(X.size(),x);
+        for (size_type i = 0; i < num_occ ; ++i) {
+            size_type  j = X.select(i+1,x);
+            size_type preorder = select0_Z(j);
+            f(preorder);
+        }
+    }
+
+
 protected:
 
 
@@ -281,11 +278,7 @@ protected:
 
 //        F_inv           = inv_vi(&F);
 
-        rank_Y          = bv_y::rank_1_type(&Y);
-        select_Y        = bv_y::select_1_type(&Y);
-
         select_L        = bv_l::select_1_type(&L);
-        rank_L          = bv_l::rank_1_type(&L);
 
     }
 

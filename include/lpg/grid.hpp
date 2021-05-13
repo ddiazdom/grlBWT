@@ -24,16 +24,11 @@ struct grid_point{
 };
 
 struct grid_query{
-    size_t row1;
-    size_t col1;
-    size_t row2;
-    size_t col2;
+    size_t row1{};
+    size_t col1{};
+    size_t row2{};
+    size_t col2{};
 };
-struct grid_query_results{
-    size_t label;
-    size_t col;
-};
-
 class grid {
 
 public:
@@ -41,7 +36,6 @@ public:
 
     typedef grid_point                                     point;
     typedef grid_query                                     query;
-    typedef grid_query_results                          qresults;
     typedef size_t                                     size_type;
     typedef sdsl::wt_int<>                                  wt_s;
     typedef sdsl::rrr_vector<>                              bv_x;
@@ -205,15 +199,15 @@ public:
     size_type first_label_col(const size_type  & col) const{
         return labels[sb.select(1,col)];
     }
-    size_type size_cols(){ return sb.size();}
+    size_type size_cols()const{ return sb.size();}
 
-    void search_2d(const query& q,std::vector<size_type>& R){
+    void search_2d(const query& q,std::vector<size_type>& R) const{
         size_t p1,p2;
         p1 = map(q.row1);
         p2 = map(q.row2+1)-1;
         if(p1 > p2) return;
         auto res = sb.range_search_2d2(p1,p2,q.col1,q.col2);
-        R.resize(res.first,0);qresults r;
+        R.resize(res.first,0);
         for ( size_type i = 0; i < R.size(); i++ ){
             R[i] = res.second[i].second;
         }
@@ -230,7 +224,6 @@ public:
     typedef size_t                                      size_type;
     typedef grid_point                                     point;
     typedef grid_query                                     query;
-    typedef grid_query_results                          qresults;
 
 
 protected:
@@ -292,7 +285,7 @@ public:
     }
 
 
-    size_type get_preorder_node_from_suffix(const size_type & sfx, const uint32_t& level){
+    size_type get_preorder_node_from_suffix(const size_type & sfx, const uint32_t& level) const{
         // if the sfx is in level it should be a point
         if(level_columns_map[sfx] != level)
             return 0;
@@ -302,7 +295,7 @@ public:
     /**
      * O(G) this is linear on G but can reduce the number of extraction rules expanded to compares
      */
-    void map_suffixes_levels(const uint32_t& level,std::vector<size_type>&V){
+    void map_suffixes_levels(const uint32_t& level,std::vector<size_type>&V)const{
         size_type len = grid_levels[level-1].size_cols();
         V.resize(len,0);
         size_type j = 0;
@@ -314,18 +307,9 @@ public:
         }
     }
 
-
-
-protected:
-//    void safe_delete() {
-//        levels = 0;
-//        if(grid_levels!= nullptr)
-//            delete [] grid_levels;
-//    }
-//    void assignMemory(const uint32_t& _levels){
-//        levels = _levels;
-//        grid_levels = new _grid[levels];
-//    }
+    void search (const grid_query& q,const uint32_t & level, std::vector<size_type>&results) const {
+        grid_levels[level-1].search_2d(q,results);
+    }
 };
 
 #endif //LPG_COMPRESSOR_GRID_H
