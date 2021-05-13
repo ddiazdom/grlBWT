@@ -11,10 +11,16 @@
 #include <sdsl/construct.hpp>
 
 struct grid_point{
-    size_t row;
-    size_t col;
-    size_t label;
-    uint32_t level;
+
+    size_t row{};
+    size_t col{};
+    size_t label{};
+    uint32_t level{};
+
+    grid_point() = default;
+
+    grid_point(const size_t& r,const size_t& c,const size_t& l,const size_t& lv):row(r),col(c),label(l),level(lv){}
+
 };
 
 struct grid_query{
@@ -225,34 +231,32 @@ public:
 
 
 protected:
-    _grid *grid_levels{nullptr};
-    uint32_t levels{};
+    std::vector<grid> grid_levels{};
+
 public:
 
-    grid_t () :grid_levels(nullptr),levels(0){}
+    grid_t () = default;
 
     grid_t (const grid_t & _g ){
-        assignMemory(_g.levels);
-        for (uint32_t i = 0; i < levels ; ++i) {
+        for (uint32_t i = 0; i < _g.grid_levels.size() ; ++i) {
             grid_levels[i] = _g.grid_levels[i];
         }
     }
 
     grid_t (const std::vector<point>& _points,const uint32_t &_l) {
-        assignMemory(_l);
-        for (uint32_t i = 0; i < levels ; ++i) {
+        grid_levels.resize(_l);
+        for (uint32_t i = 0; i < _l  ; ++i) {
             grid_levels[i].build(_points,i+1);
+            std::cout<<"grid-level-"<<i+1<<std::endl;
         }
     }
 
-    virtual ~ grid_t() {
-        safe_delete();
-    }
+    virtual ~ grid_t() {}
 
     void load(std::istream &in) {
+        size_type levels;
         sdsl::load(levels,in);
-        safe_delete();
-        assignMemory(levels);
+        grid_levels.resize(levels);
         for (uint32_t i = 0; i < levels; ++i) {
             grid_levels[i].load(in);
         }
@@ -263,6 +267,7 @@ public:
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const {
 //        sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
+        size_type levels = grid_levels.size();
         written_bytes += sdsl::serialize(levels,out);
         for (uint32_t i = 0; i < levels; ++i) {
             written_bytes += sdsl::serialize(grid_levels[i],out);
@@ -271,14 +276,15 @@ public:
     }
 
 protected:
-    void safe_delete() {
-        if(grid_levels!= nullptr)
-            delete [] grid_levels;
-    }
-    void assignMemory(const uint32_t& _levels){
-        levels = _levels;
-        grid_levels = new _grid[levels];
-    }
+//    void safe_delete() {
+//        levels = 0;
+//        if(grid_levels!= nullptr)
+//            delete [] grid_levels;
+//    }
+//    void assignMemory(const uint32_t& _levels){
+//        levels = _levels;
+//        grid_levels = new _grid[levels];
+//    }
 };
 
 #endif //LPG_COMPRESSOR_GRID_H

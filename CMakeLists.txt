@@ -9,7 +9,7 @@ find_package(LibSDSL REQUIRED)
 add_executable(lpg
         main.cpp
         lib/lpg/lpg_build.cpp
-        third-party/xxHash-dev/xxhash.c include/lpg/plain_grammar.hpp)
+        third-party/xxHash-dev/xxhash.c include/lpg/utils.hpp)
 
 target_compile_options(lpg
         PRIVATE

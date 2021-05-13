@@ -9,7 +9,7 @@
 #include <sdsl/wt_gmr.hpp>
 #include <sdsl/inv_perm_support.hpp>
 #include <sdsl/construct.hpp>
-#include "plain_grammar.hpp"
+#include "utils.hpp"
 #include "dfuds_tree.hpp"
 
 #define INV_PI_WX 8
@@ -18,12 +18,9 @@
 class grammar_tree_t{
 
 public:
-
-
-
     typedef size_t                                          size_type;
     typedef lpg_build::plain_grammar_t                      plain_grammar;
-    typedef dfuds::dfuds_tree                               top_tree;
+    typedef dfuds_tree                                      top_tree;
 
     typedef sdsl::wt_gmr<
                 sdsl::int_vector<>,
@@ -115,7 +112,7 @@ public:
         compute_aux_st();
     }
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
-//        sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+        sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
 
         written_bytes += sdsl::serialize(T,out);
@@ -143,11 +140,16 @@ public:
         return written_bytes;
     }
 
-    void build(const plain_grammar& Gr, const size_t& text_length){
-        utils::nav_grammar NG = utils::build_nav_grammar(Gr);
-        build_tree(Gr,NG,text_length);
+    void build(utils::nav_grammar& NG, const plain_grammar& Gr, const size_t& text_length,utils::lenght_rules& rules_off){
+        std::cout<<"utils::nav_grammar NG = utils::build_nav_grammar(Gr);\n";
+        build_tree(Gr,NG,text_length,rules_off);
+        std::cout<<"build_tree(Gr,NG,text_length);\n";
         compute_aux_st();
+        std::cout<<"compute_aux_st();\n";
     }
+
+    const top_tree& getT(){return T;}
+
 protected:
 
 
@@ -156,9 +158,9 @@ protected:
      * build algorithms
      * */
 
-    void build_tree( const plain_grammar& Gr,utils::nav_grammar& grammar, const size_t& text_length ){
+    void build_tree( const plain_grammar& Gr,utils::nav_grammar& grammar, const size_t& text_length,utils::lenght_rules& rules_off ){
 
-        //Building dfuds representation of parser tree
+        std::cout<<"Building dfuds representation of parser tree"<<std::endl;
         sdsl::bit_vector _bv(2 * Gr.g - 1, 1);
         size_type pos = 0; // offset in tree topology bitvector
         std::set<size_type> M; //
@@ -168,11 +170,10 @@ protected:
         sdsl::int_vector<> _x(Gr.g - Gr.r); // label of second mention nodes in the tree
         sdsl::bit_vector _l(text_length + 1, 0); // text-len bitvector marking start position of parser phrases..
         size_type l_pos = 0; // current off in the text.
-        std::unordered_map<size_type,std::pair<size_type,size_type>> rules_off; // store the rule offset and length
+
 
         utils::dfs_2v(Gr.sigma,grammar,[&Gr,&grammar,&_bv,&pos,&_z,&z_pos,&z_rank,&_f,&_x,&x_pos,&_l, &l_pos, &M,&rules_off](const size_type& id, bool first_visit){
             if(first_visit){ // first visit
-
                 z_pos ++ ; // pre-incress offset in vector z;
                 if (M.find(id) != M.end()) { // second mention of a non-terminal => leaf tree
 
@@ -225,6 +226,13 @@ protected:
         F = vi (_f);
         sdsl::util::bit_compress(F);
         Z = bv_z(_z);
+        L = bv_l (_l);
+
+//        T.print();
+//        utils::pretty_printer_bv(Z,"Z");
+//        utils::pretty_printer_v(F,"F");
+//        utils::pretty_printer_v(X,"X");
+//        utils::pretty_printer_bv(L,"L");
 
     }
 
@@ -250,7 +258,7 @@ protected:
         select1_Z       = bv_z ::select_1_type (&Z);
         select0_Z       = bv_z ::select_0_type (&Z);
 
-        F_inv           = inv_vi(&F);
+//        F_inv           = inv_vi(&F);
 
         rank_Y          = bv_y::rank_1_type(&Y);
         select_Y        = bv_y::select_1_type(&Y);

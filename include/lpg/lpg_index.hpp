@@ -23,7 +23,7 @@ private:
     uint8_t                                             parsing_rounds{}; //number of LMS parsing rounds during the grammar construction
     bool                                                rl_compressed{}; // is the grammar run-length compressed?
 
-    void build_index(plain_grammar_t &p_gram,const size_t& text_length, sdsl::cache_config& config){
+    void build_index(const std::string& i_file,plain_grammar_t &p_gram,const size_t& text_length, sdsl::cache_config& config){
         m_sigma = p_gram.sigma;
         parsing_rounds = p_gram.rules_per_level.size();
         symbols_map.resize(p_gram.symbols_map.size());
@@ -31,8 +31,19 @@ private:
             symbols_map[i] = p_gram.symbols_map[i];
         }
         //build the grammar tree and grid from p_gram here!!
-        grammar_tree.build(p_gram, text_length);
 
+        utils::lenght_rules lenghts;
+        utils::nav_grammar NG = utils::build_nav_grammar(p_gram);
+        grammar_tree.build(NG,p_gram,text_length,lenghts);
+
+        std::vector<utils::sfx> grammar_sfx;
+        utils::compute_grammar_sfx(NG,p_gram,grammar_tree.getT(),lenghts,grammar_sfx);
+        NG.clear();
+        utils::sort_suffixes(i_file,grammar_sfx);
+        std::vector<grid_point> points;
+        compute_grid_points(grammar_sfx,points);
+        grammar_sfx.clear();
+        grid = grid_t(points,p_gram.rules_per_level.size());
     };
 
     static alpha_t get_alphabet(std::string& i_file){
@@ -238,7 +249,7 @@ public:
 
         std::cout<<"Building the self-index"<<std::endl;
         start = std::chrono::high_resolution_clock::now();
-        build_index(plain_gram,n_chars, config);
+        build_index(input_file,plain_gram,n_chars, config);
         end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;
