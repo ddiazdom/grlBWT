@@ -79,8 +79,8 @@ void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp
 
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            assert(tmp_sym == buff_symbol);
-            //assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
+            //assert(tmp_sym == buff_symbol);
+            assert(p_gram.symbols_map[tmp_sym] == buff_symbol);
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
@@ -166,21 +166,29 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
         c_vec.close();
         free(buffer);
     }
+    p_gram.g = rules.size();
+
     rules.close();
     rules_lim.close();
 
-    bv_t rem_nts = mark_nonterimnals(p_gram);
-    bv_t::rank_1_type rem_nts_rs(&rem_nts);
+    std::cout<<"  Resulting LPG grammar:    "<<std::endl;
+    std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
+    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
+    std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
+    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     run_length_compress(p_gram, config);
+
+    bv_t rem_nts = mark_nonterminals(p_gram);
+    bv_t::rank_1_type rem_nts_rs(&rem_nts);
+
+    //create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
+    simplify_grammar(p_gram, rem_nts, rem_nts_rs);
+
     //TODO testing
     check_plain_grammar(p_gram, i_file);
     //
     exit(0);
-    create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
-    simplify_grammar(p_gram, rem_nts, rem_nts_rs);
-
-
     sdsl::util::clear(rem_nts_rs);
     sdsl::util::clear(rem_nts);
 
@@ -706,8 +714,6 @@ void lpg_build::decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type
 void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
 
     std::cout<<"  Simplifying the grammar"<<std::endl;
-    float rm_per = float(rem_nts_rs(rem_nts.size()))/float(p_gram.r)*100;
-    std::cout<<"    "<<rm_per<<"% of the rules will be removed"<<std::endl;
 
     bv_t r_lim;
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
@@ -717,6 +723,10 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
     sdsl::load_from_file(rules, p_gram.rules_file);
     size_t max_tsym = p_gram.symbols_map.back();
 
+    bv_t is_rl;
+    sdsl::load_from_file(is_rl, p_gram.is_rl_file);
+    sdsl::int_vector_buffer<1> new_is_rl(p_gram.is_rl_file, std::ios::out);
+
     ivb_t new_rules(p_gram.rules_file, std::ios::out);
     sdsl::int_vector_buffer<1> new_r_lim(p_gram.rules_lim_file, std::ios::out);
 
@@ -725,7 +735,7 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
         new_rules.push_back(k);
     }
 
-    size_t pos;
+    size_t pos, tr_rule=p_gram.sigma;
     for(size_t i=max_tsym+1,curr_rule=max_tsym+1;i<rules.size();curr_rule++){
         assert(r_lim[i-1]);
         pos = i;
@@ -733,19 +743,39 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
         i++;
 
         if(!rem_nts[curr_rule]){
-            for(size_t j=pos;j<i;j++){
-                if(rem_nts[rules[j]]){
-                    decomp(rules[j], rules, r_lim_ss, rem_nts, rem_nts_rs, new_rules);
-                }else{
-                    new_rules.push_back(rules[j]-rem_nts_rs(rules[j]));
+            if(!is_rl[curr_rule]){//regular rule
+                for(size_t j=pos;j<i;j++){
+                    if(rem_nts[rules[j]]){
+                        decomp(rules[j], rules, r_lim_ss, rem_nts, rem_nts_rs, new_rules);
+                    }else{
+                        new_rules.push_back(rules[j]-rem_nts_rs(rules[j]));
+                    }
                 }
+            }else{//run-length rule
+                assert((i-pos)==2);
+                new_rules.push_back(rules[pos]-rem_nts_rs(rules[pos]));
+                new_rules.push_back(rules[pos+1]);
+                new_is_rl[tr_rule] = true;
             }
             new_r_lim[new_rules.size()-1]=true;
+            tr_rule++;
         }
     }
+
+    size_t rm_nt =rem_nts_rs(rem_nts.size());
+    float rm_per = float(rm_nt)/float(p_gram.r)*100;
+    float comp_rat = float(new_rules.size())/float(rules.size());
+
+    std::cout<<"    Stats:"<<std::endl;
+    std::cout<<"      Grammar size before:  "<<p_gram.g<<std::endl;
+    std::cout<<"      Grammar size after:   "<<new_rules.size()<<std::endl;
+    std::cout<<"      Deleted nonterminals: "<<rm_nt<<" ("<<rm_per<<"%)"<<std::endl;
+    std::cout<<"      Comp. ratio:          "<<comp_rat<<std::endl;
+
     new_rules.close();
     new_r_lim.close();
-    p_gram.r -= rem_nts_rs(rem_nts.size());
+    new_is_rl.close();
+    p_gram.r -= rm_nt;
     p_gram.g = new_rules.size();
 }
 
@@ -850,7 +880,9 @@ void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::
     }
 }
 
-lpg_build::bv_t lpg_build::mark_nonterimnals(lpg_build::plain_grammar_t &p_gram) {
+lpg_build::bv_t lpg_build::mark_nonterminals(lpg_build::plain_grammar_t &p_gram) {
+
+    size_t max_tsym = p_gram.symbols_map.back();
 
     bv_t r_lim;
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
@@ -859,31 +891,53 @@ lpg_build::bv_t lpg_build::mark_nonterimnals(lpg_build::plain_grammar_t &p_gram)
     sdsl::int_vector<> rules;
     sdsl::load_from_file(rules, p_gram.rules_file);
 
-    size_t max_tsym = p_gram.symbols_map.back();
-    bv_t rem_nts(p_gram.r + 1, false);
+    sdsl::int_vector_buffer<1> is_rl(p_gram.is_rl_file, std::ios::in);
+    size_t first_rl_rule=max_tsym+1;
+    for(unsigned long freq : p_gram.rules_per_level){
+        first_rl_rule+=freq;
+    }
+    assert(!is_rl[first_rl_rule-1]);
 
-    //compute which nonterminals are repeated and which have a rule of length 1
+    bv_t rem_nts(p_gram.r, false);
+
+    //compute which nonterminals are repeated and
+    // which have a rule of length 1
     sdsl::int_vector<2> rep_nts(p_gram.r + 1, 0);
 
-    size_t r_len=1, cont=0, curr_rule=max_tsym+1;
-    for(size_t i=max_tsym+1;i<rules.size();i++){
-        if(rep_nts[rules[i]]<2){
-            rep_nts[rules[i]]++;
-        }
-        if(r_lim[i]){
-            if(r_len==1 && rules[i]>=max_tsym){
-                rem_nts[curr_rule] = true;
-                cont++;
-                assert(r_lim[i-1]);
-            }
+    size_t r_len=1, cont=0, curr_rule=max_tsym+1,k=max_tsym+1;
+    while(k<rules.size()){
+        if(curr_rule>=first_rl_rule && curr_rule<p_gram.r-1){//run-length compressed rules
+            rep_nts[rules[k++]] = 2;
+            assert(r_lim[k] && r_len==1);
             r_len=0;
             curr_rule++;
+        }else{
+            //get the frequency of every symbol
+            if(rep_nts[rules[k]]<2){
+                rep_nts[rules[k]]++;
+            }
+
+            if(r_lim[k]){
+                //mark the rules with a right-hand side of length 1
+                if(r_len==1 && rules[k]>=max_tsym){
+                    rem_nts[curr_rule] = true;
+                    cont++;
+                    assert(r_lim[k-1]);
+                }
+                r_len=0;
+                curr_rule++;
+            }
         }
         r_len++;
+        k++;
     }
 
-    //mark the grammar symbols to remove
+    //mark the rules to remove
+    //1) rules whose left-hand side has length one
+    //2) terminal symbols between [min_sym..max_sym] with
+    // frequency zero: to compress the alphabet
     for(size_t i=0;i<p_gram.r;i++){
+        //mark the rules with frequency one
         if(!rem_nts[i]){
             rem_nts[i] = rep_nts[i]==0 || (rep_nts[i]==1 && i > max_tsym);
         }
@@ -891,19 +945,18 @@ lpg_build::bv_t lpg_build::mark_nonterimnals(lpg_build::plain_grammar_t &p_gram)
 
     //unmark unique nonterminals that
     // appear in the compressed string
-    //size_t pos;
     for(size_t i=r_lim_ss(p_gram.r-1)+1; i<rules.size();i++){
         rem_nts[rules[i]] = false;
-
-        //unmark the children of a nonterimnal
-        // that appear in the compressed string
-        /*pos = r_lim_ss(rules[i])+1;
-        while(!r_lim[pos]){
-            rem_nts[rules[pos++]]=false;
-        }
-        rem_nts[rules[pos]]=false;*/
     }
+
+    //unmark the run-length rules
+    while(first_rl_rule<p_gram.r-1){
+        assert(is_rl[first_rl_rule]);
+        rem_nts[first_rl_rule++] = false;
+    }
+
     rem_nts[p_gram.r-1] = false;//unmark the compressed string
+
     return rem_nts;
 }
 
@@ -1111,7 +1164,7 @@ void lpg_build::run_length_compress(lpg_build::plain_grammar_t &p_gram, sdsl::ca
     p_gram.r+=ht.size();
     p_gram.g = rl_rules.size();
 
-    std::cout<<"    RL comp. stats:"<<std::endl;
+    std::cout<<"    Stats:"<<std::endl;
     std::cout<<"      Grammar size before:        "<<rules.size()<<std::endl;
     std::cout<<"      Grammar size after:         "<<rl_rules.size()<<std::endl;
     std::cout<<"      Number of new nonterminals: "<<ht.size()<<std::endl;

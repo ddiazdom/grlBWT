@@ -235,7 +235,7 @@ private:
     static void * record_phrases(void *data);
 
     //mark the nonterminals that can be removed from the grammar
-    static bv_t mark_nonterimnals(plain_grammar_t& p_gram);
+    static bv_t mark_nonterminals(plain_grammar_t& p_gram);
     static void simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
     static void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
                        bv_t::rank_1_type &rem_nt_rs,
