@@ -38,6 +38,7 @@ void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp
     for(size_t i=f; i <= l; i++){
         tmp_decomp.clear();
         stack.push(r[i]);
+        assert(stack.size()<=if_stream.size());
 
         while(!stack.empty()){
 
@@ -160,6 +161,10 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
 
     create_lvl_breaks(p_gram, rem_nts, rem_nts_rs, config);
     simplify_grammar(p_gram, rem_nts, rem_nts_rs, config);
+
+    if(rl_comp){
+    }
+
     //TODO testing
     //check_plain_grammar(p_gram, i_file);
     //
@@ -651,8 +656,9 @@ std::vector<std::pair<size_t, size_t>> lpg_build::compute_thread_ranges(size_t n
     assert(n_chars>0);
     size_t sym_per_thread = INT_CEIL(n_chars, n_threads);
     size_t start, end;
+    size_t eff_threads = INT_CEIL(n_chars, sym_per_thread);
 
-    for(size_t i=0;i<n_threads;i++){
+    for(size_t i=0;i<eff_threads;i++){
         start = (i * sym_per_thread);
         end = std::min<size_t>(((i + 1) * sym_per_thread), n_chars-1);
 
@@ -1005,6 +1011,10 @@ void lpg_build::colex_nt_sort(lpg_build::plain_grammar_t &p_gram, sdsl::cache_co
     lvl_breaks.close();
     new_rules.close();
     new_rlim.close();
+}
+
+void lpg_build::run_length_compress(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config& config) {
+
 }
 
 void lpg_build::plain_grammar_t::save_to_file(std::string& output_file){

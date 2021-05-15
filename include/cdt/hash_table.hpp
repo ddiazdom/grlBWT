@@ -444,6 +444,7 @@ public:
             static_buffer = false;
             dynamic_init(buffer_size);
         }else{
+            assert(buffer_size>=64);//must be at least 32 bytes
             static_buffer = true;
             static_init(buffer_size, buff_addr);
         }

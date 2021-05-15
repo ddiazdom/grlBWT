@@ -248,5 +248,6 @@ private:
                            bv_t& rem_nts, bv_t::select_1_type &r_lim_ss,
                            std::vector<uint8_t> &breaks);
     static void colex_nt_sort(plain_grammar_t& p_gram, sdsl::cache_config& config);
+    static void run_length_compress(plain_grammar_t& p_gram, sdsl::cache_config& config);
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H

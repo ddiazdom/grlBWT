@@ -212,7 +212,7 @@ public:
         std::string g_file = sdsl::cache_file_name("g_file", config);
 
         //maximum amount of RAM allowed to spend in parallel for the hashing step
-        auto hbuff_size = size_t(std::ceil(float(n_chars)*hbuff_frac));
+        auto hbuff_size = std::max<size_t>(64*n_threads, size_t(std::ceil(float(n_chars)*hbuff_frac)));
 
         std::cout<<"Computing the LPG grammar"<<std::endl;
         auto start = std::chrono::high_resolution_clock::now();
