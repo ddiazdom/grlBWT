@@ -159,10 +159,11 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     bv_t rem_nts = mark_nonterimnals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
 
-    create_lvl_breaks(p_gram, rem_nts, rem_nts_rs, config);
-    simplify_grammar(p_gram, rem_nts, rem_nts_rs, config);
+    create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
+    simplify_grammar(p_gram, rem_nts, rem_nts_rs);
 
     if(rl_comp){
+        run_length_compress(p_gram, config);
     }
 
     //TODO testing
@@ -172,7 +173,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     sdsl::util::clear(rem_nts_rs);
     sdsl::util::clear(rem_nts);
 
-    colex_nt_sort(p_gram, config);
+    colex_nt_sort(p_gram);
     p_gram.save_to_file(p_gram_file);
 
     //TODO testing
@@ -673,10 +674,9 @@ std::vector<std::pair<size_t, size_t>> lpg_build::compute_thread_ranges(size_t n
     return thread_ranges;
 }
 
-void lpg_build::decomp(size_t nt, sdsl::int_vector<>& rules,
-                       bv_t& r_lim, bv_t::select_1_type& rlim_ss,
-                       bv_t& rem_nt, bv_t::rank_1_type& rm_nt_rs,
-                       ivb_t & buff){
+void lpg_build::decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
+                       bv_t::rank_1_type &rem_nt_rs,
+                       ivb_t &dec) {
 
     std::stack<size_t> stack;
     stack.push(nt);
@@ -691,13 +691,12 @@ void lpg_build::decomp(size_t nt, sdsl::int_vector<>& rules,
                 stack.push(rules[j]);
             }
         }else{
-            buff.push_back(tmp-rm_nt_rs(tmp));
+            dec.push_back(tmp - rem_nt_rs(tmp));
         }
     }
 }
 
-void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs,
-                                 sdsl::cache_config &config) {
+void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
 
     std::cout<<"  Simplifying the grammar"<<std::endl;
     float rm_per = float(rem_nts_rs(rem_nts.size()))/float(p_gram.r)*100;
@@ -729,7 +728,7 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
         if(!rem_nts[curr_rule]){
             for(size_t j=pos;j<i;j++){
                 if(rem_nts[rules[j]]){
-                    decomp(rules[j], rules, r_lim, r_lim_ss, rem_nts, rem_nts_rs, new_rules);
+                    decomp(rules[j], rules, r_lim_ss, rem_nts, rem_nts_rs, new_rules);
                 }else{
                     new_rules.push_back(rules[j]-rem_nts_rs(rules[j]));
                 }
@@ -797,8 +796,8 @@ void lpg_build::rec_dc_int(size_t nt, uint8_t lev, size_t& pos, bool rm, sdsl::i
     }
 }
 
-std::vector<uint8_t> lpg_build::rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<>& rules,
-                                       bv_t& rem_nts, bv_t& r_lim, bv_t::select_1_type &r_lim_ss){
+std::vector<uint8_t>
+lpg_build::rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<> &rules, bv_t &rem_nts, bv_t::select_1_type &r_lim_ss) {
 
     //std::cout<<"lev: "<<(int)lev<<" nt"<<nt<<" : "<<shape(nt, rules, rem_nts, r_lim_ss)<<std::endl;
     std::vector<uint8_t> breaks;
@@ -812,8 +811,7 @@ std::vector<uint8_t> lpg_build::rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<
     return breaks;
 }
 
-void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type& rem_nts_rs,
-                                  sdsl::cache_config &config) {
+void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
 
     std::cout<<"  Computing the grid level of every nonterminal cut"<<std::endl;
     ivb_t breaks_buff(p_gram.lvl_breaks_file, std::ios::out);
@@ -831,7 +829,7 @@ void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::
     for(unsigned long lev_nter : p_gram.rules_per_level){
         for(size_t j=0;j<lev_nter;j++){
             if(!rem_nts[curr_rule]){
-                auto breaks = rec_dc(curr_rule, lev, rules, rem_nts, r_lim, r_lim_ss);
+                auto breaks = rec_dc(curr_rule, lev, rules, rem_nts, r_lim_ss);
                 breaks_buff.push_back(curr_rule-rem_nts_rs(curr_rule));
                 breaks_buff.push_back(breaks.size());
                 assert(!breaks.empty());
@@ -902,7 +900,7 @@ lpg_build::bv_t lpg_build::mark_nonterimnals(lpg_build::plain_grammar_t &p_gram)
     return rem_nts;
 }
 
-void lpg_build::colex_nt_sort(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config) {
+void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
 
     std::cout<<"  Reordering nonterimnals in Colex"<<std::endl;
 
@@ -1015,6 +1013,95 @@ void lpg_build::colex_nt_sort(lpg_build::plain_grammar_t &p_gram, sdsl::cache_co
 
 void lpg_build::run_length_compress(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config& config) {
 
+    std::cout<<"  Run-length compressing the grammar"<<std::endl;
+
+    sdsl::int_vector_buffer<> rules(p_gram.rules_file, std::ios::in);
+    sdsl::int_vector_buffer<1> r_lim(p_gram.rules_lim_file, std::ios::in);
+
+    std::string rl_rules_file = sdsl::cache_file_name("rl_file", config);
+    sdsl::int_vector_buffer<> rl_rules(rl_rules_file, std::ios::out);
+    std::string rl_r_lim_file = sdsl::cache_file_name("rl_file", config);
+    sdsl::int_vector_buffer<1> rl_r_lim(rl_rules_file, std::ios::out);
+
+    size_t run_len=1;
+    size_t new_id = p_gram.r-1;
+    size_t tmp_sym;
+    bit_hash_table<size_t, 44> ht;
+    string_t pair(2,sdsl::bits::hi(rules.size())+1);
+
+    for(size_t i=0;i<p_gram.sigma;i++){
+        rl_rules.push_back(i);
+        rl_r_lim.push_back(true);
+    }
+
+    size_t i=p_gram.sigma+1;
+    while(i<rules.size()-p_gram.c){
+        //std::cout<<rules[i-1]<<" ";
+        if(rules[i]!=rules[i-1] || r_lim[i-1]){
+            if(run_len>1){
+                pair.write(0, rules[i-1]);
+                pair.write(1, run_len);
+                auto res = ht.insert(pair.data(), pair.n_bits(), 0);
+                if(res.second){
+                    tmp_sym = new_id;
+                    ht.insert_value_at(*res.first, tmp_sym);
+                    new_id++;
+                }else{
+                    tmp_sym = res.first.value();
+                }
+                //std::cout<<"("<<pair[0]<<" "<<pair[1]<<")"<<" "<<tmp_sym<<std::endl;
+            }else{
+                tmp_sym = rules[i-1];
+            }
+            run_len=0;
+
+            rl_rules.push_back(tmp_sym);
+            if(r_lim[i-1]){
+                rl_r_lim[rl_rules.size()-1] = true;
+            }
+        }
+        /*if(r_lim[i-1]){
+            std::cout<<""<<std::endl;
+        }*/
+        run_len++;
+        i++;
+    }
+
+    assert(r_lim[i-1]);
+    if(run_len>1){
+        pair.write(0, rules[i-1]);
+        pair.write(1, run_len);
+        auto res = ht.insert(pair.data(), pair.n_bits(), 0);
+        if(res.second){
+            tmp_sym = new_id;
+            ht.insert_value_at(*res.first, tmp_sym);
+        }else{
+            tmp_sym = res.first.value();
+        }
+    }else{
+        tmp_sym = rules[i-1];
+    }
+    rl_rules.push_back(tmp_sym);
+    rl_r_lim[rl_rules.size()-1] = true;
+
+    const bitstream<buff_t>& stream = ht.get_data();
+    key_wrapper key_w{pair.width(), ht.description_bits(), stream};
+    for(auto const& phrase : ht){
+        rl_rules.push_back(key_w.read(phrase, 0));
+        rl_rules.push_back(key_w.read(phrase, 1));
+        rl_r_lim[rl_rules.size()-1] = true;
+    }
+
+    for(size_t k=rules.size()-p_gram.c;k<rules.size();k++){
+        rl_rules.push_back(rules[k]);
+    }
+    rl_r_lim[rl_rules.size()-1] = true;
+
+    std::cout<<"    RL comp. stats:"<<std::endl;
+    std::cout<<"      Grammar size before:        "<<rules.size()<<std::endl;
+    std::cout<<"      Grammar size after:         "<<rl_rules.size()<<std::endl;
+    std::cout<<"      Number of new nonterminals: "<<ht.size()<<std::endl;
+    std::cout<<"      Comp. ratio:                "<<float(rl_rules.size())/float(rules.size())<<std::endl;
 }
 
 void lpg_build::plain_grammar_t::save_to_file(std::string& output_file){
@@ -1044,6 +1131,12 @@ void lpg_build::plain_grammar_t::save_to_file(std::string& output_file){
     buffer[0] = rules_lim_file.size();
     of_stream.write((char *) buffer, sizeof(size_t));
     of_stream.write(rules_lim_file.c_str(), rules_lim_file.size());
+
+    buffer[0] = rl_rules_file.size();
+    of_stream.write((char *) buffer, sizeof(size_t));
+    if(!rl_rules_file.empty()){
+        of_stream.write(rl_rules_file.c_str(), rl_rules_file.size());
+    }
 
     buffer[0] = lvl_breaks_file.size();
     of_stream.write((char *) buffer, sizeof(size_t));
@@ -1085,6 +1178,16 @@ void lpg_build::plain_grammar_t::load_from_file(std::string &g_file){
     fp.read(tmp_file, buffer[0]);
     tmp_file[buffer[0]] = '\0';
     rules_lim_file = std::string(tmp_file);
+
+    fp.read((char *)buffer, sizeof(size_t));
+    if(buffer[0]!=0){
+        tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
+        fp.read(tmp_file, buffer[0]);
+        tmp_file[buffer[0]] = '\0';
+        rl_rules_file = std::string(tmp_file);
+    }else{
+        rl_rules_file = "";
+    }
 
     fp.read((char *)buffer, sizeof(size_t));
     tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));

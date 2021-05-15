@@ -41,6 +41,7 @@ public:
         std::string               rules_file; // rules are concatenated in this array
         std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
         std::vector<size_t>       rules_per_level; // number of rules generated in every parsing round
+        std::string               rl_rules_file; //bit vector that marks which rules are run-length compressed
         std::string               lvl_breaks_file; //file with the LMS breaks per level
         uint8_t                   lms_rounds{}; // rounds of LMS parsing
 
@@ -234,20 +235,18 @@ private:
 
     //mark the nonterminals that can be removed from the grammar
     static bv_t mark_nonterimnals(plain_grammar_t& p_gram);
-    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram,
-                                 bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs,
-                                 sdsl::cache_config &config);
-    static void decomp(size_t nt, sdsl::int_vector<>& rules, bv_t& r_lim, bv_t::select_1_type& rlim_ss,
-                       bv_t& rem_nt, bv_t::rank_1_type& rem_nt_rs, ivb_t & dec);
+    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
+    static void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
+                       bv_t::rank_1_type &rem_nt_rs,
+                       ivb_t &dec);
     //these functions are to build the index
-    static void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts,
-                                  bv_t::rank_1_type &rem_nts_rs, sdsl::cache_config &config);
-    static std::vector<uint8_t> rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<>& rules,
-                                       bv_t& rem_nts, bv_t& r_lim, bv_t::select_1_type &r_lim_ss);
+    static void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
+    static std::vector<uint8_t>
+    rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<> &rules, bv_t &rem_nts, bv_t::select_1_type &r_lim_ss);
     static void rec_dc_int(size_t nt, uint8_t lev, size_t& pos, bool rm, sdsl::int_vector<>& rules,
                            bv_t& rem_nts, bv_t::select_1_type &r_lim_ss,
                            std::vector<uint8_t> &breaks);
-    static void colex_nt_sort(plain_grammar_t& p_gram, sdsl::cache_config& config);
+    static void colex_nt_sort(plain_grammar_t &p_gram);
     static void run_length_compress(plain_grammar_t& p_gram, sdsl::cache_config& config);
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H
