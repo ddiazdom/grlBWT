@@ -188,13 +188,13 @@ private:
 public:
     typedef size_t                          size_type;
 
-    lpg_index(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac, bool rl_comp) {
+    lpg_index(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac) {
 
         std::cout<<"Input file: "<<input_file<<std::endl;
         auto alphabet =  get_alphabet(input_file);
 
         size_t n_chars = 0;
-        for(auto const sym : alphabet) n_chars+=sym.second;
+        for(auto const &sym : alphabet) n_chars+=sym.second;
 
         //create a temporary folder
         std::string tmp_path = tmp_folder+"/lpg_index.XXXXXX";
@@ -216,7 +216,7 @@ public:
 
         std::cout<<"Computing the LPG grammar"<<std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        lpg_build::compute_LPG(input_file, g_file, n_threads, config, hbuff_size, alphabet,  rl_comp);
+        lpg_build::compute_LPG(input_file, g_file, n_threads, config, hbuff_size, alphabet);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;

@@ -41,15 +41,17 @@ public:
         std::string               rules_file; // rules are concatenated in this array
         std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
         std::vector<size_t>       rules_per_level; // number of rules generated in every parsing round
-        std::string               rl_rules_file; //bit vector that marks which rules are run-length compressed
+        std::string               is_rl_file; //bit vector that marks which rules are run-length compressed
         std::string               lvl_breaks_file; //file with the LMS breaks per level
         uint8_t                   lms_rounds{}; // rounds of LMS parsing
 
         plain_grammar_t() = default;
         plain_grammar_t(std::string& r_file_,
                         std::string& r_lim_file_,
+                        std::string& rl_rules_file_,
                         std::string& lvl_breaks_file_): rules_file(r_file_),
                                                         rules_lim_file(r_lim_file_),
+                                                        is_rl_file(rl_rules_file_),
                                                         lvl_breaks_file(lvl_breaks_file_){}
 
         void save_to_file(std::string& output_file);
@@ -106,9 +108,8 @@ public:
      * @param hbuff_size : buffer size for the hashing step
      * @param sep_symbol : string delimiter in the input text
      */
-    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
-                            sdsl::cache_config &config, size_t hbuff_size, alpha_t &alphabet,
-                            bool rl_comp);
+    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
+                            size_t hbuff_size, alpha_t &alphabet);
 
     /***
      * check if the grammar is correct
