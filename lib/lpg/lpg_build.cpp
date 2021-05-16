@@ -736,9 +736,11 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
             byte_sym = res->second;
             p_gram.sym_map.erase(k);
             p_gram.sym_map.insert({cont, byte_sym});
+            std::cout<<"asasd "<<cont<<" "<<byte_sym<<std::endl;
             cont++;
         }
     }
+    assert(p_gram.sym_map.size()==p_gram.sigma);
 
     for(size_t k=0;k<p_gram.sigma;k++){
         new_r_lim.push_back(true);
@@ -1057,6 +1059,7 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
 
     //reorder nonterminal symbols
     size_t pos, rank=0;
+    std::unordered_map<size_t, uint8_t> new_map;
     for(auto const &nt_data : nt_pairs){
 
         //update the bit vector with the rl-rules
@@ -1066,8 +1069,8 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
         // for terminal symbols
         if(nt_data.first<p_gram.sigma){
             uint8_t byte_sym = p_gram.sym_map[nt_data.first];
-            p_gram.sym_map.erase(nt_data.first);
-            p_gram.sym_map.insert({rank, byte_sym});
+            std::cout<<nt_data.first<<" "<<rank<<" "<<byte_sym<<" "<<p_gram.sigma<<" "<<p_gram.sym_map.size()<<std::endl;
+            new_map[rank] = byte_sym;
         }
 
         //rename the nonterminal
@@ -1088,6 +1091,8 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
         }
         std::cout<<""<<std::endl;*/
     }
+    std::swap(p_gram.sym_map, new_map);
+    assert(p_gram.sym_map.size()==p_gram.sigma);
 
     //insert compressed string
     for(size_t i=rlim_ss(p_gram.r-1)+1;i<rules.size();i++){
