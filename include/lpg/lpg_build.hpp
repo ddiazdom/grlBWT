@@ -33,17 +33,18 @@ public:
     typedef std::vector<std::pair<uint8_t, size_t>>      alpha_t;
 
     struct plain_grammar_t{
-        uint8_t                   sigma{}; // terminal's alphabet
-        size_t                    r{}; //r: number of rules
-        size_t                    c{}; //c: length of the right-hand of the start symbol
-        size_t                    g{}; //g: sum of the rules' right-hand sides
-        std::vector<uint8_t>      symbols_map; // map compressed symbols to original symbols
-        std::string               rules_file; // rules are concatenated in this array
-        std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
-        std::vector<size_t>       rules_per_level; // number of rules generated in every parsing round
-        std::string               is_rl_file; //bit vector that marks which rules are run-length compressed
-        std::string               lvl_breaks_file; //file with the LMS breaks per level
-        uint8_t                   lms_rounds{}; // rounds of LMS parsing
+        uint8_t                            sigma{}; // terminal's alphabet
+        size_t                             r{}; //r: number of rules
+        size_t                             c{}; //c: length of the right-hand of the start symbol
+        size_t                             g{}; //g: sum of the rules' right-hand sides
+        size_t                             max_tsym{}; //maximal terminal symbol
+        std::unordered_map<size_t,uint8_t> sym_map; //map terminal symbols to their original byte symobols of the text
+        std::string                        rules_file; // rules are concatenated in this array
+        std::string                        rules_lim_file; // bit vector marking the last symbol of every right-hand
+        std::vector<size_t>                rules_per_level; // number of rules generated in every parsing round
+        std::string                        is_rl_file; //bit vector that marks which rules are run-length compressed
+        std::string                        lvl_breaks_file; //file with the LMS breaks per level
+        uint8_t                            lms_rounds{}; // rounds of LMS parsing
 
         plain_grammar_t() = default;
         plain_grammar_t(std::string& r_file_,

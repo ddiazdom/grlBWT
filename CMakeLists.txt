@@ -14,7 +14,7 @@ add_executable(lpg
 target_compile_options(lpg
         PRIVATE
         #-Werror
-        #-Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-vla-extension -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-vla-extension -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         -O0 -msse4.2 -fno-omit-frame-pointer
         INTERFACE
         -Wshadow)

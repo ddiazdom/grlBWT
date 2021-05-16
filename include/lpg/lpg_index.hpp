@@ -26,10 +26,10 @@ private:
     void build_index(plain_grammar_t &p_gram, sdsl::cache_config& config){
         m_sigma = p_gram.sigma;
         parsing_rounds = p_gram.rules_per_level.size();
-        symbols_map.resize(p_gram.symbols_map.size());
+        /*symbols_map.resize(p_gram.symbols_map.size());
         for(size_t i=0; i < p_gram.symbols_map.size(); i++){
             symbols_map[i] = p_gram.symbols_map[i];
-        }
+        }*/
         //build the grammar tree and grid from p_gram here!!
     };
 
