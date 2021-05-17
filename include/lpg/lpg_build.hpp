@@ -37,12 +37,12 @@ public:
         size_t                             r{}; //r: number of rules
         size_t                             c{}; //c: length of the right-hand of the start symbol
         size_t                             g{}; //g: sum of the rules' right-hand sides
-        size_t                             max_tsym{}; //maximal terminal symbol
-        std::unordered_map<size_t,uint8_t> sym_map; //map terminal symbols to their original byte symobols of the text
+        size_t                             max_tsym{}; //highest terminal symbol
+        std::unordered_map<size_t,uint8_t> sym_map; //map terminal symbols to their original byte symbols
         std::string                        rules_file; // rules are concatenated in this array
         std::string                        rules_lim_file; // bit vector marking the last symbol of every right-hand
-        std::vector<size_t>                rules_per_level; // number of rules generated in every parsing round
-        std::string                        is_rl_file; //bit vector that marks which rules are run-length compressed
+        std::vector<size_t>                rules_per_level; // number of rules generated in every LMS parsing round
+        std::string                        is_rl_file; //bit vector [0..r-1] indicating which rules are run-length compressed
         std::string                        lvl_breaks_file; //file with the LMS breaks per level
         uint8_t                            lms_rounds{}; // rounds of LMS parsing
 
@@ -57,6 +57,28 @@ public:
 
         void save_to_file(std::string& output_file);
         void load_from_file(std::string &g_file);
+    };
+
+    struct gram_wrapper_t{
+        const plain_grammar_t&     p_gram;
+        const sdsl::int_vector<>&  rules;
+        const bv_t::select_1_type& r_lim_ss;
+        const bv_t&                is_rl;
+        const bv_t&                rm_nts;
+        const size_t               first_non_lms_nts;//first nonterminal that was not generated in the LMS parsing
+        std::vector<uint8_t>       non_lms_lvl;
+        gram_wrapper_t(const plain_grammar_t& p_gram_,
+                       const sdsl::int_vector<>& rules_,
+                       const bv_t::select_1_type& r_lim_ss_,
+                       const bv_t& is_rl_,
+                       const bv_t& rm_nts_,
+                       size_t n_lms_nts_): p_gram(p_gram_),
+                                           rules(rules_),
+                                           r_lim_ss(r_lim_ss_),
+                                           is_rl(is_rl_),
+                                           rm_nts(rm_nts_),
+                                           first_non_lms_nts(n_lms_nts_),
+                                           non_lms_lvl(p_gram.r - first_non_lms_nts, 0){}
     };
 
     // the phrases are stored in a bit compressed hash table:
@@ -145,7 +167,6 @@ private:
                                                             end(end_),
                                                             sym_width(sdsl::bits::hi(alph)+1),
                                                             thread_map(hb_size, o_file_+"_phrases", 0.8, hb_addr) {
-
             //TODO for the moment the input string has to have a sep_symbol appended at the end
             //TODO assertion : sep_symbols cannot be consecutive
         };
@@ -244,10 +265,9 @@ private:
     //these functions are to build the index
     static void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
     static std::vector<uint8_t>
-    rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<> &rules, bv_t &rem_nts, bv_t::select_1_type &r_lim_ss);
-    static void rec_dc_int(size_t nt, uint8_t lev, size_t& pos, bool rm, sdsl::int_vector<>& rules,
-                           bv_t& rem_nts, bv_t::select_1_type &r_lim_ss,
-                           std::vector<uint8_t> &breaks);
+    rec_dc(gram_wrapper_t& gram_w, size_t nt, uint8_t lev);
+    static void rec_dc_int(gram_wrapper_t& gram_w, size_t nt, uint8_t lev, size_t &pos, bool rm,
+                           std::vector<uint8_t> &lms_breaks);
     static void colex_nt_sort(plain_grammar_t &p_gram);
     static void run_length_compress(plain_grammar_t& p_gram, sdsl::cache_config& config);
 };

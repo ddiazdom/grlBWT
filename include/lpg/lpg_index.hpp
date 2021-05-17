@@ -33,6 +33,13 @@ private:
         //build the grammar tree and grid from p_gram here!!
     };
 
+    struct parse_data{
+        uint8_t lvl;
+        size_t idx;
+        size_t n_lms;
+        bool tail;
+    };
+
     static alpha_t get_alphabet(std::string& i_file){
 
         std::cout<<"Reading input file"<<std::endl;
@@ -64,11 +71,18 @@ private:
     }
 
     template<typename proc>
-    static void lms_scan(proc& task, size_t pos, std::vector<size_t>& parse, size_t& n_lms){
+    static void lms_scan(proc& task, std::vector<size_t>& parse){
 
         int_array<size_t> lms_phrase(2, 32);
-        size_t curr_sym, prev_sym;
+        size_t curr_sym, prev_sym, pos;
         bool s_type, prev_s_type;
+
+        lms_phrase.push_back(parse.back());
+        pos = parse.size()-2;
+        while(pos>0 && parse[pos]==parse[pos+1]){
+            lms_phrase.push_back(parse[pos--]);
+        }
+        if(pos==0) return;
 
         if(parse[pos]<parse[pos+1]){
             prev_s_type = S_TYPE;
@@ -78,7 +92,6 @@ private:
 
         prev_sym = parse[pos];
         lms_phrase.push_back(prev_sym);
-        n_lms=0;
         for(size_t i = pos; i-- > 0;){
             curr_sym = parse[i];
             if (curr_sym < prev_sym) {//S_TYPE type
@@ -89,67 +102,92 @@ private:
                 s_type = L_TYPE;
                 if(prev_s_type == S_TYPE) {//LMS-type
                     lms_phrase.pop_back();
-                    if(n_lms>0){
-                        task(lms_phrase);
-                    }
+                    task(lms_phrase);
+
                     lms_phrase.clear();
                     lms_phrase.push_back(prev_sym);
-                    n_lms++;
                 }
             }
             lms_phrase.push_back(curr_sym);
             prev_sym = curr_sym;
             prev_s_type = s_type;
         }
+        task(lms_phrase);
     }
 
-    std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string& pattern) const {
+    static std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string& pattern) {
 
         std::vector<size_t> parse;
-        std::vector<size_t> next_parse;
 
         //right elements are index in the first
         // level (terminals) where the S* string occur
         // left element is the index in the last level
-        std::vector<std::pair<size_t, size_t>> lms_cuts;
+        std::vector<size_t> lms_cuts;
 
         parse.reserve(pattern.size());
-        next_parse.reserve(pattern.size()/2);
         for(auto const& sym : pattern) parse.push_back(sym);
 
-        bit_hash_table<size_t, 44> ht;
-        size_t n_lms, pos, rank=0;
-        uint8_t lvl=0;
+        size_t rank=0;
+        parse_data p_data{};
+        p_data.n_lms = parse.size();
 
+        //hash table to hash the LMS phrases
+        bit_hash_table<size_t, 44> ht;
+
+        //lambda function to hash the LMS phrases
         auto hash_task = [&](auto& phrase){
-            phrase.mask_tail();
-            ht.insert(phrase.data(), phrase.n_bits(),0);
+
+            if(p_data.tail){
+                p_data.tail = false;
+            }else{
+                phrase.mask_tail();
+                if(p_data.idx>phrase.size()){
+                    ht.insert(phrase.data(), phrase.n_bits(),0);
+                }
+            }
+
+            if(p_data.idx>phrase.size()){
+                p_data.idx -= phrase.size();
+                if(p_data.lvl==0){
+                    lms_cuts.push_back(p_data.idx);
+                }else {
+                    lms_cuts[p_data.n_lms] = lms_cuts[p_data.idx];
+                }
+                p_data.n_lms++;
+            }
+        };
+
+        //lambda function to create the LMS parse
+        auto parse_task = [&](auto& phrase){
+            if(p_data.tail){
+                p_data.tail = false;
+            }else{
+                if(p_data.n_lms>1) {
+                    phrase.mask_tail();
+                    auto res = ht.find(phrase.data(), phrase.n_bits());
+                    assert(res.second);
+                    parse[p_data.idx--] = res.first.value();
+                    p_data.n_lms--;
+                }
+            }
         };
 
         //hash the LMS phrases in the text
         while(true){
+
             assert(parse.size()>1);
-            pos = parse.size()-2;
-            while(pos>0 && parse[pos]==parse[pos+1]) pos--;
-            if(pos==0) break;
-            n_lms++;
 
-            lms_scan(hash_task, pos, parse, n_lms);
+            p_data.idx = parse.size()-1;
+            p_data.n_lms = 0;
+            p_data.tail = true;
 
-            if(n_lms<=5){//report the cuts
-                if(n_lms==0){
-                    //go back to the previous parse
-                }else{
-                    std::vector<size_t> final_cuts;
-                    for(auto const& cut: lms_cuts){
-                        final_cuts.push_back(cut.second);
-                    }
-                    return std::make_pair(std::move(final_cuts), lvl);
-                }
-            }else if(lvl == parsing_rounds){
-                //pattern is longer than the strings in the grammar
-                return std::pair<std::vector<size_t>, uint8_t>();
-            } else{
+            lms_scan(hash_task, parse);
+
+            if(p_data.n_lms<4){//report the cuts
+                if(p_data.n_lms!=0) lms_cuts.resize(p_data.n_lms);
+                std::reverse(lms_cuts.begin(), lms_cuts.end());
+                return {lms_cuts, p_data.lvl};
+            } else{//TODO if we incur in more parsing rounds than the grammar, then the pattern doesn't exist
                 //assign ranks to the lms phrases
                 {
                     const bitstream<bit_hash_table<size_t,44>::buff_t>& stream = ht.get_data();
@@ -169,19 +207,15 @@ private:
                     }
                 }
 
-                // create the parse
-                auto parse_task = [&](auto& phrase){
-                    phrase.mask_tail();
-                    auto res = ht.find(phrase.data(), phrase.n_bits());
-                    next_parse.push_back(res.first.value());
-                };
-                lms_scan(parse_task, pos, parse, n_lms);
-                std::reverse(next_parse.begin(), next_parse.end());
-                std::swap(parse, next_parse);
+                p_data.tail = true;
+                p_data.idx = parse.size()-1;
+                lms_scan(parse_task, parse);
+                parse.erase(parse.begin(), parse.begin()+p_data.idx+1);
+                lms_cuts.pop_back();
+                std::reverse(lms_cuts.begin(), lms_cuts.end());
             }
-            next_parse.clear();
             ht.flush();
-            lvl++;
+            p_data.lvl++;
         }
     }
 

@@ -102,8 +102,11 @@ int main(int argc, char** argv) {
         if(args.output_file.empty()){
             args.output_file = args.input_file.substr(0, args.input_file.size()-3);
         }*/
+        //std::vector<std::string> patterns={"tcctaatagtacc$t"};
+        std::vector<std::string> patterns={"tcgaccagaccagt$t"};
         std::cout<<"Searching for the patterns "<<std::endl;
-        g.search(args.patterns);
+        g.search(patterns);
+        //g.search(args.patterns);
         //g.search(args.patter_list_file);
     }
     return 0;

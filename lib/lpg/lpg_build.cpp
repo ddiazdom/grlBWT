@@ -183,7 +183,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
 
-    //create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
+    create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
     simplify_grammar(p_gram, rem_nts, rem_nts_rs);
 
     sdsl::util::clear(rem_nts_rs);
@@ -730,16 +730,16 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
     //compress the alphabet
     size_t cont=0;
     uint8_t byte_sym;
+    std::unordered_map<size_t, uint8_t> new_sym_map;
     for(size_t k=0;k<=p_gram.max_tsym;k++){
         auto res = p_gram.sym_map.find(k);
         if(res!=p_gram.sym_map.end()){
             byte_sym = res->second;
-            p_gram.sym_map.erase(k);
-            p_gram.sym_map.insert({cont, byte_sym});
-            std::cout<<"asasd "<<cont<<" "<<byte_sym<<std::endl;
+            new_sym_map.insert({cont, byte_sym});
             cont++;
         }
     }
+    std::swap(new_sym_map, p_gram.sym_map);
     assert(p_gram.sym_map.size()==p_gram.sigma);
 
     for(size_t k=0;k<p_gram.sigma;k++){
@@ -792,7 +792,6 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
     new_is_rl.close();
     p_gram.r -= rm_nt;
     p_gram.g = new_rules.size();
-
 }
 
 //TODO: this functions are just for debugging
@@ -828,40 +827,56 @@ std::string shape(size_t nt,  sdsl::int_vector<>& rules, sdsl::bit_vector & rem_
 }
 //
 
-void lpg_build::rec_dc_int(size_t nt, uint8_t lev, size_t& pos, bool rm, sdsl::int_vector<>& rules,
-                           bv_t& rem_nts, bv_t::select_1_type &r_lim_ss, std::vector<uint8_t> &breaks){
+void lpg_build::rec_dc_int(gram_wrapper_t& gram_w, size_t nt, uint8_t lev, size_t &pos, bool rm,
+                           std::vector<uint8_t> &lms_breaks) {
 
-    if(rem_nts[nt]){
-        size_t start = r_lim_ss(nt)+1;
-        size_t end = r_lim_ss(nt+1);
+    if(gram_w.rm_nts[nt]){
+        size_t start = gram_w.r_lim_ss(nt) + 1;
+        size_t end = gram_w.r_lim_ss(nt + 1);
         for(size_t k=start; k<=end; k++) {
-            rec_dc_int(rules[k], lev-1,pos, k==end, rules, rem_nts, r_lim_ss, breaks);
+            rec_dc_int(gram_w, gram_w.rules[k], lev - 1, pos, k == end, lms_breaks);
             if(k==end && !rm){
-                breaks.emplace_back(lev+1);
+                lms_breaks.emplace_back(lev + 1);
                 //std::cout<<pos<<" "<<(int)lev+1<<std::endl;
                 pos++;
+
+                if(nt>=gram_w.first_non_lms_nts){
+                    if(gram_w.non_lms_lvl[nt-gram_w.first_non_lms_nts] == 0){
+                        gram_w.non_lms_lvl[nt-gram_w.first_non_lms_nts] = lev + 1;
+                    }
+                }
             }
         }
     }else if(!rm){
-        breaks.emplace_back(lev+1);
+        assert(nt<gram_w.p_gram.r-1);
+        lms_breaks.emplace_back(lev + 1);
         //std::cout<<pos<<" "<<(int)lev+1<<std::endl;
         pos++;
+
+        //TODO remove asserts afterwards
+        if(nt>=gram_w.first_non_lms_nts){
+            assert(gram_w.is_rl[nt]);
+            if(gram_w.non_lms_lvl[nt-gram_w.first_non_lms_nts] == 0){
+                gram_w.non_lms_lvl[nt-gram_w.first_non_lms_nts] = lev + 1;
+            }else{
+                assert(gram_w.non_lms_lvl[nt-gram_w.first_non_lms_nts] == lev + 1);
+            }
+        }
     }
 }
 
 std::vector<uint8_t>
-lpg_build::rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<> &rules, bv_t &rem_nts, bv_t::select_1_type &r_lim_ss) {
-
+lpg_build::rec_dc(gram_wrapper_t& gram_w, size_t nt, uint8_t lev) {
     //std::cout<<"lev: "<<(int)lev<<" nt"<<nt<<" : "<<shape(nt, rules, rem_nts, r_lim_ss)<<std::endl;
-    std::vector<uint8_t> breaks;
-    size_t start = r_lim_ss(nt)+1;
-    size_t end = r_lim_ss(nt+1);
+    std::vector<uint8_t> lms_breaks;
+    size_t start = gram_w.r_lim_ss(nt) + 1;
+    size_t end = gram_w.r_lim_ss(nt + 1);
     size_t pos =0;
     for(size_t k=start; k<=end; k++) {
-        rec_dc_int(rules[k], lev-1,pos, k==end, rules, rem_nts, r_lim_ss, breaks);
+        rec_dc_int(gram_w, gram_w.rules[k], lev - 1, pos, k == end, lms_breaks);
     }
     //std::cout<<""<<std::endl;
-    return breaks;
+    return lms_breaks;
 }
 
 void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
@@ -876,13 +891,24 @@ void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
     bv_t::select_1_type r_lim_ss(&r_lim);
 
+    bv_t is_rl;
+    sdsl::load_from_file(is_rl, p_gram.is_rl_file);
+
     size_t curr_rule = p_gram.max_tsym+1;
     size_t lev=1;
+
+    //a simple wrapper for the grammar
+    size_t first_non_lms_nt=p_gram.max_tsym+1;
+    for(unsigned long lev_nter : p_gram.rules_per_level){
+        first_non_lms_nt+=lev_nter;
+    }
+    gram_wrapper_t gram_w(p_gram, rules, r_lim_ss, is_rl, rem_nts, first_non_lms_nt);
+    //
 
     for(unsigned long lev_nter : p_gram.rules_per_level){
         for(size_t j=0;j<lev_nter;j++){
             if(!rem_nts[curr_rule]){
-                auto breaks = rec_dc(curr_rule, lev, rules, rem_nts, r_lim_ss);
+                auto breaks = rec_dc(gram_w, curr_rule, lev);
                 breaks_buff.push_back(curr_rule-rem_nts_rs(curr_rule));
                 breaks_buff.push_back(breaks.size());
                 assert(!breaks.empty());
@@ -893,6 +919,18 @@ void lpg_build::create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::
             curr_rule++;
         }
         lev++;
+    }
+
+    while(curr_rule<p_gram.r-1){
+        if(!rem_nts[curr_rule]){
+            //TODO generalize this idea for any type of rule. For the moment,
+            // this is only for run-length compressed rules
+            breaks_buff.push_back(curr_rule-rem_nts_rs(curr_rule));
+            breaks_buff.push_back(1);
+            assert(gram_w.non_lms_lvl[curr_rule-first_non_lms_nt]>0);
+            breaks_buff.push_back(gram_w.non_lms_lvl[curr_rule-first_non_lms_nt]);
+        }
+        curr_rule++;
     }
 }
 
@@ -1051,11 +1089,6 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
 
     //set terminal symbols
     std::vector<size_t> renames(p_gram.r, 0);
-    /*for(size_t i=0;i<p_gram.sigma;i++){
-        new_rules.push_back(i);
-        new_rlim.push_back(true);
-        renames[i] = i;
-    }*/
 
     //reorder nonterminal symbols
     size_t pos, rank=0;
@@ -1069,7 +1102,6 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
         // for terminal symbols
         if(nt_data.first<p_gram.sigma){
             uint8_t byte_sym = p_gram.sym_map[nt_data.first];
-            std::cout<<nt_data.first<<" "<<rank<<" "<<byte_sym<<" "<<p_gram.sigma<<" "<<p_gram.sym_map.size()<<std::endl;
             new_map[rank] = byte_sym;
         }
 
@@ -1118,15 +1150,15 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
     }
 
     //renaming the rules in the lvl_breaks
-    /*ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
-    size_t k=0;
+    ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
+    k=0;
     while(k<lvl_breaks.size()){
         lvl_breaks[k] = renames[lvl_breaks[k]];
         k++;
         k+=lvl_breaks[k]+1;
     }
     assert(k==lvl_breaks.size());
-    lvl_breaks.close();*/
+    lvl_breaks.close();
     sdsl::store_to_file(new_is_rl, p_gram.is_rl_file);
     new_rules.close();
     new_rlim.close();
@@ -1276,9 +1308,7 @@ void lpg_build::plain_grammar_t::save_to_file(std::string& output_file){
 
     buffer[0] = is_rl_file.size();
     of_stream.write((char *) buffer, sizeof(size_t));
-    if(!is_rl_file.empty()){
-        of_stream.write(is_rl_file.c_str(), is_rl_file.size());
-    }
+    of_stream.write(is_rl_file.c_str(), is_rl_file.size());
 
     buffer[0] = lvl_breaks_file.size();
     of_stream.write((char *) buffer, sizeof(size_t));
@@ -1323,14 +1353,10 @@ void lpg_build::plain_grammar_t::load_from_file(std::string &g_file){
     rules_lim_file = std::string(tmp_file);
 
     fp.read((char *)buffer, sizeof(size_t));
-    if(buffer[0]!=0){
-        tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
-        fp.read(tmp_file, buffer[0]);
-        tmp_file[buffer[0]] = '\0';
-        is_rl_file = std::string(tmp_file);
-    }else{
-        is_rl_file = "";
-    }
+    tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
+    fp.read(tmp_file, buffer[0]);
+    tmp_file[buffer[0]] = '\0';
+    is_rl_file = std::string(tmp_file);
 
     fp.read((char *)buffer, sizeof(size_t));
     tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
