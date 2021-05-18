@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
         std::cout<<"Creating an LPG index"<<std::endl;
         lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac, args.rl);
 
+        std::cout<<"Saving the LPG index"<<std::endl;
         if(args.output_file.empty()){
             args.output_file = args.input_file;
         }

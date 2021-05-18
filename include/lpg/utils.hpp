@@ -104,7 +104,6 @@ namespace utils {
         while ( i < breaks_buff.size()) {
             size_type rule = breaks_buff[i];
             size_type l = breaks_buff[++i];
-            std::cout<<rule<<"["<<l<<"]\n";
             cuts[rule] = std::vector<size_type>(l,0);
             for (int j = 0; j < l; ++j) {
                 cuts[rule][j] = breaks_buff[j+i+1];
@@ -120,7 +119,7 @@ namespace utils {
                              lenght_rules& len,
                              std::vector<sfx>& grammar_sfx
                              ){
-        std::cout<<"compute_grammar_sfx\n";
+
         cuts_rules cuts;
         build_nav_cuts_rules(G,cuts); //read the cuts of each rule
         uint64_t preorder = 0;
@@ -152,11 +151,15 @@ namespace utils {
             }
             return true;
         });
+
+        std::cout<<"compute_grammar_sfx\n";
     }
 
     void sort_suffixes(const std::string& i_file, std::vector<sfx> &grammar_sfx) {
         unsigned char * text = nullptr;
+        std::cout<<"start sort_suffixes\n";
         readFile(i_file, &text);
+        std::cout<<"readFile(i_file, &text);\n";
 
         if(text == nullptr) throw "ERROR TEXT INVALID";
 
@@ -183,7 +186,7 @@ namespace utils {
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_SA, config));
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_TEXT, config));
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_LCP, config));
-
+        std::cout<<"sorting\n";
         std::sort(grammar_sfx.begin(),grammar_sfx.end(),
                   [&SA_1,&text,&LCP,&rmq](const sfx & a,
                                           const sfx &b )->bool{
@@ -223,6 +226,7 @@ namespace utils {
                           return SA_1[a_pos] < SA_1[b_pos];
                       }
                   });
+        if(text!= nullptr) delete [] text;
         std::cout<<"sort_suffixes\n";
 
     }
@@ -327,11 +331,11 @@ namespace utils {
         for(size_t i=0;i<if_stream.tot_cells;i++){
             (*text)[i] = if_stream.read(i);
         }
-        std::cout<<"TEXT"<<std::endl;
-        for (int i = 0; i <if_stream.tot_cells ; ++i) {
-           std::cout<<(*text)[i];
-        }
-        std::cout<<std::endl;
+//        std::cout<<"TEXT"<<std::endl;
+//        for (int i = 0; i <if_stream.tot_cells ; ++i) {
+//           std::cout<<(*text)[i];
+//        }
+//        std::cout<<std::endl;
         return if_stream.tot_cells;
     }
     template<typename O>

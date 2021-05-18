@@ -41,11 +41,31 @@ private:
         utils::compute_grammar_sfx(NG,p_gram,T,lenghts,grammar_sfx);
         NG.clear();
         utils::sort_suffixes(i_file,grammar_sfx);
+        std::cout<<"sort_suffixes\n";
         std::vector<grid_point> points;
         compute_grid_points(grammar_sfx,points);
+        std::cout<<"compute_grid_points\n";
         grammar_sfx.clear();
         grid = grid_t(points,p_gram.rules_per_level.size());
+        std::cout<<"build grid\n";
+        breakdown_space();
+        std::cout<<"end build index\n";
     };
+
+    void breakdown_space() const {
+        std::cout<<"breakdown-space-index\n";
+        std::cout<<"Text-length,"<<grammar_tree.get_text_len()<<std::endl;
+        std::cout<<"Number-rules,"<<grammar_tree.get_size_rules()<<std::endl;
+        std::cout<<"Grammar-size,"<<grammar_tree.get_grammar_size()<<std::endl;
+        std::cout<<"Grammar-Tree,"<<sdsl::size_in_bytes(grammar_tree)<<std::endl;
+        grammar_tree.breakdown_space();
+        std::cout<<"Grid,"<<sdsl::size_in_bytes(grid)<<std::endl;;
+        grid.breakdown_space();
+        std::cout<<"symbols_map,"<<sdsl::size_in_bytes(symbols_map);
+        std::cout<<"m_sigma,"<<sizeof(m_sigma);
+        std::cout<<"parsing_rounds,"<<sizeof(parsing_rounds);
+        std::cout<<"rl_compressed,"<<sizeof(rl_compressed);
+    }
 
     static alpha_t get_alphabet(std::string& i_file){
 
@@ -245,7 +265,7 @@ public:
         std::cout << "  Grammar size:             " << plain_gram.g - plain_gram.sigma << std::endl;
 
 
-        plain_gram.print_grammar();
+//        plain_gram.print_grammar();
 
 
         std::cout<<"Building the self-index"<<std::endl;
@@ -506,18 +526,22 @@ public:
 
 
     void locate(const std::string& pattern, std::set<uint64_t> &pos) const {
+        std::cout<<"all posible partitions\n";
+//        auto partitions  = compute_pattern_cut(pattern);
+        size_type l = this->grid.get_levels();
+//        std::cout<<partitions.first.size()<<std::endl;
+//        uint32_t level = partitions.second;
+//        for (const auto &item : partitions.first) {
+        for (int i = 0; i < pattern.size() ; ++i) {
+            for (int level = 1; level <= l ; ++level) {
 
-        auto partitions  = compute_pattern_cut(pattern);
-        std::cout<<partitions.first.size()<<std::endl;
-        uint32_t level = partitions.second;
-        for (const auto &item : partitions.first) {
                 //find primary occ
                 grid_query range{};
                 //range search
-                if(search_grid_range(pattern.c_str(),pattern.size(),item + 1,level, range)){
+                if(search_grid_range(pattern.c_str(),pattern.size(),i + 1,level, range)){
                     std::vector<utils::primaryOcc> pOcc;
                     // grid search
-                    grid_search(range,item,level,pOcc);
+                    grid_search(range,i,level,pOcc);
                     // find secondary occ
                     for (const auto &occ : pOcc) {
                         find_secondary_occ(occ,pos);
@@ -525,6 +549,7 @@ public:
                 }
 
             }
+        }
     }
 
     void grid_search(const grid_query& range, const uint64_t & pattern_off,const uint32_t &level,std::vector<utils::primaryOcc>& occ) const{

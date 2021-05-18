@@ -29,10 +29,8 @@ public:
 
     typedef sdsl::sd_vector<>                                bv_z;
     typedef sdsl::sd_vector<>                                bv_l;
-    typedef sdsl::sd_vector<>                                bv_y;
     typedef sdsl::int_vector<>                               vi;
     typedef sdsl::inv_perm_support<INV_PI_X>           inv_vi;
-    typedef std::vector<uint8_t>                             vi_alp;
 
 
 
@@ -96,22 +94,23 @@ public:
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
-
         written_bytes += sdsl::serialize(T,out);
+        std::cout<<"written_bytes += sdsl::serialize(T,out);"<<std::endl;
 
         written_bytes += sdsl::serialize(Z,out);
         written_bytes += sdsl::serialize(rank1_Z,out);
         written_bytes += sdsl::serialize(select1_Z,out);
         written_bytes += sdsl::serialize(select0_Z,out);
-
+        std::cout<<"written_bytes += sdsl::serialize(Z,out);"<<std::endl;
         written_bytes += sdsl::serialize(X,out);
-
+        std::cout<<"written_bytes += sdsl::serialize(X,out);"<<std::endl;
         written_bytes += sdsl::serialize(F,out);
         written_bytes += sdsl::serialize(F_inv,out);
+        std::cout<<"written_bytes += sdsl::serialize(F,out);"<<std::endl;
 
         written_bytes += sdsl::serialize(L,out);
         written_bytes += sdsl::serialize(select_L,out);
-
+        std::cout<<"written_bytes += sdsl::serialize(F,out);"<<std::endl;
 
         return written_bytes;
     }
@@ -151,6 +150,7 @@ public:
     }
 
     inline size_type get_size_rules()const {return F.size();}
+    inline size_type get_grammar_size()const {return Z.size();}
     inline size_type offset_node(const size_type& node) const {
         size_type leaf = T.leafrank(node);
         return select_L(leaf);
@@ -167,6 +167,17 @@ public:
         }
     }
 
+    void breakdown_space() const {
+
+        std::cout<<"T,>"<<sdsl::size_in_bytes(T)<<std::endl;
+        std::cout<<"Z,>"<<sdsl::size_in_bytes(Z)<<std::endl;
+        std::cout<<"X,>"<<sdsl::size_in_bytes(X)<<std::endl;
+        std::cout<<"F,>"<<sdsl::size_in_bytes(F)<<std::endl;
+        std::cout<<"L,>"<<sdsl::size_in_bytes(L)<<std::endl;
+
+    }
+
+    size_type get_text_len()const { return L.size();}
 
 protected:
 
@@ -184,7 +195,7 @@ protected:
         std::set<size_type> M; //
         sdsl::bit_vector _z(Gr.g, 0); // mark if the node i in preorder is a first mention node
         size_t z_pos = 0,z_rank = 0, x_pos = 0;
-        sdsl::int_vector<> _f(Gr.r + 1, 0); // permutation of rules
+        sdsl::int_vector<> _f(Gr.r, 0); // permutation of rules
         sdsl::int_vector<> _x(Gr.g - Gr.r); // label of second mention nodes in the tree
         sdsl::bit_vector _l(text_length + 1, 0); // text-len bitvector marking start position of parser phrases..
         size_type l_pos = 0; // current off in the text.
@@ -254,18 +265,6 @@ protected:
 
     }
 
-//    void build_Y(const plain_grammar& _Gr){
-//        sdsl::bit_vector _y(_Gr.g + 1,0);
-//        Y = bv_y (_y);
-//    }
-//    size_type build_L(const plain_grammar& _Gr,utils::nav_grammar& grammar, const size_t& text_length){
-//
-//        utils::Roff rules_len;
-//        sdsl::bit_vector _l;
-//        size_type n_nodes = utils::compute_rule_offsets(_Gr,grammar,text_length,rules_len,_l);
-//        L = bv_l (_l);
-//        return n_nodes;
-//    }
 
     /**
      * Initialize rank and select structures of all components and inverse permutation....
@@ -276,7 +275,7 @@ protected:
         select1_Z       = bv_z ::select_1_type (&Z);
         select0_Z       = bv_z ::select_0_type (&Z);
 
-//        F_inv           = inv_vi(&F);
+        F_inv           = inv_vi(&F);
 
         select_L        = bv_l::select_1_type(&L);
 

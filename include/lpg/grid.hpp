@@ -246,7 +246,7 @@ public:
         grid_levels.resize(_l);
         for (uint32_t i = 0; i < _l  ; ++i) {
             grid_levels[i].build(_points,i+1);
-            std::cout<<"grid-level-"<<i+1<<std::endl;
+//            std::cout<<"grid-level-"<<i+1<<std::endl;
         }
         sdsl::int_vector<> V(_points.size(),0);
         for (size_type i = 0; i < _points.size() ; ++i) {
@@ -256,6 +256,18 @@ public:
         level_columns_map = vi(V);
 
     }
+
+    void breakdown_space() const {
+
+        std::cout<<"level_columns_map,"<<sdsl::size_in_bytes(level_columns_map)<<std::endl;
+        uint i = 0;
+        for (const auto &item : grid_levels) {
+            std::cout<<"grid_levels["<<i+1<<"],"<<sdsl::size_in_bytes(grid_levels[i])<<std::endl;
+            ++i;
+        }
+
+    }
+
 
     virtual ~ grid_t() {}
 
@@ -276,10 +288,12 @@ public:
 //        sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
         written_bytes += sdsl::serialize(level_columns_map,out);
+        std::cout<<"written_bytes += sdsl::serialize(level_columns_map,out);"<<std::endl;
         size_type levels = grid_levels.size();
         written_bytes += sdsl::serialize(levels,out);
         for (uint32_t i = 0; i < levels; ++i) {
             written_bytes += sdsl::serialize(grid_levels[i],out);
+            std::cout<<"written_bytes += sdsl::serialize(grid_levels["<<i<<"],out);"<<std::endl;
         }
         return written_bytes;
     }
@@ -310,6 +324,7 @@ public:
     void search (const grid_query& q,const uint32_t & level, std::vector<size_type>&results) const {
         grid_levels[level-1].search_2d(q,results);
     }
+    uint32_t get_levels()const{ return grid_levels.size();}
 };
 
 #endif //LPG_COMPRESSOR_GRID_H
