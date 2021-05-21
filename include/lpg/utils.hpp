@@ -16,7 +16,7 @@ namespace utils {
     typedef size_t          size_type;
     typedef sdsl::int_vector_buffer<1>                   bvb_t;
     typedef sdsl::int_vector_buffer<>                    ivb_t;
-    typedef std::map<size_type,std::vector<size_type>>  nav_grammar;
+    typedef std::unordered_map<size_type,std::vector<size_type>>  nav_grammar;
     typedef std::unordered_map<size_type,std::pair<size_type,size_type>> lenght_rules; //off,len
     typedef std::unordered_map<size_type,std::vector<size_type>> cuts_rules; //off,len
 
@@ -71,20 +71,21 @@ namespace utils {
         }
     }
 
-    nav_grammar build_nav_grammar(const lpg_build::plain_grammar_t& G){
+    nav_grammar build_nav_grammar(const lpg_build::plain_grammar_t& G, size_type& S){
         ivb_t rules_buff(G.rules_file);
         bvb_t rules_lim_buff(G.rules_lim_file);
         size_type id = 0;
         nav_grammar NG;
         std::vector<size_type> right_hand;
-        for (auto i = (size_type)G.sigma; i < rules_lim_buff.size(); ++i) {
+        for (auto i = 0; i < rules_lim_buff.size(); ++i) {
             right_hand.push_back(rules_buff[i]);
             if(rules_lim_buff[i] == 1){
-                NG[id + G.sigma ] = right_hand;
+                NG[id] = right_hand;
                 right_hand.clear();
                 id++;
             }
         }
+        S = NG[id-1][0];
 //        std::cout<<"plain-grammar"<<std::endl;
 //        for (const auto &item : NG) {
 //            std::cout<<item.first<<"->";
@@ -151,16 +152,15 @@ namespace utils {
             }
             return true;
         });
-
+#ifdef DEGUG_INFO
         std::cout<<"compute_grammar_sfx\n";
+#endif
     }
 
     void sort_suffixes(const std::string& i_file, std::vector<sfx> &grammar_sfx) {
         unsigned char * text = nullptr;
-        std::cout<<"start sort_suffixes\n";
-        readFile(i_file, &text);
-        std::cout<<"readFile(i_file, &text);\n";
 
+        readFile(i_file, &text);
         if(text == nullptr) throw "ERROR TEXT INVALID";
 
         sdsl::int_vector<> SA;
@@ -186,7 +186,9 @@ namespace utils {
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_SA, config));
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_TEXT, config));
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_LCP, config));
-        std::cout<<"sorting\n";
+#ifdef DEBUG_INFO
+        std::cout<<"...sorting_suffixes\n";
+#endif
         std::sort(grammar_sfx.begin(),grammar_sfx.end(),
                   [&SA_1,&text,&LCP,&rmq](const sfx & a,
                                           const sfx &b )->bool{
@@ -227,7 +229,9 @@ namespace utils {
                       }
                   });
         if(text!= nullptr) delete [] text;
+#ifdef DEBUG_INFO
         std::cout<<"sort_suffixes\n";
+#endif
 
     }
 
@@ -273,6 +277,31 @@ namespace utils {
                 // non - terminal case
                 for (const auto &item : it->second){
                     dfs_aux(item);
+                }
+            }
+            f(id,0);
+        };
+
+        dfs_aux(id);
+
+    }
+
+    template <typename F>
+    void dfs_2v(const size_type& id, nav_grammar& G, sdsl::int_vector_buffer<1> &is_rules_len, const F& f)  {
+        std::function< void (const size_type& )> dfs_aux;
+        dfs_aux = [&dfs_aux,& G,& f,&is_rules_len](const size_type& id){
+            if(!f(id,1)) return ;
+            auto it = G.find(id);
+            if(it != G.end()){
+                if(is_rules_len[id] && it->second.size() == 2 ){
+                    dfs_aux(it->second[0]);
+                    dfs_aux(it->second[0]);
+//                    dfs_aux(it->second[0],it->second[1] - 1);
+                }else{
+                    // non - terminal case
+                    for (const auto &item : it->second){
+                        dfs_aux(item);
+                    }
                 }
             }
             f(id,0);
@@ -341,7 +370,7 @@ namespace utils {
     template<typename O>
     void pretty_printer_v( O&bv, const std::string &header){
 
-        std::cout<<header<<std::endl;
+        std::cout<<header<<"("<<bv.size()<<")"<<std::endl;
 
         auto dec = [](const uint64_t & t){
             uint64_t tt = t, c = 0;
@@ -370,7 +399,7 @@ namespace utils {
     template<typename O>
     void pretty_printer_bv( O&bv, const std::string &header){
 
-        std::cout<<header<<std::endl;
+        std::cout<<header<<"("<<bv.size()<<")"<<std::endl;
         std::cout<<"idx:";
         for(int i = 0 ; i < bv.size(); i++)std::cout<<i%10;
         std::cout<<std::endl;
@@ -445,9 +474,17 @@ namespace utils {
         size_type preorder;
         size_type  off_pattern;
         size_type  off_node;
+        size_type  run_len{};
+        size_type  fchild_len{};
+        bool primary{};
 
         primaryOcc() = default;
-        primaryOcc(const size_type& n,const size_type&p, const size_type& o,const size_type& op):node(n),preorder(p),off_node(o),off_pattern(op){}
+        primaryOcc( const primaryOcc& ) = default;
+
+        primaryOcc(const size_type& n,const size_type&p, const size_type& o,const size_type& op,const bool& pr = false):
+        node(n),preorder(p),off_node(o),off_pattern(op),run_len(0),fchild_len(0),primary(pr){}
+        primaryOcc(const size_type& n,const size_type&p, const size_type& o,const size_type& op,const size_type& r,const size_type& rl,const bool& pr = false):
+        node(n),preorder(p),off_node(o),off_pattern(op),run_len(r),fchild_len(rl),primary(pr){}
     };
 
 }

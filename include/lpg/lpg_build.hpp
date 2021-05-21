@@ -33,27 +33,32 @@ public:
     typedef std::vector<std::pair<uint8_t, size_t>>      alpha_t;
 
     struct plain_grammar_t{
-//        size_t                    l; // l: text length
-        uint8_t                   sigma{}; // terminal's alphabet
-        size_t                    r{}; //r: number of rules
-        size_t                    c{}; //c: length of the right-hand of the start symbol
-        size_t                    g{}; //g: sum of the rules' right-hand sides
-        std::vector<uint8_t>      symbols_map; // map compressed symbols to original symbols
-        std::string               rules_file; // rules are concatenated in this array
-        std::string               rules_lim_file; // bit vector marking the last symbol of every right-hand
-        std::vector<size_t>       rules_per_level; // number of rules generated in every parsing round
-        std::string               lvl_breaks_file; //file with the LMS breaks per level
-        uint8_t                   lms_rounds{}; // rounds of LMS parsing
+        uint8_t                            sigma{}; // terminal's alphabet
+        size_t                             r{}; //r: number of rules
+        size_t                             c{}; //c: length of the right-hand of the start symbol
+        size_t                             g{}; //g: sum of the rules' right-hand sides
+        size_t                             max_tsym{}; //highest terminal symbol
+        std::unordered_map<size_t,uint8_t> sym_map; //map terminal symbols to their original byte symbols
+        std::string                        rules_file; // rules are concatenated in this array
+        std::string                        rules_lim_file; // bit vector marking the last symbol of every right-hand
+        std::vector<size_t>                rules_per_level; // number of rules generated in every LMS parsing round
+        std::string                        is_rl_file; //bit vector [0..r-1] indicating which rules are run-length compressed
+        std::string                        lvl_breaks_file; //file with the LMS breaks per level
+        uint8_t                            lms_rounds{}; // rounds of LMS parsing
 
         plain_grammar_t() = default;
         plain_grammar_t(std::string& r_file_,
                         std::string& r_lim_file_,
+                        std::string& rl_rules_file_,
                         std::string& lvl_breaks_file_): rules_file(r_file_),
                                                         rules_lim_file(r_lim_file_),
+                                                        is_rl_file(rl_rules_file_),
                                                         lvl_breaks_file(lvl_breaks_file_){}
 
         void save_to_file(std::string& output_file);
         void load_from_file(std::string &g_file);
+
+        bool isTerminal(const size_t& id) const { return sym_map.find(id) != sym_map.end();}
 
         void print_grammar(){
             std::cout<<"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"<<std::endl;
@@ -61,15 +66,24 @@ public:
             std::cout<<"number of rules "<<r<<std::endl;
             std::cout<<"length of the right-hand of the start symbol "<<c<<std::endl;
             std::cout<<" sum of the rules' right-hand sides "<<g<<std::endl;
-            std::cout<<"map compressed symbols to original symbols ("<<symbols_map.size()<<")"<<std::endl;
+            std::cout<<"map compressed symbols to original symbols ("<<sym_map.size()<<")"<<std::endl;
             int c = 0;
-            for (const auto &item : symbols_map) {
-                std::cout<<c<<" ["<<item<<"]\n";
+            for (const auto &item : sym_map) {
+                std::cout<<item.first<<" ["<<item.second<<"]\n";
                 ++c;
             }
             std::cout<<std::endl;
-            std::cout<<"Rules"<<std::endl;
 
+            std::cout<<"RUN-LENGTH"<<std::endl;
+            bvb_t is_rules_len(is_rl_file);
+
+            if(is_rules_len.good()){
+                for (int j = 0; j < is_rules_len.size() ; ++j) {
+                    std::cout<<"["<<j<<"]:"<<is_rules_len[j]<<std::endl;
+                }
+            }
+
+            std::cout<<"Rules"<<std::endl;
 
             uint* len_rules = new uint [r];
             for (int i = 0; i < r ; ++i) {
@@ -79,28 +93,26 @@ public:
 
             ivb_t rules_buff(rules_file);
             bvb_t rules_lim_buff(rules_lim_file);
-            c =0;
-            int len = 0;
-            std::cout<<c+sigma<<"->";
-            for (int i = (uint)sigma; i < rules_lim_buff.size(); ++i) {
-                ++len;
-                std::cout<<rules_buff[i]<<" ";
-                if(rules_lim_buff[i] == 1){
-                    len_rules[c+sigma] = len;
-                    std::cout<<"["<<len_rules[c+sigma]<<"]"<<std::endl;
-                    len = 0;
-                    if(c+1+sigma < rules_lim_buff.size()){
-
-                        std::cout<<c+1+sigma<<"->";
-                        c++;
-                    }
-
-
+            int ii = 0;
+            for (int i = 0; i < r; ++i) {
+                std::cout<<i<<"->";
+                if(is_rules_len[i]){
+                    std::cout<<"(*) ";
                 }
 
-            }
+                int len = 0;
+                do{
+                    std::cout<<rules_buff[ii]<<" ";
+                    ++len;
+                }
+                while(ii < rules_lim_buff.size() && !rules_lim_buff[ii++]);
+                std::cout<<std::endl;
+                len_rules[i] = len;
 
+
+            }
             c = 0;
+            std::cout<<"Rules by Levels\n";
             for (const auto &item : rules_per_level) {
                 std::cout<<"level "<< c++<< " -> "<<item <<" elements "<<std::endl;
             }
@@ -113,18 +125,44 @@ public:
 //                    std::cout<<breaks_buff[i]<<" ";
 //                    i++;
                 uint rule = breaks_buff[i];
-                uint l = len_rules[rule];
+                uint l = breaks_buff[i+1];
+
                 std::cout<<rule<<"["<<l<<"]"<<"-> L | ";
-                for (int j = 1; j <= l; ++j) {
-                    std::cout<<breaks_buff[i+j]<<" ";
+                for (int j = 0; j < l; ++j) {
+                    std::cout<<breaks_buff[i+2+j]<<" ";
                 }
                 std::cout<<std::endl;
-                i += l + 1;
+                i += l + 2;
             }
+
+
+
 
         }
 
 
+    };
+
+    struct gram_wrapper_t{
+        const plain_grammar_t&     p_gram;
+        const sdsl::int_vector<>&  rules;
+        const bv_t::select_1_type& r_lim_ss;
+        const bv_t&                is_rl;
+        const bv_t&                rm_nts;
+        const size_t               first_non_lms_nts;//first nonterminal that was not generated in the LMS parsing
+        std::vector<uint8_t>       non_lms_lvl;
+        gram_wrapper_t(const plain_grammar_t& p_gram_,
+                       const sdsl::int_vector<>& rules_,
+                       const bv_t::select_1_type& r_lim_ss_,
+                       const bv_t& is_rl_,
+                       const bv_t& rm_nts_,
+                       size_t n_lms_nts_): p_gram(p_gram_),
+                                           rules(rules_),
+                                           r_lim_ss(r_lim_ss_),
+                                           is_rl(is_rl_),
+                                           rm_nts(rm_nts_),
+                                           first_non_lms_nts(n_lms_nts_),
+                                           non_lms_lvl(p_gram.r - first_non_lms_nts, 0){}
     };
 
     // the phrases are stored in a bit compressed hash table:
@@ -177,9 +215,8 @@ public:
      * @param hbuff_size : buffer size for the hashing step
      * @param sep_symbol : string delimiter in the input text
      */
-    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads,
-                            sdsl::cache_config &config, size_t hbuff_size, alpha_t &alphabet,
-                            bool rl_comp);
+    static void compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
+                            size_t hbuff_size, alpha_t &alphabet);
 
     /***
      * check if the grammar is correct
@@ -214,7 +251,6 @@ private:
                                                             end(end_),
                                                             sym_width(sdsl::bits::hi(alph)+1),
                                                             thread_map(hb_size, o_file_+"_phrases", 0.8, hb_addr) {
-
             //TODO for the moment the input string has to have a sep_symbol appended at the end
             //TODO assertion : sep_symbols cannot be consecutive
         };
@@ -305,20 +341,18 @@ private:
     static void * record_phrases(void *data);
 
     //mark the nonterminals that can be removed from the grammar
-    static bv_t mark_nonterimnals(plain_grammar_t& p_gram);
-    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram,
-                                 bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs,
-                                 sdsl::cache_config &config);
-    static void decomp(size_t nt, sdsl::int_vector<>& rules, bv_t& r_lim, bv_t::select_1_type& rlim_ss,
-                       bv_t& rem_nt, bv_t::rank_1_type& rem_nt_rs, ivb_t & dec);
+    static bv_t mark_nonterminals(plain_grammar_t& p_gram);
+    static void simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
+    static void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
+                       bv_t::rank_1_type &rem_nt_rs,
+                       ivb_t &dec);
     //these functions are to build the index
-    static void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts,
-                                  bv_t::rank_1_type &rem_nts_rs, sdsl::cache_config &config);
-    static std::vector<uint8_t> rec_dc(size_t nt, uint8_t lev, sdsl::int_vector<>& rules,
-                                       bv_t& rem_nts, bv_t& r_lim, bv_t::select_1_type &r_lim_ss);
-    static void rec_dc_int(size_t nt, uint8_t lev, size_t& pos, bool rm, sdsl::int_vector<>& rules,
-                           bv_t& rem_nts, bv_t::select_1_type &r_lim_ss,
-                           std::vector<uint8_t> &breaks);
-    static void colex_nt_sort(plain_grammar_t& p_gram, sdsl::cache_config& config);
+    static void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
+    static std::vector<uint8_t>
+    rec_dc(gram_wrapper_t& gram_w, size_t nt, uint8_t lev);
+    static void rec_dc_int(gram_wrapper_t& gram_w, size_t nt, uint8_t lev, size_t &pos, bool rm,
+                           std::vector<uint8_t> &lms_breaks);
+    static void colex_nt_sort(plain_grammar_t &p_gram);
+    static void run_length_compress(plain_grammar_t& p_gram, sdsl::cache_config& config);
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H

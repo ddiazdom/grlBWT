@@ -11,9 +11,7 @@
 #include <sdsl/construct.hpp>
 #include "utils.hpp"
 #include "dfuds_tree.hpp"
-
-#define INV_PI_WX 8
-#define INV_PI_X 8
+#include "macros.hpp"
 
 class grammar_tree_t{
 
@@ -25,13 +23,13 @@ public:
     typedef sdsl::wt_gmr<
                 sdsl::int_vector<>,
                 sdsl::inv_multi_perm_support<INV_PI_WX>
-            >                                               wt_x;
+            >                                                wt_x;
 
     typedef sdsl::sd_vector<>                                bv_z;
     typedef sdsl::sd_vector<>                                bv_l;
-    typedef sdsl::int_vector<>                               vi;
-    typedef sdsl::inv_perm_support<INV_PI_X>           inv_vi;
-
+    typedef sdsl::sd_vector<>                                bv_r;
+    typedef sdsl::int_vector<>                                 vi;
+    typedef sdsl::inv_perm_support<INV_PI_X>               inv_vi;
 
 
 
@@ -63,6 +61,12 @@ protected:
      * */
     bv_l                            L; // marks the init position of each Xi in T
     bv_l::select_1_type             select_L;
+    bv_l::rank_1_type               rank_L;
+
+    bv_r                            R; // mark the run lenght rules. g bits
+    bv_r::rank_1_type          rank_r;
+    vi                              RL;// store the length of the run lenght rules. |rank(R)|
+
 
 public:
 
@@ -95,33 +99,29 @@ public:
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
         written_bytes += sdsl::serialize(T,out);
-        std::cout<<"written_bytes += sdsl::serialize(T,out);"<<std::endl;
-
         written_bytes += sdsl::serialize(Z,out);
         written_bytes += sdsl::serialize(rank1_Z,out);
         written_bytes += sdsl::serialize(select1_Z,out);
         written_bytes += sdsl::serialize(select0_Z,out);
-        std::cout<<"written_bytes += sdsl::serialize(Z,out);"<<std::endl;
         written_bytes += sdsl::serialize(X,out);
-        std::cout<<"written_bytes += sdsl::serialize(X,out);"<<std::endl;
         written_bytes += sdsl::serialize(F,out);
         written_bytes += sdsl::serialize(F_inv,out);
-        std::cout<<"written_bytes += sdsl::serialize(F,out);"<<std::endl;
-
         written_bytes += sdsl::serialize(L,out);
         written_bytes += sdsl::serialize(select_L,out);
-        std::cout<<"written_bytes += sdsl::serialize(F,out);"<<std::endl;
-
         return written_bytes;
     }
 
 
-    void build(utils::nav_grammar& NG, const plain_grammar& Gr, const size_t& text_length,utils::lenght_rules& rules_off){
-        std::cout<<"utils::nav_grammar NG = utils::build_nav_grammar(Gr);\n";
-        build_tree(Gr,NG,text_length,rules_off);
+    void build(utils::nav_grammar& NG, const plain_grammar& Gr, const size_t& text_length,utils::lenght_rules& rules_off, const size_type& init_rule){
+#ifdef DEBUG_INFO
         std::cout<<"build_tree(Gr,NG,text_length);\n";
-        compute_aux_st();
+#endif
+        build_tree(Gr,NG,text_length,rules_off,init_rule);
+#ifdef DEBUG_INFO
         std::cout<<"compute_aux_st();\n";
+#endif
+        compute_aux_st();
+
     }
     const top_tree& getT()const {return T;}
     size_type first_occ_preorder_node(const size_type& preorder)const {
@@ -148,14 +148,22 @@ public:
         //first mention case
         return F_inv[rank1_Z(preorder)];
     }
-
+    // return 0 if is not a run
+    // in other case return the length of the run
+    inline size_type is_run(const size_type& preorder)const{
+        if(!R[preorder]) return 0;
+        return RL[rank_r(preorder)];
+    }
     inline size_type get_size_rules()const {return F.size();}
     inline size_type get_grammar_size()const {return Z.size();}
     inline size_type offset_node(const size_type& node) const {
         size_type leaf = T.leafrank(node);
         return select_L(leaf);
     }
-
+    inline size_type offset_node(const size_type& node, size_type& leaf) const {
+        leaf = T.leafrank(node);
+        return select_L(leaf);
+    }
     template<typename F>
     void visit_secondary_occ(const size_type& preorder_node, const F& f) const {
         size_type  x = get_rule_from_preorder_node(preorder_node);
@@ -166,7 +174,6 @@ public:
             f(preorder);
         }
     }
-
     void breakdown_space() const {
 
         std::cout<<"T,>"<<sdsl::size_in_bytes(T)<<std::endl;
@@ -176,8 +183,9 @@ public:
         std::cout<<"L,>"<<sdsl::size_in_bytes(L)<<std::endl;
 
     }
-
-    size_type get_text_len()const { return L.size();}
+    inline size_type get_text_len()const { return L.size();}
+    inline size_type selectL(const size_type &i)const{ return select_L(i);}
+    inline size_type num_leaves()const{return rank_L(L.size());}
 
 protected:
 
@@ -187,64 +195,158 @@ protected:
      * build algorithms
      * */
 
-    void build_tree( const plain_grammar& Gr,utils::nav_grammar& grammar, const size_t& text_length,utils::lenght_rules& rules_off ){
+    void build_tree( const plain_grammar& Gr,utils::nav_grammar& grammar, const size_t& text_length,utils::lenght_rules& rules_off
+                     ,const size_type& init_rule){
 
-        std::cout<<"Building dfuds representation of parser tree"<<std::endl;
-        sdsl::bit_vector _bv(2 * Gr.g - 1, 1);
+        size_type nnodes = (Gr.g - Gr.sigma);
+#ifdef DEBUG_INFO
+        std::cout<<"Building dfuds representation of parser tree S:"<<init_rule<<std::endl;
+        std::cout<<"Number of nodes:"<<nnodes<<std::endl;
+#endif
+        sdsl::bit_vector _bv(2 * nnodes  - 1 , 1);
         size_type pos = 0; // offset in tree topology bitvector
         std::set<size_type> M; //
-        sdsl::bit_vector _z(Gr.g, 0); // mark if the node i in preorder is a first mention node
-        size_t z_pos = 0,z_rank = 0, x_pos = 0;
+        sdsl::bit_vector _z(nnodes, 0); // mark if the node i in preorder is a first mention node
+
+        sdsl::int_vector_buffer<1> is_rules_len(Gr.is_rl_file);
+        size_type n_l = 0; // count the number of runs
+        for (size_type i = 0; i < is_rules_len.size(); ++i) {
+            if(is_rules_len[i]){
+                auto it = grammar[i];
+                if(it.size() == 2 && it[1] > 2) //(X-> Xi^l === Xi,l ) check if l > 2 else is not consider as a run length node...
+                    n_l++;
+            }
+        }
+        sdsl::bit_vector _r(nnodes, 0); // mark if the node i is a run length
+        sdsl::int_vector<> _rl(n_l, 0); // mark if the node i is a run length
+
+        size_t z_pos = 0,z_rank = 0, x_pos = 0,_rl_pos = 0;
         sdsl::int_vector<> _f(Gr.r, 0); // permutation of rules
-        sdsl::int_vector<> _x(Gr.g - Gr.r); // label of second mention nodes in the tree
-        sdsl::bit_vector _l(text_length + 1, 0); // text-len bitvector marking start position of parser phrases..
+        sdsl::int_vector<> _x(nnodes - Gr.r + 1); // label of second mention nodes in the tree
+        sdsl::bit_vector _l(text_length, 0); // text-len bitvector marking start position of parser phrases..
         size_type l_pos = 0; // current off in the text.
 
+#ifdef DEBUG_INFO
+    std::cout<<"Start dfs\n";
+#endif
 
-        utils::dfs_2v(Gr.sigma,grammar,[&Gr,&grammar,&_bv,&pos,&_z,&z_pos,&z_rank,&_f,&_x,&x_pos,&_l, &l_pos, &M,&rules_off](const size_type& id, bool first_visit){
+
+        utils::dfs_2v(init_rule,grammar,is_rules_len,[
+                &Gr,&is_rules_len,&grammar,&_bv,&pos,&_z,&z_pos
+                ,&z_rank,&_f,&_x,&x_pos,&_l, &l_pos
+                ,&_r,&_rl,&_rl_pos,&M,&rules_off
+                ](const size_type& id, bool first_visit){ //len is > 0  if it is the second child of a run length
             if(first_visit){ // first visit
+#ifdef DEBUG_PRINT
+                if(id == 0){
+                    std::cout<<"-----------------------------------------"<<id<<std::endl;
+                    std::cout<<"CASE 0"<<std::endl;
+                    std::cout<<"CASE 0:l_pos:"<<l_pos<<std::endl;
+                }
+#endif
                 z_pos ++ ; // pre-incress offset in vector z;
+                _l[l_pos] = true; // mark text position for first time visit
+
                 if (M.find(id) != M.end()) { // second mention of a non-terminal => leaf tree
 
                     _bv[pos] = false; // add to the tree as leaf
                     ++pos; // increase off in tree
 
-                    _x[x_pos] = id;x_pos++; // store second mention node
-
-                    _l[l_pos] = true; // mark text position for this leaf tree
+                    _x[x_pos] = id;
+                    x_pos++; // store second mention node
+#ifdef DEBUG_PRINT
+                    std::cout<<"-----------------------------------------"<<id<<std::endl;
+                    std::cout<<"SECOND MENTION:ID:"<<id<<std::endl;
+                    std::cout<<"SECOND MENTION:LEN:"<<rules_off[id].second<<std::endl;
+                    std::cout<<"SECOND MENTION:LPOS:"<<l_pos<<std::endl;
+                    utils::pretty_printer_bv(_l,"SECOND MENTION:L");
+#endif
                     l_pos += rules_off[id].second; // increase the off-text with pre-computed len-rule
-
                     return false; // return false stop descending in the tree
                 }
 
                 M.insert(id); // store first mention of a rule tree
-
                 _z[ z_pos - 1 ] = true; //mark the node as first mention (we index in z_pos -1 because we pre increase the off)
                 _f[id] = ++z_rank; // map the rule with the number of 1s in z;
 
-                if(id < Gr.sigma){
-                    //if is a terminal symbol
-                    _bv[pos] = false; // add to the tree as leaf
-                    ++pos; // increase off in tree
+                if(is_rules_len[id] && grammar[id][1] > 2){
+//                     check if it is a run length rule
+                    _r[ z_pos - 1 ] = true;
+                    _rl[_rl_pos++] = grammar[id][1]; //store the exponent
+
+                    size_type rhl = 2; // right hand length
+                    _bv[pos + rhl] = false; // add 0 before rhl children
+                    pos += rhl + 1; // increase off in tree
 
                     rules_off[id] = std::make_pair(l_pos,1); // store the off in the text
-                    ++l_pos;
-                    return false; // stop descending in the tree
+                    return true; //  keep descending in the tree
+
+                }else{
+
+                    if(Gr.isTerminal(id)){
+                        //if is a terminal symbol
+                        _bv[pos] = false; // add to the tree as leaf
+                        ++pos; // increase off in tree
+
+                        rules_off[id] = std::make_pair(l_pos,1); // store the off in the text
+                        ++l_pos;
+                        return false; // stop descending in the tree
+                    }
+
+                    size_type rhl = grammar[id].size(); // right hand length
+                    _bv[pos + rhl] = false; // add 0 before rhl children
+                    pos += rhl + 1; // increase off in tree
+
+
+                    rules_off[id] = std::make_pair(l_pos,1); // store the off in the text
+                    return true; //  keep descending in the tree
+
                 }
-
-                size_type rhl = grammar[id].size(); // right hand length
-                _bv[pos + rhl] = false; // add 0 before rhl children
-                pos += rhl + 1; // increase off in tree
-
-
-                rules_off[id] = std::make_pair(l_pos,1); // store the off in the text
-                return true; //  keep descending in the tree
             }
             //second visit (only in non-terminal)
+
+
+            if(is_rules_len[id] && grammar[id][1] > 2){
+                //case run-length
+#ifdef DEBUG_PRINT
+                std::cout<<"************************************************************"<<std::endl;
+                std::cout<<id<<std::endl;
+                std::cout<<rules_off[id].first<<" "<<rules_off[id].second<<std::endl;
+#endif
+                size_type _len = grammar[id][1]; //run len
+                size_type one_child_len = rules_off[grammar[id][0]].second; //one child len
+#ifdef DEBUG_PRINT
+                if(one_child_len == 1 && Gr.isTerminal(grammar[id][0])){
+                    std::cout<<"TERMINAL RUN-LENGTH\n";
+                }
+
+                std::cout<<"one_child_len:"<<one_child_len<<" l:"<<_len<<std::endl;
+                std::cout<<"l_pos:"<<l_pos<<" add:"<<(_len - 2) * one_child_len<<std::endl;
+#endif
+                rules_off[id].second = _len * one_child_len; // total len
+                l_pos += (_len - 2) * one_child_len;
+#ifdef DEBUG_PRINT
+                std::cout<<"/////////////////////////////////////////////////////////////"<<std::endl;
+#endif
+                return false;
+            }
+
             rules_off[id].second = l_pos - rules_off[id].first; // update rule length with the offset diferences
             return false; // to avoid warning.... :)
         });
 
+
+        //check residual sizes
+#ifdef DEBUG_INFO
+        std::cout<<"check residual sizes\n";
+        std::cout<<"bv:"<<_bv.size()<<"-"<<pos<<std::endl;
+        std::cout<<"f:"<<_f.size()<<"-"<<_f.size()<<std::endl;
+        std::cout<<"x:"<<_x.size()<<"-"<<x_pos<<std::endl;
+        std::cout<<"z:"<<_z.size()<<"-"<<z_pos<<std::endl;
+        std::cout<<"l:"<<_l.size()<<"-"<<l_pos<<std::endl<<" root-off:"<<rules_off[init_rule].first<<","<<rules_off[init_rule].second<<std::endl;
+        std::cout<<"r:"<<_r.size()<<"-"<<z_pos<<std::endl;
+        std::cout<<"rl:"<<_rl.size()<<"-"<<_rl_pos<<std::endl;
+#endif
 
         T.build(_bv);
         sdsl::util::bit_compress(_x);
@@ -253,19 +355,23 @@ protected:
         x_file.close();
         sdsl::construct(X, "x_file", 0);
         F = vi (_f);
-        sdsl::util::bit_compress(F);
         Z = bv_z(_z);
         L = bv_l (_l);
+        R = bv_r(_r);
+        RL = vi(_rl);
 
-//        T.print();
-//        utils::pretty_printer_bv(Z,"Z");
-//        utils::pretty_printer_v(F,"F");
-//        utils::pretty_printer_v(X,"X");
-//        utils::pretty_printer_bv(L,"L");
+#ifdef DEBUG_PRINT
+        T.print();
+        utils::pretty_printer_bv(Z,"Z");
+        utils::pretty_printer_v(F,"F");
+        utils::pretty_printer_v(X,"X");
+        utils::pretty_printer_bv(L,"L");
+        utils::pretty_printer_bv(R,"R");
+        utils::pretty_printer_bv(RL,"RL");
+#endif
+//        compute_aux_st();
 
     }
-
-
     /**
      * Initialize rank and select structures of all components and inverse permutation....
      */
@@ -276,8 +382,15 @@ protected:
         select0_Z       = bv_z ::select_0_type (&Z);
 
         F_inv           = inv_vi(&F);
+        sdsl::util::bit_compress(F);
 
         select_L        = bv_l::select_1_type(&L);
+        rank_L          = bv_l::rank_1_type(&L);
+
+        rank_r          = bv_r::rank_1_type (&R);
+        sdsl::util::bit_compress(RL);
+
+
 
     }
 

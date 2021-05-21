@@ -9,6 +9,7 @@
 #include "lpg_build.hpp"
 #include "grammar_tree.hpp"
 #include "grid.hpp"
+#include "macros.hpp"
 
 class lpg_index{
 
@@ -17,7 +18,7 @@ private:
     typedef typename lpg_build::alpha_t                 alpha_t;
 
     grammar_tree_t                                      grammar_tree;
-    grid_t                                              grid;
+    grid                                                m_grid;
     sdsl::int_vector<8>                                 symbols_map; // map a compressed terminal to its original byte symbol
     uint8_t                                             m_sigma{}; //alphabet of terminal symbols
     uint8_t                                             parsing_rounds{}; //number of LMS parsing rounds during the grammar construction
@@ -26,30 +27,44 @@ private:
     void build_index(const std::string& i_file,plain_grammar_t &p_gram,const size_t& text_length, sdsl::cache_config& config){
         m_sigma = p_gram.sigma;
         parsing_rounds = p_gram.rules_per_level.size();
-        symbols_map.resize(p_gram.symbols_map.size());
+        /*symbols_map.resize(p_gram.symbols_map.size());
         for(size_t i=0; i < p_gram.symbols_map.size(); i++){
             symbols_map[i] = p_gram.symbols_map[i];
-        }
+        }*/
         //build the grammar tree and grid from p_gram here!!
 
         utils::lenght_rules lenghts;
-        utils::nav_grammar NG = utils::build_nav_grammar(p_gram);
-        grammar_tree.build(NG,p_gram,text_length,lenghts);
+        size_type S;
+        utils::nav_grammar NG = utils::build_nav_grammar(p_gram,S);
+        grammar_tree.build(NG,p_gram,text_length,lenghts,S);
 
         std::vector<utils::sfx> grammar_sfx;
         const auto& T = grammar_tree.getT();
+#ifdef DEBUG_INFO
+        std::cout<<"compute_grammar_sfx\n";
+#endif
         utils::compute_grammar_sfx(NG,p_gram,T,lenghts,grammar_sfx);
         NG.clear();
-        utils::sort_suffixes(i_file,grammar_sfx);
+
+#ifdef DEBUG_INFO
         std::cout<<"sort_suffixes\n";
+#endif
+        utils::sort_suffixes(i_file,grammar_sfx);
+
+#ifdef DEBUG_INFO
+        std::cout<<"compute_grid_points\n";
+#endif
         std::vector<grid_point> points;
         compute_grid_points(grammar_sfx,points);
-        std::cout<<"compute_grid_points\n";
+
         grammar_sfx.clear();
-        grid = grid_t(points,p_gram.rules_per_level.size());
+//        grid = grid_t(points,p_gram.rules_per_level.size());
+        m_grid = grid(points);
+#ifdef DEBUG_INFO
         std::cout<<"build grid\n";
         breakdown_space();
         std::cout<<"end build index\n";
+#endif
     };
 
     void breakdown_space() const {
@@ -59,13 +74,20 @@ private:
         std::cout<<"Grammar-size,"<<grammar_tree.get_grammar_size()<<std::endl;
         std::cout<<"Grammar-Tree,"<<sdsl::size_in_bytes(grammar_tree)<<std::endl;
         grammar_tree.breakdown_space();
-        std::cout<<"Grid,"<<sdsl::size_in_bytes(grid)<<std::endl;;
-        grid.breakdown_space();
+        std::cout<<"Grid,"<<sdsl::size_in_bytes(m_grid)<<std::endl;;
+        m_grid.breakdown_space();
         std::cout<<"symbols_map,"<<sdsl::size_in_bytes(symbols_map);
         std::cout<<"m_sigma,"<<sizeof(m_sigma);
         std::cout<<"parsing_rounds,"<<sizeof(parsing_rounds);
         std::cout<<"rl_compressed,"<<sizeof(rl_compressed);
     }
+
+    struct parse_data{
+        uint8_t lvl;
+        size_t idx;
+        size_t n_lms;
+        bool tail;
+    };
 
     static alpha_t get_alphabet(std::string& i_file){
 
@@ -98,11 +120,18 @@ private:
     }
 
     template<typename proc>
-    static void lms_scan(proc& task, size_t pos, std::vector<size_t>& parse, size_t& n_lms){
+    static void lms_scan(proc& task, std::vector<size_t>& parse){
 
         int_array<size_t> lms_phrase(2, 32);
-        size_t curr_sym, prev_sym;
+        size_t curr_sym, prev_sym, pos;
         bool s_type, prev_s_type;
+
+        lms_phrase.push_back(parse.back());
+        pos = parse.size()-2;
+        while(pos>0 && parse[pos]==parse[pos+1]){
+            lms_phrase.push_back(parse[pos--]);
+        }
+        if(pos==0) return;
 
         if(parse[pos]<parse[pos+1]){
             prev_s_type = S_TYPE;
@@ -112,7 +141,6 @@ private:
 
         prev_sym = parse[pos];
         lms_phrase.push_back(prev_sym);
-        n_lms=0;
         for(size_t i = pos; i-- > 0;){
             curr_sym = parse[i];
             if (curr_sym < prev_sym) {//S_TYPE type
@@ -123,67 +151,92 @@ private:
                 s_type = L_TYPE;
                 if(prev_s_type == S_TYPE) {//LMS-type
                     lms_phrase.pop_back();
-                    if(n_lms>0){
-                        task(lms_phrase);
-                    }
+                    task(lms_phrase);
+
                     lms_phrase.clear();
                     lms_phrase.push_back(prev_sym);
-                    n_lms++;
                 }
             }
             lms_phrase.push_back(curr_sym);
             prev_sym = curr_sym;
             prev_s_type = s_type;
         }
+        task(lms_phrase);
     }
 
-    std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string& pattern) const {
+    static std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string& pattern) {
 
         std::vector<size_t> parse;
-        std::vector<size_t> next_parse;
 
         //right elements are index in the first
         // level (terminals) where the S* string occur
         // left element is the index in the last level
-        std::vector<std::pair<size_t, size_t>> lms_cuts;
+        std::vector<size_t> lms_cuts;
 
         parse.reserve(pattern.size());
-        next_parse.reserve(pattern.size()/2);
         for(auto const& sym : pattern) parse.push_back(sym);
 
-        bit_hash_table<size_t, 44> ht;
-        size_t n_lms, pos, rank=0;
-        uint8_t lvl=0;
+        size_t rank=0;
+        parse_data p_data{};
+        p_data.n_lms = parse.size();
 
+        //hash table to hash the LMS phrases
+        bit_hash_table<size_t, 44> ht;
+
+        //lambda function to hash the LMS phrases
         auto hash_task = [&](auto& phrase){
-            phrase.mask_tail();
-            ht.insert(phrase.data(), phrase.n_bits(),0);
+
+            if(p_data.tail){
+                p_data.tail = false;
+            }else{
+                phrase.mask_tail();
+                if(p_data.idx>phrase.size()){
+                    ht.insert(phrase.data(), phrase.n_bits(),0);
+                }
+            }
+
+            if(p_data.idx>phrase.size()){
+                p_data.idx -= phrase.size();
+                if(p_data.lvl==0){
+                    lms_cuts.push_back(p_data.idx);
+                }else {
+                    lms_cuts[p_data.n_lms] = lms_cuts[p_data.idx];
+                }
+                p_data.n_lms++;
+            }
+        };
+
+        //lambda function to create the LMS parse
+        auto parse_task = [&](auto& phrase){
+            if(p_data.tail){
+                p_data.tail = false;
+            }else{
+                if(p_data.n_lms>1) {
+                    phrase.mask_tail();
+                    auto res = ht.find(phrase.data(), phrase.n_bits());
+                    assert(res.second);
+                    parse[p_data.idx--] = res.first.value();
+                    p_data.n_lms--;
+                }
+            }
         };
 
         //hash the LMS phrases in the text
         while(true){
+
             assert(parse.size()>1);
-            pos = parse.size()-2;
-            while(pos>0 && parse[pos]==parse[pos+1]) pos--;
-            if(pos==0) break;
-            n_lms++;
 
-            lms_scan(hash_task, pos, parse, n_lms);
+            p_data.idx = parse.size()-1;
+            p_data.n_lms = 0;
+            p_data.tail = true;
 
-            if(n_lms<=5){//report the cuts
-                if(n_lms==0){
-                    //go back to the previous parse
-                }else{
-                    std::vector<size_t> final_cuts;
-                    for(auto const& cut: lms_cuts){
-                        final_cuts.push_back(cut.second);
-                    }
-                    return std::make_pair(std::move(final_cuts), lvl);
-                }
-            }else if(lvl == parsing_rounds){
-                //pattern is longer than the strings in the grammar
-                return std::pair<std::vector<size_t>, uint8_t>();
-            } else{
+            lms_scan(hash_task, parse);
+
+            if(p_data.n_lms<4){//report the cuts
+                if(p_data.n_lms!=0) lms_cuts.resize(p_data.n_lms);
+                std::reverse(lms_cuts.begin(), lms_cuts.end());
+                return {lms_cuts, p_data.lvl};
+            } else{//TODO if we incur in more parsing rounds than the grammar, then the pattern doesn't exist
                 //assign ranks to the lms phrases
                 {
                     const bitstream<bit_hash_table<size_t,44>::buff_t>& stream = ht.get_data();
@@ -203,32 +256,28 @@ private:
                     }
                 }
 
-                // create the parse
-                auto parse_task = [&](auto& phrase){
-                    phrase.mask_tail();
-                    auto res = ht.find(phrase.data(), phrase.n_bits());
-                    next_parse.push_back(res.first.value());
-                };
-                lms_scan(parse_task, pos, parse, n_lms);
-                std::reverse(next_parse.begin(), next_parse.end());
-                std::swap(parse, next_parse);
+                p_data.tail = true;
+                p_data.idx = parse.size()-1;
+                lms_scan(parse_task, parse);
+                parse.erase(parse.begin(), parse.begin()+p_data.idx+1);
+                lms_cuts.pop_back();
+                std::reverse(lms_cuts.begin(), lms_cuts.end());
             }
-            next_parse.clear();
             ht.flush();
-            lvl++;
+            p_data.lvl++;
         }
     }
 
 public:
     typedef size_t                          size_type;
 
-    lpg_index(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac, bool rl_comp) {
+    lpg_index(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac) {
 
         std::cout<<"Input file: "<<input_file<<std::endl;
         auto alphabet =  get_alphabet(input_file);
 
         size_t n_chars = 0;
-        for(auto const sym : alphabet) n_chars+=sym.second;
+        for(auto const &sym : alphabet) n_chars+=sym.second;
 
         //create a temporary folder
         std::string tmp_path = tmp_folder+"/lpg_index.XXXXXX";
@@ -246,11 +295,11 @@ public:
         std::string g_file = sdsl::cache_file_name("g_file", config);
 
         //maximum amount of RAM allowed to spend in parallel for the hashing step
-        auto hbuff_size = size_t(std::ceil(float(n_chars)*hbuff_frac));
+        auto hbuff_size = std::max<size_t>(64*n_threads, size_t(std::ceil(float(n_chars)*hbuff_frac)));
 
         std::cout<<"Computing the LPG grammar"<<std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        lpg_build::compute_LPG(input_file, g_file, n_threads, config, hbuff_size, alphabet,  rl_comp);
+        lpg_build::compute_LPG(input_file, g_file, n_threads, config, hbuff_size, alphabet);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout<<"  Elap. time (secs): "<<elapsed.count()<<std::endl;
@@ -264,9 +313,9 @@ public:
         std::cout << "  Size of the comp. string: " << plain_gram.c << std::endl;
         std::cout << "  Grammar size:             " << plain_gram.g - plain_gram.sigma << std::endl;
 
-
-//        plain_gram.print_grammar();
-
+#ifdef DEBUG_PRINT
+        plain_gram.print_grammar();
+#endif
 
         std::cout<<"Building the self-index"<<std::endl;
         start = std::chrono::high_resolution_clock::now();
@@ -280,7 +329,7 @@ public:
 
     lpg_index(const lpg_index &other){
         grammar_tree = other.grammar_tree;
-        grid = other.grid;
+        m_grid = other.m_grid;
         symbols_map = other.symbols_map;
         m_sigma = other.m_sigma;
         parsing_rounds = other.parsing_rounds;
@@ -289,7 +338,7 @@ public:
 
     void swap(lpg_index&& other){
         std::swap(grammar_tree, other.grammar_tree);
-        std::swap(grid, other.grid);
+        std::swap(m_grid, other.m_grid);
         std::swap(symbols_map, other.symbols_map);
         std::swap(m_sigma, other.m_sigma);
         std::swap(parsing_rounds, other.parsing_rounds);
@@ -310,6 +359,8 @@ public:
     //statistics about the text: number of symbols, number of documents, etc
     void text_stats(std::string& list){
     }
+
+    void locate(const std::string& pattern, std::set<uint64_t> &pos) const;
 
     //extract text[start, end] from the index
     void extract(size_t start, size_t end){
@@ -341,12 +392,11 @@ public:
             }
             std::cout<<std::endl;
         }
-
     }
 
     void load(std::istream &in){
         grammar_tree.load(in);
-        grid.load(in);
+        m_grid.load(in);
         symbols_map.load(in);
         sdsl::read_member(m_sigma, in);
         sdsl::read_member(parsing_rounds, in);
@@ -357,7 +407,7 @@ public:
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         size_t written_bytes = 0;
         written_bytes += grammar_tree.serialize(out, child, "grammar_tree");
-        written_bytes += grid.serialize(out, child, "grid");
+        written_bytes += m_grid.serialize(out, child, "m_grid");
         written_bytes += symbols_map.serialize(out, child, "symbols_map");
         written_bytes += sdsl::write_member(m_sigma, out, child, "sigma");
         written_bytes += sdsl::write_member(parsing_rounds, out, child, "sigma");
@@ -386,14 +436,25 @@ public:
             if (grammar_tree.isLeaf(preorder_node)) { //leaf case
                 return dfs_leaf_base_case(preorder_node,node,f);
             } else {
+                    auto len = grammar_tree.is_run(preorder_node);
                     const auto&T = grammar_tree.getT();
-                    uint32_t n = T.children(node); //number of children
-                    for (uint32_t i = n; i > 0; --i) { // from right to left
-                        auto chnode = T.child(node, i); //get i-child node
-                        bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode, f);// compute preorder and visit recursively
-                        if (!keep) return keep; // keep says if we must to stop the expansion of the rule
+                    if(len){
+                        for (uint32_t i = 0; i < len; ++i) {
+                            auto chnode = T.child(node, 1);
+                            bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode, f);
+                            if (!keep) return keep;
+                        }
+                        return true;
+                    }else{
+                        uint32_t n = T.children(node); //number of children
+                        for (uint32_t i = n; i > 0; --i) { // from right to left
+                            auto chnode = T.child(node, i); //get i-child node
+                            bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode, f);// compute preorder and visit recursively
+                            if (!keep) return keep; // keep says if we must to stop the expansion of the rule
+                        }
+                        return true;
                     }
-                    return true;
+
             }
     }
 
@@ -402,14 +463,21 @@ public:
         if (grammar_tree.isLeaf(preorder_node)) { //leaf case
             return dfs_leaf_base_case(preorder_node,node,f);
         }  else {
-
+            auto len = grammar_tree.is_run(preorder_node);
             const auto&T = grammar_tree.getT();
-            uint32_t n = T.children(node); //number of children
-
-            for (uint32_t i = 0; i > n; ++i) { // from left to right
-                auto chnode = T.child(node, i+1); //get i-child node
-                bool keep = dfs_leaf(T.pre_order(chnode), chnode, f);// compute preorder and visit recursively
-                if (!keep) return keep; // keep says if we must to stop the expansion of the rule
+            if(len){
+                auto chnode = T.child(node, 1);
+                for (uint32_t i = 0; i < len; ++i) {
+                    bool keep = dfs_leaf(T.pre_order(chnode), chnode, f);
+                    if (!keep) return keep;
+                }
+            }else{
+                uint32_t n = T.children(node); //number of children
+                for (uint32_t i = 0; i > n; ++i) { // from left to right
+                    auto chnode = T.child(node, i+1); //get i-child node
+                    bool keep = dfs_leaf(T.pre_order(chnode), chnode, f);// compute preorder and visit recursively
+                    if (!keep) return keep; // keep says if we must to stop the expansion of the rule
+                }
             }
             return true;
         }
@@ -480,7 +548,7 @@ public:
     inline bool isTerminal(const size_type& X) const{ return X < m_sigma;}
 
     /**
-     * Find the grid range to search
+     * Find the m_grid range to search
      * @return grid_query
      * */
 
@@ -500,78 +568,87 @@ public:
         if (!utils::upper_bound(row_1, row_2, cmp_rev_prefix_rule)) return false;
         q.row2 = row_2;
         //search suffixes
-        auto cmp_suffix_grammar_rule = [ &level, &p, &pattern,this](const size_type &suffix_id,const size_type &val) {
+        auto cmp_suffix_grammar_rule = [ &p, &pattern,this](const size_type &suffix_id) {
             //val is just to use the std lower bound method
             // compute node definiton preorder of the rule
-            uint64_t prenode = grid.get_preorder_node_from_suffix(suffix_id,level);
+            uint64_t prenode = m_grid.first_label_col(suffix_id);
             return cmp_suffix_grammar(prenode, pattern, p);
         };
 
-        std::vector<size_type> sfx_by_level;
-        this->grid.map_suffixes_levels(level,sfx_by_level);
+
+///         multiple grid versions
+//        auto cmp_suffix_grammar_rule = [ &level, &p, &pattern,this](const size_type &suffix_id,const size_type &val) {
+//            //val is just to use the std lower bound method
+//            // compute node definiton preorder of the rule
+//            uint64_t prenode = m_grid.get_preorder_node_from_suffix(suffix_id,level);
+//            return cmp_suffix_grammar(prenode, pattern, p);
+//        };
+//        std::vector<size_type> sfx_by_level;
+//        this->grid.map_suffixes_levels(level,sfx_by_level);
+//        //search lower
+//        auto it_low = std::lower_bound(sfx_by_level.begin(),sfx_by_level.end(),0,cmp_suffix_grammar_rule);
+//        //check we found a match...
+//        if(it_low == sfx_by_level.end() || cmp_suffix_grammar_rule(*it_low,0) != 0) return false;
+//        q.col1 = *it_low;
+//        //search upper
+//        //remove elements less than lower bound
+//        sfx_by_level.erase(sfx_by_level.begin(),it_low);
+//        auto it_upper = std::lower_bound(sfx_by_level.begin(),sfx_by_level.end(),0,cmp_suffix_grammar_rule);
+//        //check we found a match...
+//        if(it_upper == sfx_by_level.end() || cmp_suffix_grammar_rule(*it_upper,0) != 0) return false;
+//        q.col2 = *it_upper;
+
+        uint64_t col_1 = 1, col_2 = m_grid.size_cols();
         //search lower
-        auto it_low = std::lower_bound(sfx_by_level.begin(),sfx_by_level.end(),0,cmp_suffix_grammar_rule);
-        //check we found a match...
-        if(it_low == sfx_by_level.end() || cmp_suffix_grammar_rule(*it_low,0) != 0) return false;
-        q.col1 = *it_low;
+        if (!utils::lower_bound(col_1, col_2, cmp_suffix_grammar_rule)) return false;
+        q.col1 = col_1;
         //search upper
-        //remove elements less than lower bound
-        sfx_by_level.erase(sfx_by_level.begin(),it_low);
-        auto it_upper = std::lower_bound(sfx_by_level.begin(),sfx_by_level.end(),0,cmp_suffix_grammar_rule);
-        //check we found a match...
-        if(it_upper == sfx_by_level.end() || cmp_suffix_grammar_rule(*it_upper,0) != 0) return false;
-        q.col2 = *it_upper;
+        row_2 = col_2 = m_grid.size_cols();
+        if (!utils::upper_bound(col_1, col_2, cmp_suffix_grammar_rule)) return false;
+        q.col2 = col_2;
+        //search suffixes
         return true;
     }
 
 
-    void locate(const std::string& pattern, std::set<uint64_t> &pos) const {
-        std::cout<<"all posible partitions\n";
-//        auto partitions  = compute_pattern_cut(pattern);
-        size_type l = this->grid.get_levels();
-//        std::cout<<partitions.first.size()<<std::endl;
-//        uint32_t level = partitions.second;
-//        for (const auto &item : partitions.first) {
-        for (int i = 0; i < pattern.size() ; ++i) {
-            for (int level = 1; level <= l ; ++level) {
-
-                //find primary occ
-                grid_query range{};
-                //range search
-                if(search_grid_range(pattern.c_str(),pattern.size(),i + 1,level, range)){
-                    std::vector<utils::primaryOcc> pOcc;
-                    // grid search
-                    grid_search(range,i,level,pOcc);
-                    // find secondary occ
-                    for (const auto &occ : pOcc) {
-                        find_secondary_occ(occ,pos);
-                    }
-                }
-
-            }
-        }
-    }
-
-    void grid_search(const grid_query& range, const uint64_t & pattern_off,const uint32_t &level,std::vector<utils::primaryOcc>& occ) const{
+    void grid_search(const grid_query& range, const uint64_t & pattern_off,const uint32_t &m, const uint32_t &level,std::vector<utils::primaryOcc>& occ) const{
         std::vector<uint64_t> sfx;
-        this->grid.search(range,level,sfx);
-        occ.resize(sfx.size());
+///        multiples grid version
+//        m_grid.search(range,level,sfx);
+        m_grid.search_2d(range,sfx);
+        occ.reserve(sfx.size());
         const auto &T = grammar_tree.getT();
         for (size_type i = 0; i < sfx.size(); ++i) {
-            size_type preorder_node = this->grid.get_preorder_node_from_suffix(sfx[i],level);
+            size_type preorder_node = m_grid.first_label_col(sfx[i]);
             size_type node = T[preorder_node];
+            size_type leaf = 0;
+            size_type off = grammar_tree.offset_node(node,leaf);
             assert(grammar_tree.offset_node(node) - pattern_off >= 0);
             size_type parent = T.parent(node);
-            size_type off = grammar_tree.offset_node(node);
-            occ[i] = utils::primaryOcc(parent,T.pre_order(parent),off,off - pattern_off);
+            size_type parent_preorder = T.pre_order(parent);
+            size_type run_len = grammar_tree.is_run(parent_preorder);
+            if(run_len){
+                // add run length primary occ
+                size_type num_leaves = grammar_tree.num_leaves();
+                size_type end_node = leaf == num_leaves?grammar_tree.get_text_len():grammar_tree.selectL(leaf + 1) - 1;
+                size_type fchild_size = off - grammar_tree.offset_node(parent);
+                uint32_t pattern_tail = m - pattern_off;
+                while(end_node >= off + pattern_tail){
+                    occ.emplace_back(parent,parent_preorder,off,off - pattern_off,true);
+                    off += fchild_size;
+                }
+            }else{
+                occ.emplace_back(parent,parent_preorder,off,off - pattern_off,true);
+            }
+
         }
     }
 
     void find_secondary_occ(const utils::primaryOcc& p_occ, std::set<size_type>& occ) const {
+
         //queue for node processing
         std::deque<utils::primaryOcc> Q;
         const auto& T = grammar_tree.getT();
-
         //auxiliar functions
         auto insert_second_mentions = [&Q,&T,this](const utils::primaryOcc& occ){
             grammar_tree.visit_secondary_occ(occ.preorder,[&T,&Q,&occ,this](const size_type& preorder){
@@ -580,7 +657,6 @@ public:
                 Q.emplace_back(node,preorder,node_off,occ.off_pattern);
             });
         };
-
         //initialize the queue
         if(p_occ.preorder == 1){
             occ.insert(p_occ.off_pattern);
@@ -594,10 +670,37 @@ public:
             if(top.preorder == 1){ //base case
                 occ.insert(top.off_pattern);
             } else {
+                //check if the node is a run - length node of a secondary occ
+                if(!top.primary && (top.run_len > 0 || grammar_tree.is_run(top.preorder))){
+                    if(top.run_len > 0){
+                        //if fchild_len y len are != 0 then use precomputed values....
+                        utils::primaryOcc s_occ(top);
+                        //insert himself with all new offsets
+                        for (size_type i = 0; i < top.run_len - 1 ; ++i) {
+                            s_occ.off_pattern += top.fchild_len;
+                            Q.push_back(s_occ);
+                        }
+                    }else{
+                        // we arrive from first child
+                        // compute child len
+                        size_type fchild_len = top.off_node - grammar_tree.offset_node(T.child(top.node,2));
+                        //compute len of the run
+                        size_type rlen = grammar_tree.is_run(top.preorder);
+                        utils::primaryOcc s_occ(top);
+                        s_occ.run_len = rlen;
+                        s_occ.fchild_len = fchild_len;
+                        //insert himself with all new offsets
+                        for (size_type i = 0; i < rlen - 1 ; ++i) {
+                            s_occ.off_pattern += fchild_len;
+                            Q.push_back(s_occ);
+                        }
+                    }
+                }
                 // insert in Q parent
                 size_type parent = T.parent(top.node);
                 size_type preorder_parent = T.pre_order(parent);
                 size_type off_parent = grammar_tree.offset_node(parent);
+
                 utils::primaryOcc s_occ(parent,preorder_parent,off_parent,top.off_pattern + (top.off_node - off_parent ));
                 Q.push_back(s_occ);
                 // insert in Q second occ of the node
@@ -609,6 +712,27 @@ public:
 
 
 };
+
+void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  const {
+        auto partitions  = compute_pattern_cut(pattern);
+
+        std::cout<<partitions.first.size()<<std::endl;
+        uint32_t level = partitions.second;
+        for (const auto &item : partitions.first) {
+            //find primary occ
+            grid_query range{};
+            //range search
+            if(search_grid_range(pattern.c_str(),pattern.size(),item + 1,level, range)){
+                std::vector<utils::primaryOcc> pOcc;
+                // grid search
+                grid_search(range,item,pattern.size(),level,pOcc);
+                // find secondary occ
+                for (const auto &occ : pOcc) {
+                    find_secondary_occ(occ,pos);
+                }
+            }
+        }
+}
 
 
 #endif //LMS_GRAMMAR_REP_HPP

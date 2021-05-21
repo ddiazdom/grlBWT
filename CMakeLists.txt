@@ -9,13 +9,13 @@ find_package(LibSDSL REQUIRED)
 add_executable(lpg
         main.cpp
         lib/lpg/lpg_build.cpp
-        third-party/xxHash-dev/xxhash.c include/lpg/utils.hpp)
+        third-party/xxHash-dev/xxhash.c include/lpg/utils.hpp include/lpg/macros.hpp)
 
 target_compile_options(lpg
         PRIVATE
         #-Werror
         #-Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-vla-extension -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
-        -O0 -msse4.2 -fno-omit-frame-pointer
+        -O0
         INTERFACE
         -Wshadow)
 

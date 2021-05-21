@@ -9,6 +9,7 @@
 #include <sdsl/rrr_vector.hpp>
 #include <sdsl/wt_int.hpp>
 #include <sdsl/construct.hpp>
+#include "macros.hpp"
 
 struct grid_point{
 
@@ -59,9 +60,27 @@ public:
     grid( const grid& _g ):sb(_g.sb), labels(_g.labels),xb(_g.xb) {
         compute_rank_select_st();
     }
+    grid(const std::vector<point>& _points) {
+        build(_points);
+    }
 
     virtual ~grid() = default;
+    void build(const std::vector<point>& _points) {
+        std::vector<point> level_points(_points.size());
+        size_type n_cols = 0,n_rows = 0, n_points = 0;
+        for (const auto & _point : _points){
+            level_points[n_points] = _point;
+            n_cols = (n_cols < _point.col)? _point.col:n_cols;
+            n_rows = (n_rows < _point.row)? _point.row:n_rows;
+            ++n_points;
+        }
 
+        sort_points(level_points);
+        build_bitvectors(level_points,n_cols,n_rows,n_points);
+        build_wt_and_labels(level_points,n_cols,n_rows,n_points);
+        compute_rank_select_st();
+
+    }
     void build(const std::vector<point>& _points,uint32_t level) {
 
         std::vector<point> level_points;
@@ -81,6 +100,12 @@ public:
         build_bitvectors(level_points,n_cols,n_rows,n_points);
         build_wt_and_labels(level_points,n_cols,n_rows,n_points);
         compute_rank_select_st();
+    }
+
+    void breakdown_space() const {
+        std::cout<<"wt_s:"<< sdsl::size_in_bytes(sb)<<std::endl;
+        std::cout<<"vi:"<< sdsl::size_in_bytes(labels)<<std::endl;
+        std::cout<<"bv_x:"<< sdsl::size_in_bytes(xb)<<std::endl;
     }
 
 protected:

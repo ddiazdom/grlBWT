@@ -12,7 +12,6 @@ struct arguments{
 
     std::string tmp_dir;
     size_t n_threads{};
-    bool rl=false;
     float hbuff_frac=0.5;
     bool ver=false;
 };
@@ -45,9 +44,6 @@ static void parse_app(CLI::App& app, struct arguments& args){
     index->add_option("-t,--threads",
                       args.n_threads,
                       "Maximum number of threads")->default_val(1);
-    index->add_flag("-r,--run-length",
-                    args.rl,
-                    "Make the grammar run-length compressed");//->excludes(sear);
     index->add_option("-f,--hbuff",
                       args.hbuff_frac,
                       "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->
@@ -91,7 +87,7 @@ int main(int argc, char** argv) {
 
     if(app.got_subcommand("index")) {
         std::cout<<"Creating an LPG index"<<std::endl;
-        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac, args.rl);
+        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
 
         std::cout<<"Saving the LPG index"<<std::endl;
         if(args.output_file.empty()){
@@ -104,11 +100,15 @@ int main(int argc, char** argv) {
         std::cout<<"Searching for patterns in the LPG index"<<std::endl;
         lpg_index g;
         sdsl::load_from_file(g, args.input_file);
+        std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
         /*if(args.output_file.empty()){
             args.output_file = args.input_file.substr(0, args.input_file.size()-3);
         }*/
+        //std::vector<std::string> patterns={"tcctaatagtacc$t"};
+        std::vector<std::string> patterns={"ANSND"};
         std::cout<<"Searching for the patterns "<<std::endl;
-        g.search(args.patterns);
+        g.search(patterns);
+        //g.search(args.patterns);
         //g.search(args.patter_list_file);
     }
     return 0;
