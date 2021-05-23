@@ -10,6 +10,7 @@
 #include <sdsl/wt_int.hpp>
 #include <sdsl/construct.hpp>
 #include "macros.hpp"
+#include "utils.hpp"
 
 struct grid_point{
 
@@ -21,6 +22,19 @@ struct grid_point{
     grid_point() = default;
 
     grid_point(const size_t& r,const size_t& c,const size_t& l,const size_t& lv):row(r),col(c),label(l),level(lv){}
+
+    void save(std::fstream& out) const {
+        out.write((const char *)&row,sizeof (row));
+        out.write((const char *)&col,sizeof (col));
+        out.write((const char *)&label,sizeof (label));
+        out.write((const char *)&level,sizeof (level));
+    }
+    void load(std::fstream& in){
+        in.read(( char *)&row,sizeof (row));
+        in.read(( char *)&col,sizeof (col));
+        in.read(( char *)&label,sizeof (label));
+        in.read(( char *)&level,sizeof (level));
+    }
 
 };
 
@@ -74,12 +88,38 @@ public:
             n_rows = (n_rows < _point.row)? _point.row:n_rows;
             ++n_points;
         }
-
+#ifdef DEBUG_INFO
+        std::cout<<"GRID:n_points:"<<n_points<<std::endl;
+        std::cout<<"GRID:n_cols:"<<n_cols<<std::endl;
+        std::cout<<"GRID:n_rows:"<<n_rows<<std::endl;
+#endif
         sort_points(level_points);
-        build_bitvectors(level_points,n_cols,n_rows,n_points);
-        build_wt_and_labels(level_points,n_cols,n_rows,n_points);
-        compute_rank_select_st();
 
+#ifdef DEBUG_INFO
+        std::fstream fout("points",std::ios::out|std::ios::binary);
+        fout.write((const char *)&n_points,sizeof (n_points));
+        fout.write((const char *)&n_cols,sizeof (n_cols));
+        fout.write((const char *)&n_rows,sizeof (n_rows));
+        for (size_t i = 0; i < n_points ; ++i) {
+            _points[i].save(fout);
+        }
+        std::cout<<"points saved....."<<std::endl;
+
+        std::cout<<"sort_points"<<n_rows<<std::endl;
+#endif
+        build_bitvectors(level_points,n_cols,n_rows,n_points);
+
+#ifdef DEBUG_INFO
+        std::cout<<"build_bitvectors"<<n_rows<<std::endl;
+#endif
+        build_wt_and_labels(level_points,n_cols,n_rows,n_points);
+#ifdef DEBUG_INFO
+        std::cout<<"build_wt_and_labels"<<n_rows<<std::endl;
+#endif
+        compute_rank_select_st();
+#ifdef DEBUG_INFO
+        std::cout<<"compute_rank_select_st"<<n_rows<<std::endl;
+#endif
     }
     void build(const std::vector<point>& _points,uint32_t level) {
 
@@ -130,14 +170,16 @@ protected:
     void build_bitvectors(const std::vector<point>& _points, const size_type& n_cols,const size_type& n_rows,const size_type& n_points){
 
         std::vector<size_type> card_rows(n_rows, 0);
-        std::vector<size_type> card_cols(n_cols, 0);
+//        std::vector<size_type> card_cols(n_cols, 0);
 
         /*
         * Computing the cardinal of every column and every row
         * */
         for (size_type i = 0; i < n_points; ++i) {
-//            card_rows[_points[i].row - 1]++;
-            card_cols[_points[i].col - 1]++;
+            if(_points[i].row != 0)
+//                    std::cout<<"ZERO WARNING!!!!"<<std::endl;
+                card_rows.at(_points[i].row - 1)++;
+//            card_cols[_points[i].col - 1]++;
         }
 
         /**
@@ -160,7 +202,14 @@ protected:
             return X;
         };
 
-        xb = bv_x(build_bv(card_cols,n_points,n_cols));
+        xb = bv_x(build_bv(card_rows,n_points,n_rows));
+#ifdef DEBUG_PRINT
+        std::cout<<"GRID:XB"<<std::endl;
+        for (int i = 0; i < xb.size(); ++i) {
+            std::cout<<xb[i];
+        }
+        std::cout<<std::endl;
+#endif
 //        xa = bv_x(build_bv(card_rows,n_points,n_rows));
     }
 
@@ -190,7 +239,18 @@ protected:
         std::string id_sb = sdsl::util::basename("sb_file") + "_";
         sdsl::cache_config file_conf_sb(false,"./",id_sb);
         sdsl::construct(sb,"sb_file",file_conf_sb,0);
-
+#ifdef DEBUG_PRINT
+        std::cout<<"GRID:SB"<<std::endl;
+        for (int i = 0; i < sb.size(); ++i) {
+            std::cout<<sb[i]<<" ";
+        }
+        std::cout<<std::endl;
+        std::cout<<"GRID:LABELS"<<std::endl;
+        for (int i = 0; i < labels.size(); ++i) {
+            std::cout<<labels[i]<<" ";
+        }
+        std::cout<<std::endl;
+#endif
     }
 
     void compute_rank_select_st(){
@@ -206,6 +266,8 @@ public:
         sdsl::load(sb,in);
         sdsl::load(xb,in);
         sdsl::load(xb_sel1,in);
+
+        compute_rank_select_st();
     }
 
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const {

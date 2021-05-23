@@ -10,6 +10,6 @@
 #define INV_PI_X 8
 #define DEBUG_INFO 1
 //#define DEBUG_PRINT 1
-
+#define CHECK_OCC 1
 
 #endif //LPG_COMPRESSOR_MACROS_HPP

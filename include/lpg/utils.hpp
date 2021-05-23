@@ -10,6 +10,9 @@
 #include "grid.hpp"
 #include <sdsl/lcp_bitcompressed.hpp>
 #include <sdsl/rmq_succinct_sada.hpp>
+#include <sdsl/csa_wt.hpp>
+#include <sdsl/suffix_arrays.hpp>
+#include <sdsl/wavelet_trees.hpp>
 
 namespace utils {
 
@@ -19,6 +22,8 @@ namespace utils {
     typedef std::unordered_map<size_type,std::vector<size_type>>  nav_grammar;
     typedef std::unordered_map<size_type,std::pair<size_type,size_type>> lenght_rules; //off,len
     typedef std::unordered_map<size_type,std::vector<size_type>> cuts_rules; //off,len
+    typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127> >, 512, 1024> TestIndex;
+
 
     struct sfx{
         size_type off{0};
@@ -54,7 +59,7 @@ namespace utils {
     template <typename F>void dfs_2v(const size_type& , nav_grammar&, const F&);
     template<typename O>void pretty_printer_v( O&bv, const std::string &header);
     template<typename O>void pretty_printer_bv( O&bv, const std::string &header);
-    size_type readFile(const std::string& i_file,unsigned char ** text);
+    size_type readFile(const std::string& i_file,std::string &text);
     void compute_grammar_sfx(nav_grammar &,lpg_build::plain_grammar_t&,const dfuds_tree&,lenght_rules&,std::vector<sfx>&);
     void compute_grid_points(const std::vector<sfx>&, std::vector<grid_point>&);
 
@@ -118,7 +123,8 @@ namespace utils {
                              lpg_build::plain_grammar_t& G,
                              const dfuds_tree& m_tree,
                              lenght_rules& len,
-                             std::vector<sfx>& grammar_sfx
+                             std::vector<sfx>& grammar_sfx,
+                             const size_t & init_r
                              ){
 
         cuts_rules cuts;
@@ -126,7 +132,8 @@ namespace utils {
         uint64_t preorder = 0;
         std::set<uint64_t> mark;
 
-        dfs(G.sigma,grammar,[&G,&grammar,&m_tree, &mark,&preorder,&cuts,&len,&grammar_sfx](const size_type& id){
+
+        dfs(init_r,grammar,[&G,&grammar,&m_tree, &mark,&preorder,&cuts,&len,&grammar_sfx](const size_type& id){
 
             auto it_rule = grammar.find(id);
             ++preorder;
@@ -134,7 +141,7 @@ namespace utils {
                 return false; // stop descending if it is second mention
             mark.insert(id);
 
-            if(id < G.sigma) return false;
+            if(G.sym_map.find(id) != G.sym_map.end()) return false;
 
             size_type n_children = it_rule->second.size();
             if(n_children <= 0) return false; // if leaf break and stop descending
@@ -142,6 +149,7 @@ namespace utils {
             for(size_type j = 1; j < n_children; ++j){
                 auto _child = m_tree.child(node, j + 1);
                 sfx s(
+
                         len[it_rule->second[j]].first, //rule off
                         len[it_rule->first].second - len[it_rule->second[j-1]].second,// len of parent - len of prev-sibling
                         it_rule->second[j-1], //prev-sibling id
@@ -158,18 +166,19 @@ namespace utils {
     }
 
     void sort_suffixes(const std::string& i_file, std::vector<sfx> &grammar_sfx) {
-        unsigned char * text = nullptr;
-
-        readFile(i_file, &text);
-        if(text == nullptr) throw "ERROR TEXT INVALID";
-
+        std::string text; char c = 1;
+        readFile(i_file, text);
+        text =  text + c;
+#ifdef DEBUG_PRINT
+        std::cout<<"T\n"<<text<<std::endl;
+#endif
         sdsl::int_vector<> SA;
         sdsl::int_vector<> SA_1;
         sdsl::lcp_bitcompressed<> LCP;
         sdsl::rmq_succinct_sada<> rmq;
 
         sdsl::cache_config config(false, ".", "cache-normal");
-        sdsl::store_to_file((const char *)text, sdsl::conf::KEY_TEXT);
+        sdsl::store_to_file((const char *)text.c_str(), sdsl::conf::KEY_TEXT);
         sdsl::register_cache_file(sdsl::conf::KEY_TEXT, config);
         sdsl::construct(LCP, sdsl::conf::KEY_TEXT, config, 1);
         if (sdsl::cache_file_exists(sdsl::conf::KEY_SA, config)) {
@@ -178,6 +187,19 @@ namespace utils {
             for (uint32_t i = 0; i < SA.size(); i++) {
                 SA_1[SA[i]] = i;
             }
+#ifdef DEBUG_PRINT
+            std::cout<<"SA"<<std::endl;
+            for (const auto &item : SA) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
+            std::cout<<"SA_1"<<std::endl;
+            for (const auto &item : SA_1) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
+#endif
+
             sdsl::util::clear(SA);
         }
 
@@ -186,53 +208,45 @@ namespace utils {
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_SA, config));
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_TEXT, config));
         sdsl::remove(sdsl::cache_file_name(sdsl::conf::KEY_LCP, config));
+#ifdef DEBUG_PRINT
+        std::cout<<"LCP"<<std::endl;
+        for (const auto &item : LCP) {
+            std::cout<<item<<" ";
+        }
+        std::cout<<std::endl;
+#endif
 #ifdef DEBUG_INFO
         std::cout<<"...sorting_suffixes\n";
 #endif
-        std::sort(grammar_sfx.begin(),grammar_sfx.end(),
-                  [&SA_1,&text,&LCP,&rmq](const sfx & a,
-                                          const sfx &b )->bool{
-                      /*
-                       * offset of suffix in the text
-                       * */
-                      uint64_t a_pos = a.off;
-                      uint64_t b_pos = b.off;
 
-                      uint64_t size_a = a.len;
-                      uint64_t size_b = b.len;
-
-                      /*
-                       * is start at the same position return the shortest
-                       * */
-
-                      if(a_pos == b_pos)
-                          return size_a < size_b;
-
-                      uint32_t _rmq;
-                      if (SA_1[a_pos] < SA_1[b_pos]) {
-                          _rmq = rmq(SA_1[a_pos] + 1, SA_1[b_pos]);
-                      } else {
-                          _rmq = rmq(SA_1[b_pos] + 1, SA_1[a_pos]);
+        std::sort(grammar_sfx.begin(), grammar_sfx.end(),
+                  [&SA_1,&text,&LCP,&rmq](const sfx &lhs, const sfx &rhs) {
+                      if (SA_1[lhs.off] == SA_1[rhs.off]) {
+                          return lhs.len < rhs.len;
                       }
-                      if (size_a <= LCP[_rmq] && size_b <= LCP[_rmq]) {
-                          return size_a < size_b;
-                      } else if (size_a <= LCP[_rmq]) {
+                      size_type _rmq;
+                      if (SA_1[lhs.off] < SA_1[rhs.off]) {
+                          _rmq = rmq(SA_1[lhs.off] + 1, SA_1[rhs.off]);
+                      } else {
+                          _rmq = rmq(SA_1[rhs.off] + 1, SA_1[lhs.off]);
+                      }
+                      if (lhs.len <= LCP[_rmq] && rhs.len <= LCP[_rmq]) {
+                          return lhs.len < rhs.len;
+                      } else if (lhs.len <= LCP[_rmq]) {
                           return true;
-                      } else if (size_b <= LCP[_rmq]) {
+                      } else if (rhs.len <= LCP[_rmq]) {
                           return false;
                       } else {
                           /***
                            * Neither is a prefix of the other. Use ISA to find
                            *the order
                            ***/
-                          return SA_1[a_pos] < SA_1[b_pos];
+                          return SA_1[lhs.off] < SA_1[rhs.off];
                       }
                   });
-        if(text!= nullptr) delete [] text;
 #ifdef DEBUG_INFO
         std::cout<<"sort_suffixes\n";
 #endif
-
     }
 
 
@@ -354,11 +368,11 @@ namespace utils {
 
 
 
-    size_type readFile(const std::string& i_file,unsigned char ** text){
+    size_type readFile(const std::string& i_file,std::string& text){
         i_file_stream<uint8_t> if_stream(i_file, BUFFER_SIZE);
-        *text = new unsigned char [if_stream.tot_cells];
+        text.resize(if_stream.tot_cells);
         for(size_t i=0;i<if_stream.tot_cells;i++){
-            (*text)[i] = if_stream.read(i);
+            text[i] = if_stream.read(i);
         }
 //        std::cout<<"TEXT"<<std::endl;
 //        for (int i = 0; i <if_stream.tot_cells ; ++i) {
@@ -486,6 +500,7 @@ namespace utils {
         primaryOcc(const size_type& n,const size_type&p, const size_type& o,const size_type& op,const size_type& r,const size_type& rl,const bool& pr = false):
         node(n),preorder(p),off_node(o),off_pattern(op),run_len(r),fchild_len(rl),primary(pr){}
     };
+
 
 }
 

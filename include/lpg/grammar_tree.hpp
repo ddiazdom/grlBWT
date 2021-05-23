@@ -93,6 +93,10 @@ public:
         sdsl::load(L,in);
         sdsl::load(select_L,in);
 
+        sdsl::load(R,in);
+        sdsl::load(rank_r,in);
+        sdsl::load(RL,in);
+
         compute_aux_st();
     }
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
@@ -108,6 +112,9 @@ public:
         written_bytes += sdsl::serialize(F_inv,out);
         written_bytes += sdsl::serialize(L,out);
         written_bytes += sdsl::serialize(select_L,out);
+        written_bytes += sdsl::serialize(R,out);
+        written_bytes += sdsl::serialize(rank_r,out);
+        written_bytes += sdsl::serialize(RL,out);
         return written_bytes;
     }
 
@@ -134,6 +141,9 @@ public:
     }
     size_type first_occ_from_rule(const size_type& _x)const {
         // preorder has to be a non-terminal leaf
+//        std::cout<<F[_x]<<std::endl;
+//        std::cout<<select1_Z(F[_x]) + 1 <<std::endl;
+//        utils::pretty_printer_bv(Z,"Z");
         return select1_Z(F[_x]) + 1;
     }
     inline bool isLeaf(const size_type& preorder)const {
@@ -151,8 +161,8 @@ public:
     // return 0 if is not a run
     // in other case return the length of the run
     inline size_type is_run(const size_type& preorder)const{
-        if(!R[preorder]) return 0;
-        return RL[rank_r(preorder)];
+        if(!R[preorder - 1]) return 0;
+        return RL[rank_r(preorder - 1)];
     }
     inline size_type get_size_rules()const {return F.size();}
     inline size_type get_grammar_size()const {return Z.size();}
@@ -170,7 +180,7 @@ public:
         size_type num_occ = X.rank(X.size(),x);
         for (size_type i = 0; i < num_occ ; ++i) {
             size_type  j = X.select(i+1,x);
-            size_type preorder = select0_Z(j);
+            size_type preorder = select0_Z( j + 1 ) + 1;
             f(preorder);
         }
     }
@@ -237,13 +247,7 @@ protected:
                 ,&_r,&_rl,&_rl_pos,&M,&rules_off
                 ](const size_type& id, bool first_visit){ //len is > 0  if it is the second child of a run length
             if(first_visit){ // first visit
-#ifdef DEBUG_PRINT
-                if(id == 0){
-                    std::cout<<"-----------------------------------------"<<id<<std::endl;
-                    std::cout<<"CASE 0"<<std::endl;
-                    std::cout<<"CASE 0:l_pos:"<<l_pos<<std::endl;
-                }
-#endif
+
                 z_pos ++ ; // pre-incress offset in vector z;
                 _l[l_pos] = true; // mark text position for first time visit
 
@@ -254,13 +258,7 @@ protected:
 
                     _x[x_pos] = id;
                     x_pos++; // store second mention node
-#ifdef DEBUG_PRINT
-                    std::cout<<"-----------------------------------------"<<id<<std::endl;
-                    std::cout<<"SECOND MENTION:ID:"<<id<<std::endl;
-                    std::cout<<"SECOND MENTION:LEN:"<<rules_off[id].second<<std::endl;
-                    std::cout<<"SECOND MENTION:LPOS:"<<l_pos<<std::endl;
-                    utils::pretty_printer_bv(_l,"SECOND MENTION:L");
-#endif
+
                     l_pos += rules_off[id].second; // increase the off-text with pre-computed len-rule
                     return false; // return false stop descending in the tree
                 }
@@ -308,26 +306,11 @@ protected:
 
             if(is_rules_len[id] && grammar[id][1] > 2){
                 //case run-length
-#ifdef DEBUG_PRINT
-                std::cout<<"************************************************************"<<std::endl;
-                std::cout<<id<<std::endl;
-                std::cout<<rules_off[id].first<<" "<<rules_off[id].second<<std::endl;
-#endif
                 size_type _len = grammar[id][1]; //run len
                 size_type one_child_len = rules_off[grammar[id][0]].second; //one child len
-#ifdef DEBUG_PRINT
-                if(one_child_len == 1 && Gr.isTerminal(grammar[id][0])){
-                    std::cout<<"TERMINAL RUN-LENGTH\n";
-                }
 
-                std::cout<<"one_child_len:"<<one_child_len<<" l:"<<_len<<std::endl;
-                std::cout<<"l_pos:"<<l_pos<<" add:"<<(_len - 2) * one_child_len<<std::endl;
-#endif
                 rules_off[id].second = _len * one_child_len; // total len
                 l_pos += (_len - 2) * one_child_len;
-#ifdef DEBUG_PRINT
-                std::cout<<"/////////////////////////////////////////////////////////////"<<std::endl;
-#endif
                 return false;
             }
 
