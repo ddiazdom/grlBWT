@@ -6,6 +6,8 @@
 #define LMS_GRAMMAR_REP_HPP
 
 #include <pthread.h>
+#include <iostream>
+#include <cstdlib>
 #include "lpg_build.hpp"
 #include "grammar_tree.hpp"
 #include "grid.hpp"
@@ -404,8 +406,24 @@ public:
     void extract(size_t start, size_t end) {
     }
 
+    void bt_search(const std::string &str,const std::string &sub, std::set<size_t> &positions)const{
+        size_t pos = str.find(sub, 0);
+        while(pos != std::string::npos)
+        {
+            positions.insert(pos);
+            pos = str.find(sub,pos+1);
+        }
+    }
     //search for a list of patterns
-    void search(std::vector<std::string> &list) {
+    void search(std::vector<std::string> &list
+#ifdef CHECK_OCC
+    ,const std::string& file
+#endif
+    ) {
+#ifdef CHECK_OCC
+        std::string data;
+        utils::readFile(file,data);
+#endif
         std::cout << "Locate pattern list["<<list.size()<<"]" << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
         size_t total_occ = 0;
@@ -414,8 +432,29 @@ public:
             std::cout << pattern << ":";
 #endif
             std::set<size_type> occ;
-            locate(pattern, occ);
+            std::cout<<"--"<<pattern<<std::endl;
+            locate("ATGGAGTTAG", occ);
             total_occ += occ.size();
+#ifdef CHECK_OCC
+            std::set<size_t> positions;
+            bt_search(data,"ATGGAGTTAG",positions);
+            if(positions != occ){
+                std::cout<<"Locate error\n";
+                std::cout<<"pattern:"<<pattern<<std::endl;
+                std::cout<<"occ:"<<occ.size()<<std::endl;
+                for (const auto &item : occ) {
+                    std::cout<<item<<" ";
+                }
+                std::cout<<"real-occ:"<<positions.size()<<std::endl;
+
+                for (const auto &item : positions) {
+                    std::cout<<item<<" ";
+                }
+
+                return;
+            }
+#endif
+
 #ifdef DEBUG_PRINT
             std::cout <<"-\n";
             for (const auto &item : occ) {
@@ -433,7 +472,7 @@ public:
         std::cout << "Elap. time (microsec): " << elapsed.count() << std::endl;
         std::cout << "Total occ: " << total_occ << std::endl;
         double time_per_occ = (double)elapsed.count()/(double)total_occ;
-        std::cout << "  Elap. time/occ (microsec): " << time_per_occ << std::endl;
+        std::cout << "Time/occ (microsec): " << time_per_occ << std::endl;
         std::cout << "Index size " << sdsl::size_in_bytes(*this) << std::endl;
         std::cout << "Text size " << grammar_tree.get_text_len() << std::endl;
         std::cout << "Bps " << index_size * 8 /text_size << std::endl;
@@ -798,6 +837,7 @@ public:
             size_type parent_off = grammar_tree.offset_node(parent);
             size_type parent_preorder = T.pre_order(parent);
             size_type run_len = grammar_tree.is_run(parent_preorder);
+            size_type ll = off - pattern_off;
             if (run_len) {
                 // add run length primary occ
                 size_type first_child_size = off - grammar_tree.offset_node(parent);
@@ -830,12 +870,16 @@ public:
                 size_type parent = T.parent(node);
                 size_type pre_parent = T.pre_order(parent);
                 if(grammar_tree.is_run(pre_parent)){
+//                    std::cout<<"[insert_second_mentions]:run_len:pre_parent:"<<pre_parent<<std::endl;
+//                    std::cout<<"[insert_second_mentions]:run_len:preorder:"<<preorder<<std::endl;
+//                    std::cout<<"[insert_second_mentions]:run_len:off_pattern:"<<occ.off_pattern<<std::endl;
 //                    std::cout<<"run"<<pre_parent<<std::endl;
                     // if it is the first child of a run
                     if( pre_parent + 1 == preorder) // we only put the first child
                     { //the rest of the run len is handle in the while...
                         size_type node_off = grammar_tree.offset_node(T[preorder]);
                         Q.emplace_back(node, preorder, node_off, occ.off_pattern);
+//                        std::cout<<"[insert_second_mentions]:run_len:preorder::inserted:"<<node_off + occ.off_pattern<<std::endl;
                     }
                 }else{
                     size_type node_off = grammar_tree.offset_node(T[preorder]);
@@ -860,6 +904,7 @@ public:
             } else {
                 //check if the node is a run - length node of a secondary occ
                 if (!top.primary && (top.run_len > 0 || grammar_tree.is_run(top.preorder))) {
+//                    std::cout<<"run_len\n";
                     if (top.run_len > 0) {
                         //if fchild_len y len are != 0 then use precomputed values....
                         utils::primaryOcc s_occ(top);
@@ -873,7 +918,9 @@ public:
                     else {
                         // we arrive from first child
                         // compute child len
-                        size_type fchild_len = top.off_node - grammar_tree.offset_node(T.child(top.node, 2));
+                        size_type fchild_len = grammar_tree.offset_node(T.child(top.node, 2)) - top.off_node ;
+//                        std::cout<<"fchild_len:"<<fchild_len<<std::endl;
+
                         //compute len of the run
                         size_type rlen = grammar_tree.is_run(top.preorder);
                         utils::primaryOcc s_occ(top);
@@ -883,6 +930,9 @@ public:
                         //insert himself with all new offsets
                         for (size_type i = 0; i < rlen - 1; ++i) {
                             s_occ.off_pattern += fchild_len;
+//                            std::cout<<"off_pattern:"<<s_occ.off_node<<std::endl;
+//                            std::cout<<"off_pattern:"<<s_occ.off_pattern<<std::endl;
+//                            std::cout<<"s_occ.off_node + s_occ.off_pattern:"<<s_occ.off_node + s_occ.off_pattern<<std::endl;
                             Q.push_back(s_occ);
                         }
                     }

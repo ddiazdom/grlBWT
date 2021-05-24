@@ -484,10 +484,10 @@ namespace utils {
 
     struct primaryOcc{
 
-        size_type node;
-        size_type preorder;
-        size_type  off_pattern;
-        size_type  off_node;
+        size_type node{};
+        size_type preorder{};
+        size_type  off_pattern{};
+        size_type  off_node{};
         size_type  run_len{};
         size_type  fchild_len{};
         bool primary{};
