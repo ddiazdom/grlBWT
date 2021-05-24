@@ -183,7 +183,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
 
-    create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
+    //create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
     simplify_grammar(p_gram, rem_nts, rem_nts_rs);
 
     sdsl::util::clear(rem_nts_rs);
@@ -754,6 +754,7 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
         while(!r_lim[i]) i++;
         i++;
 
+
         if(!rem_nts[curr_rule]){
             if(!is_rl[curr_rule]){//regular rule
                 for(size_t j=pos;j<i;j++){
@@ -786,6 +787,14 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
     std::cout<<"      Grammar size after:   "<<new_rules.size()<<std::endl;
     std::cout<<"      Deleted nonterminals: "<<rm_nt<<" ("<<rm_per<<"%)"<<std::endl;
     std::cout<<"      Comp. ratio:          "<<comp_rat<<std::endl;
+
+    /*cont=0;
+    for(auto && new_rule : new_rules){
+        if(new_rule==0){
+            cont++;
+        }
+    }
+    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;*/
 
     new_rules.close();
     new_r_lim.close();
@@ -1016,6 +1025,7 @@ lpg_build::bv_t lpg_build::mark_nonterminals(lpg_build::plain_grammar_t &p_gram)
 
 void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
 
+    //that this point, the grammar is supposed to be collapsed
     std::cout<<"  Reordering nonterimnals in Colex"<<std::endl;
 
     //sort the nonterminals in reverse lexicographical order
@@ -1043,7 +1053,7 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
             tmp_sym = stack.top();
             stack.pop();
 
-            if(rules[tmp_sym]!=tmp_sym){
+            if(tmp_sym>=p_gram.sigma){
                 start = rlim_ss(tmp_sym)+1;
                 if(!is_rl[tmp_sym]){
                     end = rlim_ss(tmp_sym+1);
@@ -1061,11 +1071,13 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
             }
         }
 
-        /*std::cout<<curr_rule<<" : ";
-        for(char sym : tmp_buff){
-            std::cout<<(int)sym<<" ";
-        }
-        std::cout<<""<<std::endl;*/
+        /*if(curr_rule==1182963) {
+            std::cout << curr_rule << " : ";
+            for (char sym : tmp_buff) {
+                std::cout << (size_t) sym << " ";
+            }
+            std::cout << "" << std::endl;
+        }*/
 
         nt_pairs.emplace_back(curr_rule, std::move(tmp_buff));
         curr_rule++;
@@ -1138,6 +1150,9 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
     curr_rule=0;
     size_t k=0;
     while(k<new_rules.size()){
+        /*if(renames[new_rules[k]]==0){
+            std::cout<<new_rules[k]<<" "<<p_gram.r<<" "<<rlim_ss(new_rules[k])+1<<" "<<rlim_ss(new_rules[k]+1)<<std::endl;
+        }*/
         new_rules[k] = renames[new_rules[k]];
         if(new_is_rl[curr_rule]){
             assert(!new_rlim[k] && new_rlim[k+1]);
@@ -1149,8 +1164,18 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
         k++;
     }
 
+    //TODO testing
+    /*size_t cont=0;
+    for(auto && new_rule : new_rules){
+        if(new_rule==0){
+            cont++;
+        }
+    }
+    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;*/
+    //
+
     //renaming the rules in the lvl_breaks
-    ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
+    /*ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
     k=0;
     while(k<lvl_breaks.size()){
         lvl_breaks[k] = renames[lvl_breaks[k]];
@@ -1158,7 +1183,8 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
         k+=lvl_breaks[k]+1;
     }
     assert(k==lvl_breaks.size());
-    lvl_breaks.close();
+    lvl_breaks.close();*/
+
     sdsl::store_to_file(new_is_rl, p_gram.is_rl_file);
     new_rules.close();
     new_rlim.close();
