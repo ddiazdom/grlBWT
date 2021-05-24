@@ -57,6 +57,90 @@ public:
 
         void save_to_file(std::string& output_file);
         void load_from_file(std::string &g_file);
+
+        bool isTerminal(const size_t& id) const { return sym_map.find(id) != sym_map.end();}
+
+        void print_grammar(){
+            std::cout<<"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"<<std::endl;
+            std::cout<<"terminal's alphabet "<<(uint)sigma<<std::endl;
+            std::cout<<"number of rules "<<r<<std::endl;
+            std::cout<<"length of the right-hand of the start symbol "<<c<<std::endl;
+            std::cout<<" sum of the rules' right-hand sides "<<g<<std::endl;
+            std::cout<<"map compressed symbols to original symbols ("<<sym_map.size()<<")"<<std::endl;
+            int c = 0;
+            for (const auto &item : sym_map) {
+                std::cout<<item.first<<" ["<<item.second<<"]\n";
+                ++c;
+            }
+            std::cout<<std::endl;
+
+            std::cout<<"RUN-LENGTH"<<std::endl;
+            bvb_t is_rules_len(is_rl_file);
+
+            if(is_rules_len.good()){
+                for (int j = 0; j < is_rules_len.size() ; ++j) {
+                    std::cout<<"["<<j<<"]:"<<is_rules_len[j]<<std::endl;
+                }
+            }
+
+            std::cout<<"Rules"<<std::endl;
+
+            uint* len_rules = new uint [r];
+            for (int i = 0; i < r ; ++i) {
+                len_rules[i] = 1;
+            }
+
+
+            ivb_t rules_buff(rules_file);
+            bvb_t rules_lim_buff(rules_lim_file);
+            int ii = 0;
+            for (int i = 0; i < r; ++i) {
+                std::cout<<i<<"->";
+                if(is_rules_len[i]){
+                    std::cout<<"(*) ";
+                }
+
+                int len = 0;
+                do{
+                    std::cout<<rules_buff[ii]<<" ";
+                    ++len;
+                }
+                while(ii < rules_lim_buff.size() && !rules_lim_buff[ii++]);
+                std::cout<<std::endl;
+                len_rules[i] = len;
+
+
+            }
+            c = 0;
+            std::cout<<"Rules by Levels\n";
+            for (const auto &item : rules_per_level) {
+                std::cout<<"level "<< c++<< " -> "<<item <<" elements "<<std::endl;
+            }
+
+
+            std::cout<<"file with the LMS breaks per level"<<std::endl;
+            ivb_t breaks_buff(lvl_breaks_file);
+            int i = 0;
+            while ( i < breaks_buff.size()) {
+//                    std::cout<<breaks_buff[i]<<" ";
+//                    i++;
+                uint rule = breaks_buff[i];
+                uint l = breaks_buff[i+1];
+
+                std::cout<<rule<<"["<<l<<"]"<<"-> L | ";
+                for (int j = 0; j < l; ++j) {
+                    std::cout<<breaks_buff[i+2+j]<<" ";
+                }
+                std::cout<<std::endl;
+                i += l + 2;
+            }
+
+
+
+
+        }
+
+
     };
 
     struct gram_wrapper_t{

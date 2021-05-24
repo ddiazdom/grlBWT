@@ -62,8 +62,9 @@ static void parse_app(CLI::App& app, struct arguments& args){
     search->add_option("-p,--patterns",
                                      args.patterns,
                                      "Pattern to search for in the index")->type_name("")->required(true);
+
     search->add_option("-F,--pattern-list",
-                                  args.output_file,
+                                  args.patter_list_file,
                     "File with a pattern list")->type_name("");
     search->add_option("-t,--threads",
                        args.n_threads,
@@ -89,6 +90,7 @@ int main(int argc, char** argv) {
         std::cout<<"Creating an LPG index"<<std::endl;
         lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
 
+        std::cout<<"Saving the LPG index"<<std::endl;
         if(args.output_file.empty()){
             args.output_file = args.input_file;
         }
@@ -98,12 +100,29 @@ int main(int argc, char** argv) {
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the LPG index"<<std::endl;
         lpg_index g;
-        /*sdsl::load_from_file(g, args.input_file);
-        if(args.output_file.empty()){
+        sdsl::load_from_file(g, args.input_file);
+        std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
+
+        /*if(args.output_file.empty()){
             args.output_file = args.input_file.substr(0, args.input_file.size()-3);
         }*/
-        //std::vector<std::string> patterns={"tcctaatagtacc$t"};
-        std::vector<std::string> patterns={"tcgaccagaccagt$t"};
+        std::vector<std::string> patterns={};
+        if (!args.patter_list_file.empty()){
+            std::fstream in(args.patter_list_file,std::ios::in);
+            if(in.good()){
+                std::string ss;
+                while(in >> ss){
+                    patterns.push_back(ss);
+                }
+#ifdef DEBUG_INFO
+                std::cout<<"Patterns to search["<<patterns.size()<<"]"<<std::endl;
+#endif
+#ifdef DEBUG_PRINT
+                for (const auto &s : patterns) std::cout<<s<<std::endl;
+#endif
+
+            }
+        }
         std::cout<<"Searching for the patterns "<<std::endl;
         g.search(patterns);
         //g.search(args.patterns);
