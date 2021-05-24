@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
                 std::cout<<"Patterns to search["<<patterns_set.size()<<"]"<<std::endl;
 #endif
 #ifdef DEBUG_PRINT
-                for (const auto &s : patterns) std::cout<<s<<std::endl;
+                for (const auto &s : patterns_set) std::cout<<s<<std::endl;
 #endif
 
             }
@@ -127,6 +127,7 @@ int main(int argc, char** argv) {
 #ifdef CHECK_OCC
         std::string file; file.resize(args.input_file.size() - 3);
         std::copy(args.input_file.begin(),args.input_file.end()-3,file.begin());
+        std::cout<<"file:"<<file<<std::endl;
 #endif
         std::cout<<"Searching for the patterns "<<std::endl;
         g.search(patterns

@@ -22,7 +22,7 @@ namespace utils {
     typedef std::unordered_map<size_type,std::vector<size_type>>  nav_grammar;
     typedef std::unordered_map<size_type,std::pair<size_type,size_type>> lenght_rules; //off,len
     typedef std::unordered_map<size_type,std::vector<size_type>> cuts_rules; //off,len
-    typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127> >, 512, 1024> TestIndex;
+//    typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127> >, 512, 1024> TestIndex;
 
 
     struct sfx{
@@ -48,6 +48,10 @@ namespace utils {
             std::string ss;ss.resize(len);
             std::copy(text+off, text+off+len,ss.begin());
             return ss;
+        }
+        void print() const {
+            std::cout<<"{\n\toff:"<<off<<"\n\tlen:"<<len<<"\n\trule:"<<rule<<"\n\tpre:"<<preorder<<"\n}"<<std::endl;
+
         }
     };
 
@@ -80,10 +84,20 @@ namespace utils {
         ivb_t rules_buff(G.rules_file);
         bvb_t rules_lim_buff(G.rules_lim_file);
         size_type id = 0;
+        size_type zero_count = 0;
         nav_grammar NG;
         std::vector<size_type> right_hand;
+
         for (auto i = 0; i < rules_lim_buff.size(); ++i) {
             right_hand.push_back(rules_buff[i]);
+            if(rules_buff[i] == 0) {
+                zero_count++;
+//                std::cout<<"right hand"<<std::endl;
+//                for (const auto &item : right_hand) {
+//                    std::cout<<item<<" ";
+//                }
+//                std::cout<<std::endl;
+            }
             if(rules_lim_buff[i] == 1){
                 NG[id] = right_hand;
                 right_hand.clear();
@@ -91,6 +105,7 @@ namespace utils {
             }
         }
         S = NG[id-1][0];
+        if(zero_count != 2) std::cout<<"ERROR 0 APPEARS MORE THAN 1 TIME IN THE GRAMMAR:"<<zero_count<<std::endl;
 //        std::cout<<"plain-grammar"<<std::endl;
 //        for (const auto &item : NG) {
 //            std::cout<<item.first<<"->";
@@ -374,7 +389,8 @@ namespace utils {
         for(size_t i=0;i<if_stream.tot_cells;i++){
             text[i] = if_stream.read(i);
         }
-//        std::cout<<"TEXT"<<std::endl;
+
+        std::cout<<"TEXT:"<<text.size()<<std::endl;
 //        for (int i = 0; i <if_stream.tot_cells ; ++i) {
 //           std::cout<<(*text)[i];
 //        }

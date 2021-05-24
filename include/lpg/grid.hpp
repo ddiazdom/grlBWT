@@ -176,9 +176,14 @@ protected:
         * Computing the cardinal of every column and every row
         * */
         for (size_type i = 0; i < n_points; ++i) {
-            if(_points[i].row != 0)
-//                    std::cout<<"ZERO WARNING!!!!"<<std::endl;
+            if(_points[i].row != 0){
                 card_rows.at(_points[i].row - 1)++;
+            }else{
+                std::cout<<"ZERO WARNING!!!!"<<std::endl;
+                std::cout<<"row:"<<_points[i].row<<std::endl;
+                std::cout<<"col:"<<_points[i].col<<std::endl;
+                std::cout<<"label:"<<_points[i].label<<std::endl;
+            }
 //            card_cols[_points[i].col - 1]++;
         }
 
