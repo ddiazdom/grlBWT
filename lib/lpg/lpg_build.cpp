@@ -1040,8 +1040,8 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
     sdsl::load_from_file(is_rl, p_gram.is_rl_file);
 
     std::stack<size_t> stack;
-    std::vector<char> tmp_buff;
-    std::vector<std::pair<size_t, std::vector<char>>> nt_pairs;
+    std::vector<uint8_t> tmp_buff;
+    std::vector<std::pair<size_t, std::vector<uint8_t>>> nt_pairs;
     size_t start, end, tmp_sym, curr_rule=0;
 
     //decompress all the nonterinals
@@ -1067,7 +1067,7 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
                     }
                 }
             }else{//we reach a terminal
-                tmp_buff.push_back((char)tmp_sym);
+                tmp_buff.push_back((uint8_t)tmp_sym);
             }
         }
 
@@ -1094,6 +1094,13 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
         }
         return left.second.size()<right.second.size();
     });
+
+    //TODO testing
+    std::cout<<"the string: "<<nt_pairs[0].first<<std::endl;
+    for(size_t i=0;i<nt_pairs[0].second.size();i++){
+        std::cout<<(size_t)nt_pairs[0].second[i]<<std::endl;
+    }
+    //
 
     ivb_t new_rules(p_gram.rules_file, std::ios::out);
     sdsl::int_vector_buffer<1> new_rlim(p_gram.rules_lim_file, std::ios::out);
@@ -1171,8 +1178,9 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
             cont++;
         }
     }
-    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;*/
+    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;
     //
+    exit(0);*/
 
     //renaming the rules in the lvl_breaks
     /*ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
