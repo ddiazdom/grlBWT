@@ -1096,10 +1096,10 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
     });
 
     //TODO testing
-    std::cout<<"the string: "<<nt_pairs[0].first<<std::endl;
+    /*std::cout<<"the string: "<<nt_pairs[0].first<<std::endl;
     for(size_t i=0;i<nt_pairs[0].second.size();i++){
         std::cout<<(size_t)nt_pairs[0].second[i]<<std::endl;
-    }
+    }*/
     //
 
     ivb_t new_rules(p_gram.rules_file, std::ios::out);
