@@ -118,22 +118,22 @@ public:
             }
 
 
-            std::cout<<"file with the LMS breaks per level"<<std::endl;
-            ivb_t breaks_buff(lvl_breaks_file);
-            int i = 0;
-            while ( i < breaks_buff.size()) {
-//                    std::cout<<breaks_buff[i]<<" ";
-//                    i++;
-                uint rule = breaks_buff[i];
-                uint l = breaks_buff[i+1];
-
-                std::cout<<rule<<"["<<l<<"]"<<"-> L | ";
-                for (int j = 0; j < l; ++j) {
-                    std::cout<<breaks_buff[i+2+j]<<" ";
-                }
-                std::cout<<std::endl;
-                i += l + 2;
-            }
+//            std::cout<<"file with the LMS breaks per level"<<std::endl;
+//            ivb_t breaks_buff(lvl_breaks_file);
+//            int i = 0;
+//            while ( i < breaks_buff.size()) {
+////                    std::cout<<breaks_buff[i]<<" ";
+////                    i++;
+//                uint rule = breaks_buff[i];
+//                uint l = breaks_buff[i+1];
+//
+//                std::cout<<rule<<"["<<l<<"]"<<"-> L | ";
+//                for (int j = 0; j < l; ++j) {
+//                    std::cout<<breaks_buff[i+2+j]<<" ";
+//                }
+//                std::cout<<std::endl;
+//                i += l + 2;
+//            }
 
 
 

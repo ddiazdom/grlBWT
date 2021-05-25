@@ -102,29 +102,44 @@ int main(int argc, char** argv) {
         lpg_index g;
         sdsl::load_from_file(g, args.input_file);
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
-
         /*if(args.output_file.empty()){
             args.output_file = args.input_file.substr(0, args.input_file.size()-3);
         }*/
-        std::vector<std::string> patterns={};
+        std::set<std::string> patterns_set;
         if (!args.patter_list_file.empty()){
             std::fstream in(args.patter_list_file,std::ios::in);
             if(in.good()){
                 std::string ss;
                 while(in >> ss){
-                    patterns.push_back(ss);
+                    patterns_set.insert(ss);
                 }
 #ifdef DEBUG_INFO
-                std::cout<<"Patterns to search["<<patterns.size()<<"]"<<std::endl;
+                std::cout<<"Patterns to search["<<patterns_set.size()<<"]"<<std::endl;
 #endif
 #ifdef DEBUG_PRINT
-                for (const auto &s : patterns) std::cout<<s<<std::endl;
+                for (const auto &s : patterns_set) std::cout<<s<<std::endl;
 #endif
 
             }
         }
+        std::vector<std::string> patterns(patterns_set.size());
+        std::copy(patterns_set.begin(),patterns_set.end(),patterns.begin());
+#ifdef CHECK_OCC
+        std::string file; file.resize(args.input_file.size() - 3);
+        std::copy(args.input_file.begin(),args.input_file.end()-3,file.begin());
+        std::cout<<"file:"<<file<<std::endl;
+#endif
+//        std::cout<<"descomprimiendo gramatica"<<std::endl;
+//        g.uncompress_grammar(args.input_file + ".ucmp");
+//        if(!utils::compareFiles(args.input_file + ".ucmp",file))
+//            std::cout<<"ERROR GRAMMAR DOES NOT REPRESENT THE TEXT\n";
+
         std::cout<<"Searching for the patterns "<<std::endl;
-        g.search(patterns);
+        g.search(patterns
+#ifdef CHECK_OCC
+                 ,file
+#endif
+                 );
         //g.search(args.patterns);
         //g.search(args.patter_list_file);
     }

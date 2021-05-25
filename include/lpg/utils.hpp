@@ -22,7 +22,15 @@ namespace utils {
     typedef std::unordered_map<size_type,std::vector<size_type>>  nav_grammar;
     typedef std::unordered_map<size_type,std::pair<size_type,size_type>> lenght_rules; //off,len
     typedef std::unordered_map<size_type,std::vector<size_type>> cuts_rules; //off,len
-    typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127> >, 512, 1024> TestIndex;
+//    typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127> >, 512, 1024> TestIndex;
+
+
+    struct path_element{
+        uint64_t preorder;
+        uint64_t node;
+        uint32_t ch_rank;
+        path_element(const uint64_t&p,const uint64_t&_n, const uint32_t&r):preorder(p),node(_n),ch_rank(r){}
+    };
 
 
     struct sfx{
@@ -48,6 +56,10 @@ namespace utils {
             std::string ss;ss.resize(len);
             std::copy(text+off, text+off+len,ss.begin());
             return ss;
+        }
+        void print() const {
+            std::cout<<"{\n\toff:"<<off<<"\n\tlen:"<<len<<"\n\trule:"<<rule<<"\n\tpre:"<<preorder<<"\n}"<<std::endl;
+
         }
     };
 
@@ -76,14 +88,46 @@ namespace utils {
         }
     }
 
+
+
+    bool compareFiles(const std::string& p1, const std::string& p2){
+        std::ifstream f1(p1, std::ifstream::binary|std::ifstream::ate);
+        std::ifstream f2(p2, std::ifstream::binary|std::ifstream::ate);
+
+        if (f1.fail() || f2.fail()) {
+            return false; //file problem
+        }
+
+        if (f1.tellg() != f2.tellg()) {
+            return false; //size mismatch
+        }
+
+//seek back to beginning and use std::equal to compare contents
+        f1.seekg(0, std::ifstream::beg);
+        f2.seekg(0, std::ifstream::beg);
+        return std::equal(std::istreambuf_iterator<char>(f1.rdbuf()),
+                          std::istreambuf_iterator<char>(),
+                          std::istreambuf_iterator<char>(f2.rdbuf()));
+    }
+
     nav_grammar build_nav_grammar(const lpg_build::plain_grammar_t& G, size_type& S){
         ivb_t rules_buff(G.rules_file);
         bvb_t rules_lim_buff(G.rules_lim_file);
         size_type id = 0;
+        size_type zero_count = 0;
         nav_grammar NG;
         std::vector<size_type> right_hand;
+
         for (auto i = 0; i < rules_lim_buff.size(); ++i) {
             right_hand.push_back(rules_buff[i]);
+            if(rules_buff[i] == 0) {
+                zero_count++;
+//                std::cout<<"right hand"<<std::endl;
+//                for (const auto &item : right_hand) {
+//                    std::cout<<item<<" ";
+//                }
+//                std::cout<<std::endl;
+            }
             if(rules_lim_buff[i] == 1){
                 NG[id] = right_hand;
                 right_hand.clear();
@@ -91,6 +135,7 @@ namespace utils {
             }
         }
         S = NG[id-1][0];
+        if(zero_count != 2) std::cout<<"ERROR 0 APPEARS MORE THAN 1 TIME IN THE GRAMMAR:"<<zero_count<<std::endl;
 //        std::cout<<"plain-grammar"<<std::endl;
 //        for (const auto &item : NG) {
 //            std::cout<<item.first<<"->";
@@ -374,7 +419,8 @@ namespace utils {
         for(size_t i=0;i<if_stream.tot_cells;i++){
             text[i] = if_stream.read(i);
         }
-//        std::cout<<"TEXT"<<std::endl;
+
+        std::cout<<"TEXT:"<<text.size()<<std::endl;
 //        for (int i = 0; i <if_stream.tot_cells ; ++i) {
 //           std::cout<<(*text)[i];
 //        }
@@ -397,15 +443,15 @@ namespace utils {
 
         std::cout<<"idx:";
 
-        for(int i = 0 ; i < bv.size(); i++){
+        for(size_t i = 0 ; i < bv.size(); i++){
             uint64_t c = dec(bv[i]);
-            for (int j = 0; j < c  ; ++j) {
+            for (uint64_t j = 0; j < c  ; ++j) {
                 std::cout<<" ";
             }
             std::cout<<i%10<<" ";
         }
         std::cout<<std::endl<<"arr:";
-        for(int i =0 ; i < bv.size(); i++)
+        for(size_t i =0 ; i < bv.size(); i++)
             std::cout<<bv[i]<<" ";
         std::cout<<std::endl;
 
@@ -415,17 +461,17 @@ namespace utils {
 
         std::cout<<header<<"("<<bv.size()<<")"<<std::endl;
         std::cout<<"idx:";
-        for(int i = 0 ; i < bv.size(); i++)std::cout<<i%10;
+        for(size_t i = 0 ; i < bv.size(); i++)std::cout<<i%10;
         std::cout<<std::endl;
         uint64_t acc = 0; //rank
         std::cout<<"rnk:";
-        for(int i = 0 ; i < bv.size(); i++){
+        for(size_t i = 0 ; i < bv.size(); i++){
             std::cout<<acc%10;
             acc += bv[i];
         }
         std::cout<<acc%10;
         std::cout<<std::endl<<"arr:";
-        for(int i = 0 ; i < bv.size(); i++){
+        for(size_t i = 0 ; i < bv.size(); i++){
             std::cout<<bv[i];
         }
         std::cout<<std::endl;
@@ -484,12 +530,12 @@ namespace utils {
 
     struct primaryOcc{
 
-        size_type node;
-        size_type preorder;
-        size_type  off_pattern;
-        size_type  off_node;
-        size_type  run_len{};
-        size_type  fchild_len{};
+        size_type node{0};
+        size_type preorder{0};
+        size_type  off_pattern{0};
+        size_type  off_node{0};
+        size_type  run_len{0};
+        size_type  fchild_len{0};
         bool primary{};
 
         primaryOcc() = default;

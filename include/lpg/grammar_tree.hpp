@@ -131,6 +131,9 @@ public:
 
     }
     const top_tree& getT()const {return T;}
+
+
+
     size_type first_occ_preorder_node(const size_type& preorder)const {
         // preorder has to be a non-terminal leaf
         if(!Z[preorder - 1]){
