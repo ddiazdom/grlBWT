@@ -89,6 +89,8 @@ void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp
 void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_t n_threads, sdsl::cache_config &config,
                             size_t hbuff_size, alpha_t &alphabet) {
 
+    std::cout<<"  Generating the LMS-based locally consistent grammar:    "<<std::endl;
+
     std::string rules_file = sdsl::cache_file_name("rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
     std::string lvl_breaks_file = sdsl::cache_file_name("lvl_breaks", config);
@@ -127,14 +129,14 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     size_t iter=1;
     size_t rem_phrases;
 
-    std::cout<<"  Iteration "<<iter++<<std::endl;
+    std::cout<<"    Parsing round "<<iter++<<std::endl;
     rem_phrases = compute_LPG_int<uint8_t>(i_file, tmp_i_file,
                                            n_threads, hbuff_size,
                                            p_gram, rules, rules_lim,
                                            symbol_desc, config);
 
     while (rem_phrases > 0) {
-        std::cout<<"  Iteration "<<iter++<<std::endl;
+        std::cout<<"    Parsing round "<<iter++<<std::endl;
         rem_phrases = compute_LPG_int<size_t>(tmp_i_file, output_file,
                                               n_threads, hbuff_size,
                                               p_gram, rules, rules_lim,
@@ -172,7 +174,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     rules.close();
     rules_lim.close();
 
-    std::cout<<"  Resulting LPG grammar:    "<<std::endl;
+    std::cout<<"  Resulting locally consistent grammar:    "<<std::endl;
     std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
     std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
     std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
@@ -195,6 +197,12 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     //TODO testing
     check_plain_grammar(p_gram, i_file);
     //
+
+    std::cout <<"  Final grammar: " << std::endl;
+    std::cout <<"    Number of terminals:    " << (size_t) p_gram.sigma << std::endl;
+    std::cout <<"    Number of nonterminals: " << p_gram.r - p_gram.sigma << std::endl;
+    std::cout <<"    Grammar size:           " << p_gram.g - p_gram.sigma << std::endl;
+    std::cout <<"    Compressed string:      " << p_gram.c << std::endl;
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -235,7 +243,7 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
         k++;
     }
 
-    std::cout<<"    Computing the phrases of the text"<<std::endl;
+    std::cout<<"      Computing the LMS phrases in the text"<<std::endl;
     {
         std::vector<pthread_t> threads(threads_data.size());
         for(size_t i=0;i<threads_data.size();i++){
@@ -275,7 +283,7 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
         mp_table.unload_table(st_table);
 
         //rename phrases according to their lexicographical ranks
-        std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
+        std::cout<<"      Assigning identifiers to the phrases"<<std::endl;
         assign_ids(mp_table, p_gram.r-1,  key_w, rules, rules_lim, n_threads, config);
 
         //reload the hash table
@@ -286,7 +294,7 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
             exit(1);
         }
 
-        std::cout<<"    Creating the parse of the text"<<std::endl;
+        std::cout<<"      Creating the parse of the text"<<std::endl;
         {//store the phrases into a new file
             std::vector<pthread_t> threads(threads_data.size());
             for(size_t i=0;i<threads_data.size();i++){
@@ -319,7 +327,7 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
         {
             //keep track of the lms phrases that have to be rephrased
             phrase_desc.resize(p_gram.r+mp_table.size());
-            std::cout << "    Updating symbols status" << std::endl;
+            std::cout << "      Updating symbols status" << std::endl;
             auto it = mp_table.begin();
             auto it_end = mp_table.end();
             size_t tmp_value, sym;
@@ -366,9 +374,9 @@ size_t lpg_build::compute_LPG_int(std::string &i_file, std::string &o_file,
     }
 
     p_gram.r +=mp_table.size();
-    std::cout<<"    Iter. stats:"<<std::endl;
-    std::cout<<"      Parse size:          "<<psize<<std::endl;
-    std::cout<<"      New nonterminals:    "<<mp_table.size()<<std::endl;
+    std::cout<<"      Stats:"<<std::endl;
+    std::cout<<"        Parse size:          "<<psize<<std::endl;
+    std::cout<<"        New nonterminals:    "<<mp_table.size()<<std::endl;
 
     if(psize>1){
         return mp_table.size();

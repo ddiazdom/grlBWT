@@ -81,30 +81,28 @@ int main(int argc, char** argv) {
 
     arguments args;
 
-    CLI::App app("LPG: A grammar-based self-index");
+    CLI::App app("A grammar-based self-index");
     parse_app(app, args);
 
     CLI11_PARSE(app, argc, argv);
 
     if(app.got_subcommand("index")) {
-        std::cout<<"Creating an LPG index"<<std::endl;
         lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
 
-        std::cout<<"Saving the LPG index"<<std::endl;
         if(args.output_file.empty()){
             args.output_file = args.input_file;
         }
-        args.output_file = args.output_file+".lg";
+        args.output_file = args.output_file+".idx";
+
+        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
 
     }else if(app.got_subcommand("search")){
-        std::cout<<"Searching for patterns in the LPG index"<<std::endl;
+        std::cout<<"Searching for patterns in the self-index"<<std::endl;
         lpg_index g;
         sdsl::load_from_file(g, args.input_file);
+
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
-        /*if(args.output_file.empty()){
-            args.output_file = args.input_file.substr(0, args.input_file.size()-3);
-        }*/
         std::set<std::string> patterns_set;
         if (!args.patter_list_file.empty()){
             std::fstream in(args.patter_list_file,std::ios::in);
@@ -134,6 +132,13 @@ int main(int argc, char** argv) {
 //        if(!utils::compareFiles(args.input_file + ".ucmp",file))
 //            std::cout<<"ERROR GRAMMAR DOES NOT REPRESENT THE TEXT\n";
 
+        /*for(auto const& pattern : patterns){
+            std::cout<<pattern<<std::endl;
+            auto cuts = g.compute_pattern_cut(pattern);
+            for(unsigned long j : cuts.first){
+                std::cout<<j<<std::endl;
+            }
+        }*/
         std::cout<<"Searching for the patterns "<<std::endl;
         g.search(patterns
 #ifdef CHECK_OCC

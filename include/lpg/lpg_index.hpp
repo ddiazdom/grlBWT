@@ -55,14 +55,6 @@ private:
 #endif
         }
 
-
-
-        /*symbols_map.resize(p_gram.symbols_map.size());
-        for(size_t i=0; i < p_gram.symbols_map.size(); i++){
-            symbols_map[i] = p_gram.symbols_map[i];
-        }*/
-        //build the grammar tree and grid from p_gram here!!
-
         utils::lenght_rules lenghts;
         size_type S;
         utils::nav_grammar NG = build_nav_grammar(p_gram, S);
@@ -197,19 +189,22 @@ private:
         task(lms_phrase);
     }
 
-    static std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string &pattern) {
+public:
+
+    std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string &pattern) const {
 
         std::vector<size_t> parse;
 
-        //right elements are index in the first
-        // level (terminals) where the S* string occur
-        // left element is the index in the last level
-        std::vector<size_t> lms_cuts;
+        //positions in pattern that will be
+        // tried out in the grid
+        std::vector<size_t> cuts ={0};
+
+        std::vector<uint16_t> lms_pos(pattern.size());
+        std::iota(lms_pos.begin(), lms_pos.end(), 0);
 
         parse.reserve(pattern.size());
         for (auto const &sym : pattern) parse.push_back(sym);
 
-        size_t rank = 0;
         parse_data p_data{};
         p_data.n_lms = parse.size();
 
@@ -218,7 +213,6 @@ private:
 
         //lambda function to hash the LMS phrases
         auto hash_task = [&](auto &phrase) {
-
             if (p_data.tail) {
                 p_data.tail = false;
             } else {
@@ -230,12 +224,8 @@ private:
 
             if (p_data.idx > phrase.size()) {
                 p_data.idx -= phrase.size();
-                if (p_data.lvl == 0) {
-                    lms_cuts.push_back(p_data.idx);
-                } else {
-                    lms_cuts[p_data.n_lms] = lms_cuts[p_data.idx];
-                }
                 p_data.n_lms++;
+                lms_pos[lms_pos.size()-p_data.n_lms] = lms_pos[p_data.idx];
             }
         };
 
@@ -243,37 +233,42 @@ private:
         auto parse_task = [&](auto &phrase) {
             if (p_data.tail) {
                 p_data.tail = false;
-            } else {
-                if (p_data.n_lms > 1) {
-                    phrase.mask_tail();
-                    auto res = ht.find(phrase.data(), phrase.n_bits());
-                    assert(res.second);
-                    parse[p_data.idx--] = res.first.value();
-                    p_data.n_lms--;
-                }
+            } else if (p_data.n_lms > 1) {
+                phrase.mask_tail();
+                auto res = ht.find(phrase.data(), phrase.n_bits());
+                assert(res.second);
+                parse[p_data.idx--] = res.first.value();
+                p_data.n_lms--;
             }
         };
 
         //hash the LMS phrases in the text
         while (true) {
 
-            assert(parse.size() > 1);
+            if(p_data.lvl>parsing_rounds){//the pattern is longer than the text
+                return {{},parsing_rounds};
+            }
 
+            assert(parse.size() > 1);
             p_data.idx = parse.size() - 1;
             p_data.n_lms = 0;
             p_data.tail = true;
 
             lms_scan(hash_task, parse);
 
-            if (p_data.n_lms < 4) {//report the cuts
-                if (p_data.n_lms != 0) lms_cuts.resize(p_data.n_lms);
-                std::reverse(lms_cuts.begin(), lms_cuts.end());
-                return {lms_cuts, p_data.lvl};
-            } else {//TODO if we incur in more parsing rounds than the grammar, then the pattern doesn't exist
-                //assign ranks to the lms phrases
+            if (p_data.n_lms < 3) {//report the cuts
+                if(p_data.n_lms>0){
+                    cuts.push_back(lms_pos[lms_pos.size()-p_data.n_lms]);
+                }else{
+                    //TODO here I should include the first symbol in case it is S-type
+                }
+                return {cuts, p_data.lvl};
+            } else {
+                //assign ranks to the LMS phrases
                 {
+                    size_t rank = 0;
                     const bitstream<bit_hash_table<size_t, 44>::buff_t> &stream = ht.get_data();
-                    lpg_build::key_wrapper key_w{44, ht.description_bits(), stream};
+                    lpg_build::key_wrapper key_w{32, ht.description_bits(), stream};
                     std::vector<size_t> sorted_phrases;
                     sorted_phrases.reserve(ht.size());
 
@@ -291,10 +286,11 @@ private:
 
                 p_data.tail = true;
                 p_data.idx = parse.size() - 1;
+                cuts.push_back(lms_pos[lms_pos.size()-p_data.n_lms]);
+                lms_pos.erase(lms_pos.begin(), lms_pos.end()-p_data.n_lms+1);
+
                 lms_scan(parse_task, parse);
                 parse.erase(parse.begin(), parse.begin() + p_data.idx + 1);
-                lms_cuts.pop_back();
-                std::reverse(lms_cuts.begin(), lms_cuts.end());
             }
             ht.flush();
             p_data.lvl++;
@@ -315,14 +311,20 @@ public:
         }
         return true;
     }
+
     lpg_index(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac) {
 
         std::cout << "Input file: " << input_file << std::endl;
-        if(!just_one_zero(input_file)){
+        if (!just_one_zero(input_file)) {
             std::cout << "More than one zero error" << std::endl;
             return;
         }
         auto alphabet = get_alphabet(input_file);
+
+        /*TODO este if puede reemplazar a just_one_zero
+        if(alphabet[0].first==0 && alphabet[0].second>1){
+            exit(1);
+        }*/
 
         size_t n_chars = 0;
         for (auto const &sym : alphabet) n_chars += sym.second;
@@ -345,22 +347,16 @@ public:
         //maximum amount of RAM allowed to spend in parallel for the hashing step
         auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(n_chars) * hbuff_frac)));
 
-        std::cout << "Computing the LPG grammar" << std::endl;
+        std::cout << "Computing the grammar for the self-index" << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
         lpg_build::compute_LPG(input_file, g_file, n_threads, config, hbuff_size, alphabet);
         auto end = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "  Elap. time (microsec): " << elapsed.count() << std::endl;
 
-
         //plain representation of the grammar
         plain_grammar_t plain_gram;
         plain_gram.load_from_file(g_file);
-        std::cout << "Resulting grammar: " << std::endl;
-        std::cout << "  Terminals:                " << (size_t) plain_gram.sigma << std::endl;
-        std::cout << "  Nonterminals:             " << plain_gram.r - plain_gram.sigma << std::endl;
-        std::cout << "  Size of the comp. string: " << plain_gram.c << std::endl;
-        std::cout << "  Grammar size:             " << plain_gram.g - plain_gram.sigma << std::endl;
 
 #ifdef DEBUG_PRINT
         plain_gram.print_grammar();
@@ -511,7 +507,7 @@ public:
     }
 
     //search for a list of pattern (input is a file each line is a pattern)
-    void search(std::string &input_file) {
+    void search(std::string &input_file) const {
         std::fstream in(input_file, std::ios::in);
         std::string pattern;
         long total_time = 0;
@@ -524,7 +520,6 @@ public:
             total_time += elapsed;
         }
         std::cout << "  Elap. time (secs): " << total_time << std::endl;
-
     }
 
     void load(std::istream &in) {
