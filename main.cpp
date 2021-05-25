@@ -129,6 +129,11 @@ int main(int argc, char** argv) {
         std::copy(args.input_file.begin(),args.input_file.end()-3,file.begin());
         std::cout<<"file:"<<file<<std::endl;
 #endif
+//        std::cout<<"descomprimiendo gramatica"<<std::endl;
+//        g.uncompress_grammar(args.input_file + ".ucmp");
+//        if(!utils::compareFiles(args.input_file + ".ucmp",file))
+//            std::cout<<"ERROR GRAMMAR DOES NOT REPRESENT THE TEXT\n";
+
         std::cout<<"Searching for the patterns "<<std::endl;
         g.search(patterns
 #ifdef CHECK_OCC

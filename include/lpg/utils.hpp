@@ -25,6 +25,14 @@ namespace utils {
 //    typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::rrr_vector<127> >, 512, 1024> TestIndex;
 
 
+    struct path_element{
+        uint64_t preorder;
+        uint64_t node;
+        uint32_t ch_rank;
+        path_element(const uint64_t&p,const uint64_t&_n, const uint32_t&r):preorder(p),node(_n),ch_rank(r){}
+    };
+
+
     struct sfx{
         size_type off{0};
         size_type len{0};
@@ -78,6 +86,28 @@ namespace utils {
         for (size_type i = 0; i < suffixes.size() ; ++i) {
             points[i] = grid_point(suffixes[i].rule,i+1,suffixes[i].preorder,suffixes[i].level);
         }
+    }
+
+
+
+    bool compareFiles(const std::string& p1, const std::string& p2){
+        std::ifstream f1(p1, std::ifstream::binary|std::ifstream::ate);
+        std::ifstream f2(p2, std::ifstream::binary|std::ifstream::ate);
+
+        if (f1.fail() || f2.fail()) {
+            return false; //file problem
+        }
+
+        if (f1.tellg() != f2.tellg()) {
+            return false; //size mismatch
+        }
+
+//seek back to beginning and use std::equal to compare contents
+        f1.seekg(0, std::ifstream::beg);
+        f2.seekg(0, std::ifstream::beg);
+        return std::equal(std::istreambuf_iterator<char>(f1.rdbuf()),
+                          std::istreambuf_iterator<char>(),
+                          std::istreambuf_iterator<char>(f2.rdbuf()));
     }
 
     nav_grammar build_nav_grammar(const lpg_build::plain_grammar_t& G, size_type& S){
@@ -413,15 +443,15 @@ namespace utils {
 
         std::cout<<"idx:";
 
-        for(int i = 0 ; i < bv.size(); i++){
+        for(size_t i = 0 ; i < bv.size(); i++){
             uint64_t c = dec(bv[i]);
-            for (int j = 0; j < c  ; ++j) {
+            for (uint64_t j = 0; j < c  ; ++j) {
                 std::cout<<" ";
             }
             std::cout<<i%10<<" ";
         }
         std::cout<<std::endl<<"arr:";
-        for(int i =0 ; i < bv.size(); i++)
+        for(size_t i =0 ; i < bv.size(); i++)
             std::cout<<bv[i]<<" ";
         std::cout<<std::endl;
 
@@ -431,17 +461,17 @@ namespace utils {
 
         std::cout<<header<<"("<<bv.size()<<")"<<std::endl;
         std::cout<<"idx:";
-        for(int i = 0 ; i < bv.size(); i++)std::cout<<i%10;
+        for(size_t i = 0 ; i < bv.size(); i++)std::cout<<i%10;
         std::cout<<std::endl;
         uint64_t acc = 0; //rank
         std::cout<<"rnk:";
-        for(int i = 0 ; i < bv.size(); i++){
+        for(size_t i = 0 ; i < bv.size(); i++){
             std::cout<<acc%10;
             acc += bv[i];
         }
         std::cout<<acc%10;
         std::cout<<std::endl<<"arr:";
-        for(int i = 0 ; i < bv.size(); i++){
+        for(size_t i = 0 ; i < bv.size(); i++){
             std::cout<<bv[i];
         }
         std::cout<<std::endl;
@@ -500,12 +530,12 @@ namespace utils {
 
     struct primaryOcc{
 
-        size_type node{};
-        size_type preorder{};
-        size_type  off_pattern{};
-        size_type  off_node{};
-        size_type  run_len{};
-        size_type  fchild_len{};
+        size_type node{0};
+        size_type preorder{0};
+        size_type  off_pattern{0};
+        size_type  off_node{0};
+        size_type  run_len{0};
+        size_type  fchild_len{0};
         bool primary{};
 
         primaryOcc() = default;

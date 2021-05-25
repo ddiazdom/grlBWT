@@ -463,37 +463,35 @@ public:
 #ifdef DEBUG_PRINT
             std::cout << pattern << ":";
 #endif
+
+
             std::set<size_type> occ;
-            std::cout<<++ii<<"--"<<pattern<<std::endl;
             locate(pattern, occ);
             total_occ += occ.size();
 #ifdef CHECK_OCC
+            std::cout<<++ii<<"--"<<pattern<<std::endl;
             std::set<size_t> positions;
             bt_search(data,pattern,positions);
             if(positions != occ){
                 std::cout<<"Locate error\n";
                 std::cout<<"pattern:"<<pattern<<std::endl;
                 std::cout<<"occ:"<<occ.size()<<std::endl;
-//                for (const auto &item : occ) {
-//                    std::cout<<item<<" ";
-//                }
-                std::cout<<"real-occ:"<<positions.size()<<std::endl;
-//
-//                for (const auto &item : positions) {
-//                    std::cout<<item<<" ";
-//                }
+                std::cout<<"bt-occ:"<<positions.size()<<std::endl;
+                if(positions.size() > occ.size())
+                {
+                    std::vector<size_type> X;
+                    X.resize(positions.size(),0);
+                    auto it = std::set_difference(positions.begin(),positions.end(),occ.begin(),occ.end(),X.begin());
+                    X.resize(it - X.begin());
+                    std::cout<<"missing positions["<<X.size()<<"]\n";
+                }
+
+
 
                 return;
             }
 #endif
 
-#ifdef DEBUG_PRINT
-            std::cout <<"-\n";
-            for (const auto &item : occ) {
-                std::cout << item << " ";
-            }
-            std::cout << std::endl;
-#endif
         }
 
         auto text_size = (double)grammar_tree.get_text_len();
@@ -834,28 +832,28 @@ public:
         row_2 = grammar_tree.get_size_rules() - 2;
         if (!utils::upper_bound(row_1, row_2, cmp_rev_prefix_rule)) return false;
         q.row2 = row_2;
-
-        std::cout<<"-----------------------------------"<<std::endl;
-        std::cout<<"rules-"<<row_1-1<<":";
-        print_prefix_rule(grammar_tree.first_occ_from_rule(row_1-1),10);
-        std::cout<<std::endl;
-        std::cout<<"-----------------------------------"<<std::endl;
-        for (int i = row_1; i <= row_1+2; ++i) {
-            std::cout<<"rules-"<<i<<":";
-            print_prefix_rule(grammar_tree.first_occ_from_rule(i),10);
-            std::cout<<std::endl;
-        }
-        std::cout<<"***\n";
-        for (int i = row_2; i >= row_2-2; --i) {
-            std::cout<<"rules-"<<i<<":";
-            print_prefix_rule(grammar_tree.first_occ_from_rule(i),10);
-            std::cout<<std::endl;
-        }
-        std::cout<<"-----------------------------------"<<std::endl;
-        std::cout<<"rules-"<<row_2+1<<":";
-        print_prefix_rule(grammar_tree.first_occ_from_rule(row_2+1),10);
-        std::cout<<std::endl;
-        std::cout<<"-----------------------------------"<<std::endl;
+//
+//        std::cout<<"-----------------------------------"<<std::endl;
+//        std::cout<<"rules-"<<row_1-1<<":";
+//        print_prefix_rule(grammar_tree.first_occ_from_rule(row_1-1),10);
+//        std::cout<<std::endl;
+//        std::cout<<"-----------------------------------"<<std::endl;
+//        for (int i = row_1; i <= row_1+2; ++i) {
+//            std::cout<<"rules-"<<i<<":";
+//            print_prefix_rule(grammar_tree.first_occ_from_rule(i),10);
+//            std::cout<<std::endl;
+//        }
+//        std::cout<<"***\n";
+//        for (int i = row_2; i >= row_2-2; --i) {
+//            std::cout<<"rules-"<<i<<":";
+//            print_prefix_rule(grammar_tree.first_occ_from_rule(i),10);
+//            std::cout<<std::endl;
+//        }
+//        std::cout<<"-----------------------------------"<<std::endl;
+//        std::cout<<"rules-"<<row_2+1<<":";
+//        print_prefix_rule(grammar_tree.first_occ_from_rule(row_2+1),10);
+//        std::cout<<std::endl;
+//        std::cout<<"-----------------------------------"<<std::endl;
 
 
 
@@ -900,27 +898,27 @@ public:
         if (!utils::upper_bound(col_1, col_2, cmp_suffix_grammar_rule)) return false;
         q.col2 = col_2;
         //search suffixes
-        std::cout<<"-----------------------------------"<<std::endl;
-        std::cout<<"sfx-"<<col_1-1<<":";
-        print_suffix_grammar(m_grid.first_label_col(col_1-1),10);
-        std::cout<<std::endl;
-        std::cout<<"-----------------------------------"<<std::endl;
-        for (int i = col_1; i <= col_1+2; ++i) {
-            std::cout<<"sfx-"<<i<<":";
-            print_suffix_grammar(m_grid.first_label_col(i),10);
-            std::cout<<std::endl;
-        }
-        std::cout<<"***\n";
-        for (int i = col_2; i >= col_2-2; --i) {
-            std::cout<<"sfx-"<<i<<":";
-            print_suffix_grammar(m_grid.first_label_col(i),10);
-            std::cout<<std::endl;
-        }
-        std::cout<<"-----------------------------------"<<std::endl;
-        std::cout<<"sfx-"<<col_2+1<<":";
-        print_suffix_grammar(m_grid.first_label_col(col_2+1),10);
-        std::cout<<std::endl;
-        std::cout<<"-----------------------------------"<<std::endl;
+//        std::cout<<"-----------------------------------"<<std::endl;
+//        std::cout<<"sfx-"<<col_1-1<<":";
+//        print_suffix_grammar(m_grid.first_label_col(col_1-1),10);
+//        std::cout<<std::endl;
+//        std::cout<<"-----------------------------------"<<std::endl;
+//        for (int i = col_1; i <= col_1+2; ++i) {
+//            std::cout<<"sfx-"<<i<<":";
+//            print_suffix_grammar(m_grid.first_label_col(i),10);
+//            std::cout<<std::endl;
+//        }
+//        std::cout<<"***\n";
+//        for (int i = col_2; i >= col_2-2; --i) {
+//            std::cout<<"sfx-"<<i<<":";
+//            print_suffix_grammar(m_grid.first_label_col(i),10);
+//            std::cout<<std::endl;
+//        }
+//        std::cout<<"-----------------------------------"<<std::endl;
+//        std::cout<<"sfx-"<<col_2+1<<":";
+//        print_suffix_grammar(m_grid.first_label_col(col_2+1),10);
+//        std::cout<<std::endl;
+//        std::cout<<"-----------------------------------"<<std::endl;
         return true;
     }
 
@@ -934,37 +932,39 @@ public:
         occ.reserve(sfx.size());
         const auto &T = grammar_tree.getT();
 
-        std::cout<<"row1:"<<range.row1<<std::endl;
-        std::cout<<"row2:"<<range.row2<<std::endl;
-        std::cout<<"col1:"<<range.col1<<std::endl;
-        std::cout<<"col2:"<<range.col2<<std::endl;
+//        std::cout<<"row1:"<<range.row1<<std::endl;
+//        std::cout<<"row2:"<<range.row2<<std::endl;
+//        std::cout<<"col1:"<<range.col1<<std::endl;
+//        std::cout<<"col2:"<<range.col2<<std::endl;
 
         for (size_type i = 0; i < sfx.size(); ++i) {
             size_type preorder_node = m_grid.first_label_col(sfx[i]);
             size_type node = T[preorder_node];
             size_type leaf = 0;
             size_type off = grammar_tree.offset_node(node, leaf);
-            assert(grammar_tree.offset_node(node) - pattern_off >= 0);
+//            assert(grammar_tree.offset_node(node) - pattern_off >= 0);
+//            std::cout<<"node-"<<node<<std::endl;
+//            std::cout<<"preorder_node-"<<preorder_node<<std::endl;
             size_type parent = T.parent(node);
             size_type parent_off = grammar_tree.offset_node(parent);
             size_type parent_preorder = T.pre_order(parent);
             size_type run_len = grammar_tree.is_run(parent_preorder);
 
 
-            size_type chr = T.childrank(node);
-            assert(chr > 1);
-            size_type prev_sibiling = T.child(parent,chr-1);
-            auto Y = grammar_tree.get_rule_from_preorder_node(T.pre_order(prev_sibiling));
-            std::cout<<"r:"<<Y<<":";
-            print_prefix_rule(grammar_tree.first_occ_from_rule(Y),10);
-            std::cout<<std::endl;
-            std::cout<<"sfx:"<<sfx[i]<<":";
-            print_suffix_grammar(preorder_node,10);
-            std::cout<<std::endl;
-            std::cout<<"**************************************"<<std::endl;
+//            size_type chr = T.childrank(node);
+//            assert(chr > 1);
+//            size_type prev_sibiling = T.child(parent,chr-1);
+//            auto Y = grammar_tree.get_rule_from_preorder_node(T.pre_order(prev_sibiling));
+//            std::cout<<"r:"<<Y<<":";
+//            print_prefix_rule(grammar_tree.first_occ_from_rule(Y),10);
+//            std::cout<<std::endl;
+//            std::cout<<"sfx:"<<sfx[i]<<":";
+//            print_suffix_grammar(preorder_node,10);
+//            std::cout<<std::endl;
+//            std::cout<<"**************************************"<<std::endl;
 
             if (run_len) {
-                std::cout<<"run_len"<<std::endl;
+//                std::cout<<"[grid_search]:run_len"<<std::endl;
                 // add run length primary occ
                 size_type first_child_size = off - grammar_tree.offset_node(parent);
                 size_type num_leaves = grammar_tree.num_leaves();
@@ -990,27 +990,32 @@ public:
         std::deque<utils::primaryOcc> Q;
         const auto &T = grammar_tree.getT();
         //auxiliar functions
+//        auto insert_second_mentions = [&Q, &T, this](const utils::primaryOcc &occ) {
+//            grammar_tree.visit_secondary_occ(occ.preorder, [&T, &Q, &occ, this](const size_type &preorder) {
+//                size_type node = T[preorder];
+//                size_type parent = T.parent(node);
+//                size_type pre_parent = T.pre_order(parent);
+//                size_type run_len = grammar_tree.is_run(pre_parent);
+//                if(run_len){
+//                    // if it is the first child of a run
+//                    if( pre_parent + 1 == preorder) // we only put the first child
+//                    { //the rest of the run len is handle in the while...
+//                        size_type node_off = grammar_tree.offset_node(node);
+//                        size_type fchild_len = grammar_tree.offset_node(T.nsibling(node)) - node_off;
+//                        Q.emplace_back(parent, pre_parent, node_off, occ.off_pattern,run_len,fchild_len);
+//                    }
+//                }else{
+//                    size_type node_off = grammar_tree.offset_node(node);
+//                    Q.emplace_back(node, preorder, node_off, occ.off_pattern);
+//                }
+//            });
+//        };
+//
         auto insert_second_mentions = [&Q, &T, this](const utils::primaryOcc &occ) {
             grammar_tree.visit_secondary_occ(occ.preorder, [&T, &Q, &occ, this](const size_type &preorder) {
                 size_type node = T[preorder];
-                size_type parent = T.parent(node);
-                size_type pre_parent = T.pre_order(parent);
-                if(grammar_tree.is_run(pre_parent)){
-//                    std::cout<<"[insert_second_mentions]:run_len:pre_parent:"<<pre_parent<<std::endl;
-//                    std::cout<<"[insert_second_mentions]:run_len:preorder:"<<preorder<<std::endl;
-//                    std::cout<<"[insert_second_mentions]:run_len:off_pattern:"<<occ.off_pattern<<std::endl;
-                    std::cout<<"run"<<pre_parent<<std::endl;
-                    // if it is the first child of a run
-                    if( pre_parent + 1 == preorder) // we only put the first child
-                    { //the rest of the run len is handle in the while...
-                        size_type node_off = grammar_tree.offset_node(T[preorder]);
-                        Q.emplace_back(node, preorder, node_off, occ.off_pattern);
-                        std::cout<<"[insert_second_mentions]:run_len:preorder::inserted:"<<node_off + occ.off_pattern<<std::endl;
-                    }
-                }else{
-                    size_type node_off = grammar_tree.offset_node(T[preorder]);
-                    Q.emplace_back(node, preorder, node_off, occ.off_pattern);
-                }
+                size_type node_off = grammar_tree.offset_node(node);
+                Q.emplace_back(node, preorder, node_off, occ.off_pattern);
             });
         };
         //initialize the queue
@@ -1028,53 +1033,84 @@ public:
             if (top.preorder == 1) { //base case
                 occ.insert(top.off_pattern);
             } else {
-                //check if the node is a run - length node of a secondary occ
-                if (!top.primary && (top.run_len > 0 || grammar_tree.is_run(top.preorder))) {
-                    std::cout<<"run_len\n";
-                    if (top.run_len > 0) {
-                        std::cout<<"CASE **1\n";
-                        //if fchild_len y len are != 0 then use precomputed values....
-                        utils::primaryOcc s_occ(top);
-                        //insert himself with all new offsets
-                        for (size_type i = 0; i < top.run_len - 1; ++i) {
-                            s_occ.off_pattern += top.fchild_len;
-                            s_occ.primary = true;
-                            Q.push_back(s_occ);
-                        }
-                    }
-                    else {
-                        std::cout<<"CASE **2\n";
-                        // we arrive from first child
-                        // compute child len
-                        size_type fchild_len = grammar_tree.offset_node(T.child(top.node, 2)) - top.off_node ;
-//                        std::cout<<"fchild_len:"<<fchild_len<<std::endl;
-
-                        //compute len of the run
-                        size_type rlen = grammar_tree.is_run(top.preorder);
-                        utils::primaryOcc s_occ(top);
-                        s_occ.run_len = rlen;
-                        s_occ.fchild_len = fchild_len;
-                        s_occ.primary = true;
-                        //insert himself with all new offsets
-                        for (size_type i = 0; i < rlen - 1; ++i) {
-                            s_occ.off_pattern += fchild_len;
-//                            std::cout<<"off_pattern:"<<s_occ.off_node<<std::endl;
-//                            std::cout<<"off_pattern:"<<s_occ.off_pattern<<std::endl;
-//                            std::cout<<"s_occ.off_node + s_occ.off_pattern:"<<s_occ.off_node + s_occ.off_pattern<<std::endl;
-                            Q.push_back(s_occ);
-                        }
-                    }
-                }
-                // insert in Q parent
+                //check if parent is run length
                 size_type parent = T.parent(top.node);
                 size_type preorder_parent = T.pre_order(parent);
-                size_type off_parent = grammar_tree.offset_node(parent);
+                auto rlen = grammar_tree.is_run(preorder_parent);
+                // check if parent is run-length
+                if( rlen > 0 && preorder_parent + 1 == top.preorder){
+//                    std::cout<<"run\n";
+//                    std::cout<<"preparent"<<preorder_parent<<"-preorder"<<top.preorder<<std::endl;
+                    // if parent is a run-length node
+                    size_type fchild_len = grammar_tree.offset_node(T.child(parent, 2)) - top.off_node ;
+//                    std::cout<<"fchild_len:"<<fchild_len<<"-len:"<<rlen<<std::endl;
+                    // insert n times, the parent and all its second occ
+                    for (size_type i = 0; i < rlen ; ++i) {
+                        utils::primaryOcc s_occ;
+                        s_occ.preorder = preorder_parent;
+                        s_occ.node = parent;
+                        s_occ.off_node = top.off_node; //as it is first child is the same offset
+                        s_occ.off_pattern = top.off_pattern + fchild_len*i;
+                        Q.emplace_back(s_occ);
+                        insert_second_mentions(s_occ);
+                    }
+                }else{
+                    if(rlen == 0){
+                        // if parent is not a run-length node
+                        size_type off_parent = grammar_tree.offset_node(parent);
+                        // insert the parent and all its second occ
+                        utils::primaryOcc s_occ(parent, preorder_parent, off_parent,top.off_pattern + (top.off_node - off_parent));
+                        Q.emplace_back(s_occ);
+                        insert_second_mentions(s_occ);
+                    }
+                    // if parent is a run-length node but the current node is not the first child do not process it
+                    // first child insert all the occ in the second child with the parent node
+                }
 
-                utils::primaryOcc s_occ(parent, preorder_parent, off_parent,
-                                        top.off_pattern + (top.off_node - off_parent));
-                Q.push_back(s_occ);
-                // insert in Q second occ of the node
-                insert_second_mentions(s_occ);
+                //check if the node is a run - length node of a secondary occ
+//                if (!top.primary && (top.run_len > 0 || grammar_tree.is_run(top.preorder))) {
+//                    std::cout<<"run_len\n";
+//                    if (top.run_len > 0) {
+//                        std::cout<<"CASE **1\n";
+//                        //if fchild_len y len are != 0 then use precomputed values....
+//                        utils::primaryOcc s_occ(top);
+//                        //insert himself with all new offsets
+//                        for (size_type i = 0; i < top.run_len - 1; ++i) {
+//                            s_occ.off_pattern += top.fchild_len;
+//                            s_occ.primary = true;
+//                            Q.push_back(s_occ);
+//                            insert_second_mentions(s_occ);
+//                        }
+//                    }
+//                    else {
+//                        std::cout<<"CASE **2\n";
+//                        // we arrive from first child
+//                        // compute child len
+//                        size_type fchild_len = grammar_tree.offset_node(T.child(top.node, 2)) - top.off_node ;
+//                        //compute len of the run
+//                        size_type rlen = grammar_tree.is_run(top.preorder);
+//                        utils::primaryOcc s_occ(top);
+//                        s_occ.run_len = rlen;
+//                        s_occ.fchild_len = fchild_len;
+//                        s_occ.primary = true;
+//                        //insert himself with all new offsets
+//                        for (size_type i = 0; i < rlen - 1; ++i) {
+//                            s_occ.off_pattern += fchild_len;
+//                            Q.push_back(s_occ);
+//                            insert_second_mentions(s_occ);
+//                        }
+//                    }
+//                }
+                // insert in Q parent
+//                size_type parent = T.parent(top.node);
+//                size_type preorder_parent = T.pre_order(parent);
+//                size_type off_parent = grammar_tree.offset_node(parent);
+//
+//                utils::primaryOcc s_occ(parent, preorder_parent, off_parent,
+//                                        top.off_pattern + (top.off_node - off_parent));
+//                Q.push_back(s_occ);
+//                // insert in Q second occ of the node
+//                insert_second_mentions(s_occ);
             }
             Q.pop_front();
         }
@@ -1096,7 +1132,7 @@ public:
         std::ifstream _buf(G.rules_file,std::ios::in);
         sdsl::load(rules_buff,_buf);
 //        ivb_t rules_buff(G.rules_file);
-        if(G.rules_file.size() != G.g) std::cout<<"NO MATCH IN grammar sizes\n";
+
         size_type zero_count = 0;
         for (size_t i = 0; i < rules_buff.size(); ++i) {
             if(rules_buff[i] == 0)
@@ -1109,7 +1145,7 @@ public:
         nav_grammar NG;
         std::vector<size_type> right_hand;
         zero_count = 0;
-        for (auto i = 0; i < rules_lim_buff.size(); ++i) {
+        for (size_t i = 0; i < rules_lim_buff.size(); ++i) {
             right_hand.push_back(rules_buff[i]);
             if(rules_buff[i] == 0) {
                 zero_count++;
@@ -1126,7 +1162,6 @@ public:
             }
         }
         S = NG[id-1][0];
-        if(zero_count != 2) std::cout<<"ERROR 0 APPEARS MORE THAN 1 TIME IN THE GRAMMAR:"<<zero_count<<std::endl;
 //        std::cout<<"plain-grammar"<<std::endl;
 //        for (const auto &item : NG) {
 //            std::cout<<item.first<<"->";
@@ -1139,6 +1174,22 @@ public:
 
         return NG;
     }
+
+    void uncompress_grammar(const std::string & file_dir) const {
+
+        size_type cont = grammar_tree.get_text_len();
+        std::fstream fout_lpg(file_dir,std::ios::out|std::ios::binary);
+        auto cmp = [this,&cont,&fout_lpg](const uint64_t &prenode, const uint64_t &node,const uint64_t &X) {
+            auto c1 = get_symbol(X);//symbols_map[X];
+            fout_lpg.write((const char *)&c1,1);
+            if(cont == 0)
+                return false;
+            cont--;
+            return true;
+        };
+        process_suffix_grammar(2,cmp);
+    }
+
 
 };
 
@@ -1187,16 +1238,16 @@ void lpg_index::compute_grammar_sfx(
                             0
 //                        cuts[r.first][i-1]//cut level
                     );
-                    if(r.second[i-1] == 0)
-                    {
-                        s.print();
-                        std::cout<<"rule:"<<r.first<<std::endl;
-                        for (size_type i = 0; i < r.second.size(); ++i) {
-                            std::cout<<r.second[i]<<" ";
-                        }
-                        std::cout<<std::endl;
-                        int ct;std::cout<<"pres 0 enter to continue"<<std::endl;std::cin>>ct;
-                    }
+//                    if(r.second[i-1] == 0)
+//                    {
+//                        s.print();
+//                        std::cout<<"rule:"<<r.first<<std::endl;
+//                        for (size_type i = 0; i < r.second.size(); ++i) {
+//                            std::cout<<r.second[i]<<" ";
+//                        }
+//                        std::cout<<std::endl;
+//                        int ct;std::cout<<"pres 0 enter to continue"<<std::endl;std::cin>>ct;
+//                    }
 
                     grammar_sfx.push_back(s);
 
@@ -1254,7 +1305,7 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
 //        std::cout<<partitions.first.size()<<std::endl;
         uint32_t level = partitions.second;
 //        for (const auto &item : partitions.first) {
-        size_type tt = 0;
+//        size_type tt = 0;
         for(uint item = 0; item < pattern.size() - 1;++item){
             //find primary occ
             grid_query range{};
@@ -1262,21 +1313,10 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
             if(search_grid_range(pattern.c_str(),pattern.size(),item + 1,level, range)){
                 std::vector<utils::primaryOcc> pOcc;
                 // grid search
-                std::string pref;pref.resize(item + 1);
-                std::string suffix;suffix.resize(pattern.size() - item - 1);
-                std::copy(pattern.begin(),pattern.begin()+item+1,pref.begin());
-                std::copy(pattern.begin()+item+1,pattern.end(),suffix.begin());
-                std::cout<<"corte:"<<item<<std::endl;
-                std::cout<<"corte:"<<pref<<"|"<<suffix<<std::endl;
                 grid_search(range,item + 1,pattern.size(),level,pOcc);
                 // find secondary occ
-                std::cout<<"find_secondary_occ:n_p:"<<pOcc.size()<<std::endl;
                 for (const auto &occ : pOcc) {
-                    std::cout<<"\t"<<occ.preorder<<" "<<occ.run_len<<" "<<occ.primary<<std::endl;
                     find_secondary_occ(occ,pos);
-//                    std::cout<<"occ:"<<occ.preorder<<"\t+"<<pos.size() - tt<<std::endl;
-                    tt = pos.size();
-                    std::cout<<"pos:"<<pos.size()<<std::endl;
                 }
             }
         }
