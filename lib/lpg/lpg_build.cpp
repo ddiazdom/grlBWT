@@ -6,6 +6,7 @@
 #include <cmath>
 #include <sdsl/select_support_mcl.hpp>
 #include "cdt/parallel_string_sort.hpp"
+#include "lpg/repair_algo.hpp"
 
 //pthread_mutex_t thread_mutex=PTHREAD_MUTEX_INITIALIZER;
 
@@ -48,6 +49,7 @@ void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp
 
             curr_sym = stack.top() ;
             stack.pop();
+            //std::cout<<curr_sym<<std::endl;
 
             if(curr_sym==0){
                 start = 0;
@@ -62,7 +64,7 @@ void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp
                 assert(tmp_decomp.size()<=if_stream.size());
                 tmp_decomp.push_back(curr_sym);
             }else{
-                //this is a dummy way of handeling rl nonterminals,
+                //this is a dummy way of handling rl nonterminals,
                 // but I don't have enough time
                 if(is_rl[curr_sym]){
                     assert(end-start+1==2);
@@ -77,10 +79,13 @@ void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp
             }
         }
 
+
+        size_t cont=0;
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            //assert(tmp_sym == buff_symbol);
+            //std::cout<<(int)buff_symbol<<" "<<(int)p_gram.sym_map[tmp_sym]<<" "<<pos-1<<" "<<cont<<std::endl;
             assert(p_gram.sym_map[tmp_sym] == buff_symbol);
+            cont++;
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
@@ -181,11 +186,11 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     run_length_compress(p_gram, config);
+    repair(p_gram, config);
 
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
 
-    //create_lvl_breaks(p_gram, rem_nts, rem_nts_rs);
     simplify_grammar(p_gram, rem_nts, rem_nts_rs);
 
     sdsl::util::clear(rem_nts_rs);
@@ -794,7 +799,7 @@ void lpg_build::simplify_grammar(lpg_build::plain_grammar_t &p_gram, bv_t &rem_n
     std::cout<<"      Grammar size before:  "<<p_gram.g<<std::endl;
     std::cout<<"      Grammar size after:   "<<new_rules.size()<<std::endl;
     std::cout<<"      Deleted nonterminals: "<<rm_nt<<" ("<<rm_per<<"%)"<<std::endl;
-    std::cout<<"      Comp. ratio:          "<<comp_rat<<std::endl;
+    std::cout<<"      Compression ratio:    "<<comp_rat<<std::endl;
 
     /*cont=0;
     for(auto && new_rule : new_rules){
@@ -963,11 +968,11 @@ lpg_build::bv_t lpg_build::mark_nonterminals(lpg_build::plain_grammar_t &p_gram)
     sdsl::load_from_file(rules, p_gram.rules_file);
 
     sdsl::int_vector_buffer<1> is_rl(p_gram.is_rl_file, std::ios::in);
-    size_t first_rl_rule=max_tsym+1;
+    size_t rl_rule=max_tsym+1;
     for(unsigned long freq : p_gram.rules_per_level){
-        first_rl_rule+=freq;
+        rl_rule+=freq;
     }
-    assert(!is_rl[first_rl_rule-1]);
+    assert(!is_rl[rl_rule-1]);
 
     bv_t rem_nts(p_gram.r, false);
 
@@ -977,7 +982,7 @@ lpg_build::bv_t lpg_build::mark_nonterminals(lpg_build::plain_grammar_t &p_gram)
 
     size_t r_len=1, cont=0, curr_rule=max_tsym+1,k=max_tsym+1;
     while(k<rules.size()){
-        if(curr_rule>=first_rl_rule && curr_rule<p_gram.r-1){//run-length compressed rules
+        if(curr_rule>=rl_rule && curr_rule<p_gram.r-1){//run-length compressed rules
             rep_nts[rules[k++]] = 2;
             assert(r_lim[k] && r_len==1);
             r_len=0;
@@ -1021,9 +1026,11 @@ lpg_build::bv_t lpg_build::mark_nonterminals(lpg_build::plain_grammar_t &p_gram)
     }
 
     //unmark the run-length rules
-    while(first_rl_rule<p_gram.r-1){
-        assert(is_rl[first_rl_rule]);
-        rem_nts[first_rl_rule++] = false;
+    while(rl_rule<p_gram.r-1){
+        if(is_rl[rl_rule]){
+            rem_nts[rl_rule] = false;
+        }
+        rl_rule++;
     }
 
     rem_nts[p_gram.r-1] = false;//unmark the compressed string
@@ -1186,9 +1193,8 @@ void lpg_build::colex_nt_sort(plain_grammar_t &p_gram) {
             cont++;
         }
     }
-    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;
+    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;*/
     //
-    exit(0);*/
 
     //renaming the rules in the lvl_breaks
     /*ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
@@ -1303,7 +1309,7 @@ void lpg_build::run_length_compress(lpg_build::plain_grammar_t &p_gram, sdsl::ca
     std::cout<<"      Grammar size before:        "<<rules.size()<<std::endl;
     std::cout<<"      Grammar size after:         "<<rl_rules.size()<<std::endl;
     std::cout<<"      Number of new nonterminals: "<<ht.size()<<std::endl;
-    std::cout<<"      Comp. ratio:                "<<float(rl_rules.size())/float(rules.size())<<std::endl;
+    std::cout<<"      Compression ratio:          "<<float(rl_rules.size())/float(rules.size())<<std::endl;
 
     rules.close();
     r_lim.close();
