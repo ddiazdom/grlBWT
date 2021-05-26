@@ -152,7 +152,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     }
     sdsl::util::clear(symbol_desc);
 
-    {//put the compressed string at position rules[0]
+    {//put the compressed string at end
         std::ifstream c_vec(tmp_i_file, std::ifstream::binary);
         c_vec.seekg(0, std::ifstream::end);
         size_t tot_bytes = c_vec.tellg();
@@ -188,16 +188,6 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
 
     run_length_compress(p_gram, config);
     repair(p_gram, config);
-
-    //todo llamar a repair aqui
-//    p_gram.print_grammar();
-//    p_gram = repair_compress(p_gram,config);
-
-    std::cout<<"  Resulting LPG+Repair  grammar:    "<<std::endl;
-    std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
-    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
-    std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
-    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
