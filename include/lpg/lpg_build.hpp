@@ -15,6 +15,8 @@
 #include <sdsl/int_vector.hpp>
 #include <sdsl/rank_support_v.hpp>
 
+#include "macros.hpp"
+
 #define L_TYPE false
 #define S_TYPE true
 #define BUFFER_SIZE 8388608 //8MB of buffer
@@ -61,13 +63,16 @@ public:
         bool isTerminal(const size_t& id) const { return sym_map.find(id) != sym_map.end();}
 
         void print_grammar(){
-            std::cout<<"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"<<std::endl;
+
+            std::cout<<"----------------------------------------------------------------------"<<std::endl;
             std::cout<<"terminal's alphabet "<<(uint)sigma<<std::endl;
             std::cout<<"number of rules "<<r<<std::endl;
             std::cout<<"length of the right-hand of the start symbol "<<c<<std::endl;
             std::cout<<" sum of the rules' right-hand sides "<<g<<std::endl;
             std::cout<<"map compressed symbols to original symbols ("<<sym_map.size()<<")"<<std::endl;
+
             int c = 0;
+
             for (const auto &item : sym_map) {
                 std::cout<<item.first<<" ["<<item.second<<"]\n";
                 ++c;
@@ -78,7 +83,7 @@ public:
             bvb_t is_rules_len(is_rl_file);
 
             if(is_rules_len.good()){
-                for (int j = 0; j < is_rules_len.size() ; ++j) {
+                for (size_t j = 0; j < is_rules_len.size() ; ++j) {
                     std::cout<<"["<<j<<"]:"<<is_rules_len[j]<<std::endl;
                 }
             }
@@ -86,7 +91,7 @@ public:
             std::cout<<"Rules"<<std::endl;
 
             uint* len_rules = new uint [r];
-            for (int i = 0; i < r ; ++i) {
+            for (size_t i = 0; i < r ; ++i) {
                 len_rules[i] = 1;
             }
 
@@ -94,7 +99,7 @@ public:
             ivb_t rules_buff(rules_file);
             bvb_t rules_lim_buff(rules_lim_file);
             int ii = 0;
-            for (int i = 0; i < r; ++i) {
+            for (size_t i = 0; i < r; ++i) {
                 std::cout<<i<<"->";
                 if(is_rules_len[i]){
                     std::cout<<"(*) ";
@@ -224,6 +229,9 @@ public:
      * @param uncomp_file : original input text
      */
     static void check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp_file);
+
+//    static lpg_build::plain_grammar_t repair_compress(plain_grammar_t& p_gram, sdsl::cache_config& config);
+
 private:
 
     template<class sym_type>
@@ -354,5 +362,8 @@ private:
                            std::vector<uint8_t> &lms_breaks);
     static void colex_nt_sort(plain_grammar_t &p_gram);
     static void run_length_compress(plain_grammar_t& p_gram, sdsl::cache_config& config);
+
+
+
 };
 #endif //LG_COMPRESSOR_LMS_ALGO_H

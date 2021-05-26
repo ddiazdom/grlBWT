@@ -358,6 +358,7 @@ public:
         plain_grammar_t plain_gram;
         plain_gram.load_from_file(g_file);
 
+
 #ifdef DEBUG_PRINT
         plain_gram.print_grammar();
 #endif
@@ -453,51 +454,55 @@ public:
 //        }
 
         std::cout << "Locate pattern list["<<list.size()<<"]" << std::endl;
-        auto start = std::chrono::high_resolution_clock::now();
-        size_t total_occ = 0;
+        size_t total_occ = 0,total_time = 0 , total_occ_bt = 0;
         for (auto const &pattern : list) {
 #ifdef DEBUG_PRINT
             std::cout << pattern << ":";
 #endif
-
-
+            auto start = std::chrono::high_resolution_clock::now();
             std::set<size_type> occ;
             locate(pattern, occ);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
             total_occ += occ.size();
-#ifdef CHECK_OCC
-            std::cout<<++ii<<"--"<<pattern<<std::endl;
+            total_time+=elapsed;
+            
             std::set<size_t> positions;
             bt_search(data,pattern,positions);
-            if(positions != occ){
-                std::cout<<"Locate error\n";
-                std::cout<<"pattern:"<<pattern<<std::endl;
-                std::cout<<"occ:"<<occ.size()<<std::endl;
-                std::cout<<"bt-occ:"<<positions.size()<<std::endl;
-                if(positions.size() > occ.size())
-                {
-                    std::vector<size_type> X;
-                    X.resize(positions.size(),0);
-                    auto it = std::set_difference(positions.begin(),positions.end(),occ.begin(),occ.end(),X.begin());
-                    X.resize(it - X.begin());
-                    std::cout<<"missing positions["<<X.size()<<"]\n";
-                }
+            total_occ_bt += positions.size();
 
 
+#ifdef CHECK_OCC
+//            std::cout<<++ii<<"--"<<pattern<<std::endl;
+//
+//            bt_search(data,pattern,positions);
+//            total_occ_bt += positions.size();
+//            if(positions != occ){
+//                std::cout<<"Locate error\n";
+//                std::cout<<"pattern:"<<pattern<<std::endl;
+//                std::cout<<"occ:"<<occ.size()<<std::endl;
+//                std::cout<<"bt-occ:"<<positions.size()<<std::endl;
+//                if(positions.size() > occ.size())
+//                {
+//                    std::vector<size_type> X;
+//                    X.resize(positions.size(),0);
+//                    auto it = std::set_difference(positions.begin(),positions.end(),occ.begin(),occ.end(),X.begin());
+//                    X.resize(it - X.begin());
+//                    std::cout<<"missing positions["<<X.size()<<"]\n";
+//                }
+////                return;
+//            }
 
-                return;
-            }
 #endif
 
         }
 
         auto text_size = (double)grammar_tree.get_text_len();
         auto index_size = (double)sdsl::size_in_bytes(*this);
-
-        auto end = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        std::cout << "Elap. time (microsec): " << elapsed.count() << std::endl;
+        std::cout << "Elap. time (microsec): " << total_time << std::endl;
         std::cout << "Total occ: " << total_occ << std::endl;
-        double time_per_occ = (double)elapsed.count()/(double)total_occ;
+        std::cout << "Real Total occ: " << total_occ_bt << std::endl;
+        double time_per_occ = (double)total_time/(double)total_occ;
         std::cout << "Time/occ (microsec): " << time_per_occ << std::endl;
         std::cout << "Index size " << sdsl::size_in_bytes(*this) << std::endl;
         std::cout << "Text size " << grammar_tree.get_text_len() << std::endl;
@@ -1299,8 +1304,13 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
 
 //        std::cout<<partitions.first.size()<<std::endl;
         uint32_t level = partitions.second;
+//        std::cout<<"level:"<<level<<std::endl;
+//        std::cout<<"corte:"<<std::endl;
 //        for (const auto &item : partitions.first) {
-//        size_type tt = 0;
+//            std::cout<<item<<" ";
+//        }
+//        std::cout<<std::endl;
+//        for (const auto &item : partitions.first) {
         for(uint item = 0; item < pattern.size() - 1;++item){
             //find primary occ
             grid_query range{};
