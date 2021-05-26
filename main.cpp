@@ -12,12 +12,18 @@ void generate_random_samples(const std::string &file, const uint32_t& len, const
     out_f.write((const char*)&len,sizeof (uint32_t));
     out_f.write((const char*)&samples,sizeof (uint32_t));
     std::srand(time(nullptr));
-    for (uint32_t i = 0; i < samples ; ++i) {
+    uint32_t i = 0;
+    std::set<std::string> M;
+    while (i < samples){
         size_t pos = std::rand()%data.size();
         if(pos + len >= data.size()) pos -= len;
         std::string ss; ss.resize(len);
         std::copy(data.begin()+pos,data.begin()+pos+len,ss.begin());
-        out_f.write(ss.c_str(),len);
+        if(M.find(ss) == M.end()){
+            M.insert(ss);
+            out_f.write(ss.c_str(),len);
+            i++;
+        }
     }
 }
 
@@ -105,15 +111,15 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
 
     if(app.got_subcommand("index")) {
-        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
-
-        if(args.output_file.empty()){
-            args.output_file = args.input_file;
-        }
-        args.output_file = args.output_file+".idx";
-
-        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
-        sdsl::store_to_file(g, args.output_file);
+//        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
+//
+//        if(args.output_file.empty()){
+//            args.output_file = args.input_file;
+//        }
+//        args.output_file = args.output_file+".idx";
+//
+//        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
+//        sdsl::store_to_file(g, args.output_file);
         generate_random_samples(args.input_file,10,1000)  ;
         generate_random_samples(args.input_file,100,1000) ;
         generate_random_samples(args.input_file,200,1000) ;
@@ -143,7 +149,8 @@ int main(int argc, char** argv) {
                 char *buff = new char[len];
                 for (uint32_t i = 0; i < samples ; ++i) {
                     in.read(buff,len);
-                    std::string ss;
+                    std::string ss;ss.resize(len);
+                    std::copy(buff,buff+len,ss.begin());
                     patterns_set.insert(ss);
                     patterns.push_back(ss);
                 }
