@@ -459,7 +459,7 @@ public:
 #ifdef DEBUG_PRINT
             std::cout << pattern << ":";
 #endif
-            std::cout<<++ii<<"--"<<pattern<<std::endl;
+//            std::cout<<++ii<<"--"<<pattern<<std::endl;
             auto start = std::chrono::high_resolution_clock::now();
             std::set<size_type> occ;
             locate(pattern, occ);
@@ -1311,6 +1311,7 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
 //        }
 //        std::cout<<std::endl;
         for (const auto &item : partitions.first) {
+//        uint32_t level = 0;
 //        for(uint item = 0; item < pattern.size() - 1;++item){
             //find primary occ
             grid_query range{};
