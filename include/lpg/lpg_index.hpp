@@ -489,11 +489,10 @@ public:
 #endif
 
         }
+        auto end = std::chrono::high_resolution_clock::now();
 
         auto text_size = (double)grammar_tree.get_text_len();
         auto index_size = (double)sdsl::size_in_bytes(*this);
-
-        auto end = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "Elap. time (microsec): " << elapsed.count() << std::endl;
         std::cout << "Total occ: " << total_occ << std::endl;
