@@ -12,46 +12,58 @@
 #include "cdt/hash_table.hpp"
 #include "cdt/int_array.h"
 #include "cdt/si_int_array.h"
+#include "lpg_build.hpp"
 
-//using pt_vector_t = vlc_int_array<elias_delta>;
-//using pt_vector_t = si_int_array;
-using pt_vector_t = std::vector<size_t>;
+typedef sdsl::bit_vector bv_t;
+typedef sdsl::int_vector_buffer<> ivb;
+typedef std::vector<size_t> pt_vector_t;
+typedef lpg_build::plain_grammar_t plain_gram_t;
+typedef lpg_build::key_wrapper key_wrapper;
+typedef bit_hash_table<size_t, 44> ht_t;
 
+//information of a pair
 struct pair_data_t {
-    size_t freq;
-    size_t q_locus;
-    size_t id;
-    pt_vector_t *occ;
-    pair_data_t(size_t freq_, size_t q_locus_, size_t id_, pt_vector_t *occ_) : freq(freq_), q_locus(q_locus_), id(id_), occ(occ_) {};
-    pair_data_t() : freq(0), q_locus(0), id(0), occ(nullptr) {};
+    size_t freq;      // frequency of the pair
+    size_t q_locus;   // locus of the pair in the priority queue
+    size_t id;        // ID assigned to the pair
+    pt_vector_t *occ; // positions in list of rules where the pair occurs
+    pair_data_t(size_t freq_, size_t q_locus_,
+                size_t id_, pt_vector_t *occ_) : freq(freq_),
+                                                 q_locus(q_locus_),
+                                                 id(id_),
+                                                 occ(occ_) {};
+    pair_data_t() : freq(0),
+                    q_locus(0),
+                    id(0),
+                    occ(nullptr) {};
 };
 
-using repair_ht_t =  bit_hash_table<pair_data_t>;
+typedef bit_hash_table<pair_data_t> repair_ht_t;
 
 struct repair_data{
 
-    gram_t&              gram_info;
+    plain_gram_t &       gram;         // plain grammar where the RePair rules are built upon
     sdsl::cache_config & config;
     size_t               s_width;
-    int_array<size_t>    seq;
+    int_array<size_t>    seq;          // list of rules
     bv_t                 seq_lim;
     bv_t::rank_1_type    seq_lim_rs;
-    bv_t                 rep_syms;
-    bv_t::rank_1_type    rep_syms_rs;
+    bv_t                 rep_syms;     //which symbols are repeated in seq?
+    bv_t::rank_1_type    rep_syms_rs;  //rank support of the repeated symbols
     int_array<size_t>    sym_dists;
-    repair_ht_t          ht;
-    size_t               next_av_rule;
-    ivb                  new_rules;
-    size_t               dummy_sym;
+    repair_ht_t          ht;           //hash table with the pairs
+    size_t               next_av_rule; //next available id for a rule
+    ivb                  new_rules;    //buffer with the new RePair rules
+    size_t               dummy_sym;    //dummy symbol
 
-    explicit repair_data(gram_t& gram_info_, sdsl::cache_config& config_): gram_info(gram_info_),
-                                                                           config(config_){
+    explicit repair_data(plain_gram_t & gram_info_, sdsl::cache_config& config_): gram(gram_info_),
+                                                                                  config(config_){
 
-        ivb r(gram_info.r_file, std::ios::in);
+        ivb r(gram.rules_file, std::ios::in);
         s_width = sdsl::bits::hi(r.size()*2) + 1;
         seq = int_array<size_t>(r.size(), s_width);
-        dummy_sym = seq.bits.masks[s_width];
-        sdsl::load_from_file(seq_lim, gram_info.r_lim_file);
+        dummy_sym = int_array<size_t>::stream_t::masks[s_width];
+        sdsl::load_from_file(seq_lim, gram.rules_lim_file);
 
         sdsl::int_vector<2> rep_record(r.size(), 0);
         size_t sym;
@@ -67,7 +79,7 @@ struct repair_data{
         rep_syms = bv_t(r.size(), false);
         size_t max_rep_len=0;
         size_t tmp_rep_len=0;
-        for(size_t i=gram_info.sigma; i < seq.size(); i++){
+        for(size_t i=gram.max_tsym+1; i < seq.size(); i++){
             if(rep_record[seq[i]] > 1){
                 rep_syms[i] = true;
                 if(!seq_lim[i-1]){
@@ -96,7 +108,7 @@ struct repair_data{
         size_t mask = (1UL<<d_width)-1UL;
         size_t dist;
         bool prev_is_rep=false;
-        for(size_t i=gram_info.sigma; i < seq.size(); i++){
+        for(size_t i=gram.max_tsym+1; i < seq.size(); i++){
 
             if(rep_syms[i]){
                 dist=0;
@@ -115,9 +127,9 @@ struct repair_data{
         }
         sym_dists.write(sym_dists.size()-1, mask);
 
-        next_av_rule=gram_info.n_rules-1;
+        next_av_rule= gram.r - 1;
         std::string nr_file=sdsl::cache_file_name("new_rp_rules", config);
-        new_rules = ivb(nr_file, std::ios::out, BUFFER_SIZE);
+        new_rules = ivb(nr_file, std::ios::out);
         sdsl::util::init_support(seq_lim_rs, &seq_lim);
     };
 
@@ -198,8 +210,8 @@ struct priority_queue{
         while(true){
 
             largest = idx;
-            left = l_child(idx);
-            right = r_child(idx);
+            left = l_child((size_type)idx);
+            right = r_child((size_type)idx);
 
             if(left<arr.size() && comp(arr[left], arr[idx])){
                 largest = left;
@@ -219,9 +231,9 @@ struct priority_queue{
     }
 
     void sift_up(size_t idx){
-        while (idx != 0 && comp(arr[idx], arr[parent(idx)]) ){
-            swap(idx, parent(idx));
-            idx = parent(idx);
+        while (idx != 0 && comp(arr[idx], arr[parent((size_type)idx)]) ){
+            swap(idx, parent((size_type)idx));
+            idx = parent((size_type)idx);
         }
     }
 
@@ -242,7 +254,7 @@ struct priority_queue{
         swap(0, arr.size()-1);
         arr.pop_back();
         sift_down(0);
-        return root;
+        return (size_type)root;
     }
 
     void insert(size_t elm) {
@@ -262,25 +274,24 @@ struct priority_queue{
 
 void update_grammar(repair_data& rp_data){
 
-    size_t new_gsyms = rp_data.new_rules.size();
-
     size_t new_g_size=0;
     for(size_t i=0;i<rp_data.seq.size();i++){
         if(rp_data.seq[i]!=rp_data.dummy_sym) new_g_size++;
     }
+    size_t new_gsyms = rp_data.new_rules.size();
     new_g_size += new_gsyms;
 
-    sdsl::int_vector_buffer<1> r_lim(rp_data.gram_info.r_lim_file, std::ios::out, BUFFER_SIZE);
-    ivb r(rp_data.gram_info.r_file, std::ios::out, BUFFER_SIZE, rp_data.s_width);
+    sdsl::int_vector_buffer<1> r_lim(rp_data.gram.rules_lim_file, std::ios::out, BUFFER_SIZE);
+    ivb r(rp_data.gram.rules_file, std::ios::out);
 
-    for(size_t i=0;i<rp_data.gram_info.sigma;i++){
+    for(size_t i=0;i<=rp_data.gram.max_tsym; i++){
         r.push_back(rp_data.seq[i]);
         r_lim.push_back(true);
     }
 
     size_t new_c_size=0;
-    size_t gsyms = rp_data.gram_info.grammar_size-rp_data.gram_info.comp_size;
-    for(size_t i=rp_data.gram_info.sigma;i<gsyms;i++){
+    size_t gsyms = rp_data.gram.g - rp_data.gram.c;
+    for(size_t i=rp_data.gram.max_tsym+1; i < gsyms; i++){
         if(rp_data.seq[i]!=rp_data.dummy_sym){
             r.push_back(rp_data.seq[i]);
         }
@@ -305,38 +316,48 @@ void update_grammar(repair_data& rp_data){
     r.close();
     r_lim.close();
 
-    std::cout<<"  Re-Pair stats:"<<std::endl;
-    std::cout<<"    Grammar size before:         "<<rp_data.gram_info.grammar_size-rp_data.gram_info.sigma<<std::endl;
-    std::cout<<"    Grammar size after:          "<<new_g_size-rp_data.gram_info.sigma<<std::endl;
-    std::cout<<"    Number of new nonterminals:  "<<new_gsyms/2<<std::endl;
-    std::cout<<"    Compression ratio:           "<<double(new_g_size)/rp_data.gram_info.grammar_size<<std::endl;
+    //mark the repair rules as non run-length compressed
+    sdsl::int_vector_buffer<1> is_rl(rp_data.gram.is_rl_file, std::ios::in);
+    for(size_t j = rp_data.gram.r; j<rp_data.gram.r+new_gsyms-1;j++){
+        is_rl[j] = false;
+    }
 
-    rp_data.gram_info.grammar_size = new_g_size;
-    rp_data.gram_info.n_rules += new_gsyms/2;
-    rp_data.gram_info.comp_size = new_c_size;
+    std::cout<<"    Stats:"<<std::endl;
+    std::cout<<"      Grammar size before:        "<<rp_data.gram.g << std::endl;
+    std::cout<<"      Grammar size after:         "<<new_g_size<<std::endl;
+    std::cout<<"      Number of new nonterminals: "<<new_gsyms/2<<std::endl;
+    std::cout<<"      Compression ratio:          "<<double(new_g_size)/double(rp_data.gram.g) << std::endl;
+
+    rp_data.gram.g = new_g_size;
+    rp_data.gram.r += new_gsyms / 2;
+    rp_data.gram.c = new_c_size;
 }
 
 static void repair_prim_pairs(repair_data& rp_data, priority_queue& p_queue){
 
     int_array<size_t> pair(2, rp_data.s_width);
-    size_t rep, lim;
+    size_t rep, lim, curr_rule;
+
+    bv_t is_rl;
+    sdsl::load_from_file(is_rl, rp_data.gram.is_rl_file);
 
     {//get the frequency of the first pairs
 
-        rep = rp_data.rep_syms[rp_data.gram_info.sigma]<<1UL;
+        rep = rp_data.rep_syms[rp_data.gram.max_tsym+1] << 1UL;
         lim = 4;// 100
 
-        bit_hash_table<size_t, 44> rep_map;
+        ht_t rep_map;
 
         size_t val=0;
-        for (size_t i = rp_data.gram_info.sigma; i < rp_data.seq.size()-1; i++) {
+        curr_rule=rp_data.gram.max_tsym+1;
+        for (size_t i = rp_data.gram.max_tsym+1; i < rp_data.seq.size() - 1; i++) {
 
             rep |= rp_data.rep_syms[i+1];
             lim |= rp_data.seq_lim[i+1];
 
             //11: both symbols are repeated
             //!10: pair is not a junction of two rules
-            if ((rep & 3UL) == 3UL && (lim & 3UL) != 2U) {
+            if ((rep & 3UL) == 3UL && (lim & 3UL) != 2U && !is_rl[curr_rule]) {
                 pair.write(0, rp_data.seq[i]);
                 pair.write(1, rp_data.seq[i + 1]);
                 auto res = rep_map.insert(pair.data(), pair.n_bits(), 1);
@@ -347,6 +368,7 @@ static void repair_prim_pairs(repair_data& rp_data, priority_queue& p_queue){
             }
             rep <<= 1U;
             lim <<= 1U;
+            if(rp_data.seq_lim[i]) curr_rule++;
         }
 
         size_t freq=0;
@@ -367,13 +389,14 @@ static void repair_prim_pairs(repair_data& rp_data, priority_queue& p_queue){
     }
 
     //store the positions of the repeated pairs
-    rep = rp_data.rep_syms[rp_data.gram_info.sigma]<<1UL;
+    rep = rp_data.rep_syms[rp_data.gram.max_tsym+1] << 1UL;
     lim = 4;// 100
-    for (size_t i = rp_data.gram_info.sigma; i < rp_data.seq.size()-1; i++) {
+    curr_rule=rp_data.gram.max_tsym+1;
+    for (size_t i = rp_data.gram.max_tsym+1; i < rp_data.seq.size() - 1; i++) {
         rep |= rp_data.rep_syms[i+1];
         lim |= rp_data.seq_lim[i+1];
 
-        if((rep & 3UL)==3UL && (lim & 3UL) != 2U){ //==11 repeated symbol
+        if((rep & 3UL)==3UL && (lim & 3UL) != 2U && !is_rl[curr_rule]){ //==11 repeated symbol
 
             pair.write(0, rp_data.seq[i]);
             pair.write(1, rp_data.seq[i+1]);
@@ -392,6 +415,7 @@ static void repair_prim_pairs(repair_data& rp_data, priority_queue& p_queue){
         }
         rep <<= 1U;
         lim <<= 1U;
+        if(rp_data.seq_lim[i]) curr_rule++;
     }
 
     for(auto pt : rp_data.ht){
@@ -460,6 +484,8 @@ static void re_pair_int(repair_data& rp_data){
                 tmp_pair.write(0, rp_data.seq[pos]);
                 tmp_pair.write(1, rp_data.seq[pos+r_dist]);
 
+                //We need to check if the pairs are equals in case the
+                // occurrence was invalidated by other pair replacement
                 if (tmp_pair == curr_pair && !is_rule) {
 
                     //replace the pair with its id
@@ -582,16 +608,13 @@ static void re_pair_int(repair_data& rp_data){
     rp_data.ht.reset();
     sdsl::util::clear(rp_data.rep_syms);
     sdsl::util::clear(rp_data.rep_syms_rs);
-
     update_grammar(rp_data);
 }
 
-static void re_pair(std::string &g_file, sdsl::cache_config &config) {
+void repair(plain_gram_t& p_gram, sdsl::cache_config &config) {
+    std::cout<<"  Running RePair over the grammar's rules"<<std::endl;
     //Load the grammar from file
-    gram_t gram_info;
-    gram_info.load_from_file(g_file);
-    repair_data rp_data{gram_info, config};
+    repair_data rp_data{p_gram, config};
     re_pair_int(rp_data);
-    gram_info.save_to_file(g_file);
 }
 #endif //LMS_COMPRESSOR_PAIRING_ALGORITHMS_H
