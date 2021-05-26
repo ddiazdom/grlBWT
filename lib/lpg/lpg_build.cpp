@@ -184,7 +184,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     run_length_compress(p_gram, config);
 
     //todo llamar a repair aqui
-    p_gram.print_grammar();
+//    p_gram.print_grammar();
 //    p_gram = repair_compress(p_gram,config);
 
     std::cout<<"  Resulting LPG+Repair  grammar:    "<<std::endl;
