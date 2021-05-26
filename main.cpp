@@ -103,6 +103,7 @@ int main(int argc, char** argv) {
         sdsl::load_from_file(g, args.input_file);
 
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
+        std::cout<<"Index name:"<<args.input_file<<std::endl;
         std::set<std::string> patterns_set;
         if (!args.patter_list_file.empty()){
             std::fstream in(args.patter_list_file,std::ios::in);

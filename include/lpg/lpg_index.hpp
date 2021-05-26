@@ -455,7 +455,7 @@ public:
 
         std::cout << "Locate pattern list["<<list.size()<<"]" << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
-        size_t total_occ = 0;
+        size_t total_occ = 0, total_occ_bt = 0;
         for (auto const &pattern : list) {
 #ifdef DEBUG_PRINT
             std::cout << pattern << ":";
@@ -466,9 +466,11 @@ public:
             locate(pattern, occ);
             total_occ += occ.size();
 #ifdef CHECK_OCC
+
             std::cout<<++ii<<"--"<<pattern<<std::endl;
             std::set<size_t> positions;
             bt_search(data,pattern,positions);
+            total_occ_bt += positions.size();
             if(positions != occ){
                 std::cout<<"Locate error\n";
                 std::cout<<"pattern:"<<pattern<<std::endl;
@@ -482,10 +484,7 @@ public:
                     X.resize(it - X.begin());
                     std::cout<<"missing positions["<<X.size()<<"]\n";
                 }
-
-
-
-                return;
+//                return;
             }
 #endif
 
@@ -498,6 +497,7 @@ public:
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         std::cout << "Elap. time (microsec): " << elapsed.count() << std::endl;
         std::cout << "Total occ: " << total_occ << std::endl;
+        std::cout << "Real Total occ: " << total_occ_bt << std::endl;
         double time_per_occ = (double)elapsed.count()/(double)total_occ;
         std::cout << "Time/occ (microsec): " << time_per_occ << std::endl;
         std::cout << "Index size " << sdsl::size_in_bytes(*this) << std::endl;
@@ -1300,9 +1300,14 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
 
 //        std::cout<<partitions.first.size()<<std::endl;
         uint32_t level = partitions.second;
+//        std::cout<<"level:"<<level<<std::endl;
+//        std::cout<<"corte:"<<std::endl;
 //        for (const auto &item : partitions.first) {
-//        size_type tt = 0;
-        for(uint item = 0; item < pattern.size() - 1;++item){
+//            std::cout<<item<<" ";
+//        }
+//        std::cout<<std::endl;
+        for (const auto &item : partitions.first) {
+//        for(uint item = 0; item < pattern.size() - 1;++item){
             //find primary occ
             grid_query range{};
             //range search
