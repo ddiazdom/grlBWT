@@ -1302,7 +1302,7 @@ void lpg_index::compute_grammar_sfx(
 void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  const {
         auto partitions  = compute_pattern_cut(pattern);
 
-        std::cout<<partitions.first.size()<<std::endl;
+//        std::cout<<partitions.first.size()<<std::endl;
         uint32_t level = partitions.second;
 //        std::cout<<"level:"<<level<<std::endl;
 //        std::cout<<"corte:"<<std::endl;
