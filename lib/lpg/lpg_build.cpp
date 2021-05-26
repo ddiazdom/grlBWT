@@ -7,6 +7,7 @@
 #include <sdsl/select_support_mcl.hpp>
 #include "cdt/parallel_string_sort.hpp"
 
+
 //pthread_mutex_t thread_mutex=PTHREAD_MUTEX_INITIALIZER;
 
 void lpg_build::check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp_file) {
@@ -179,6 +180,16 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     run_length_compress(p_gram, config);
+
+    //todo llamar a repair aqui
+    p_gram.print_grammar();
+//    p_gram = repair_compress(p_gram,config);
+
+    std::cout<<"  Resulting LPG+Repair  grammar:    "<<std::endl;
+    std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
+    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
+    std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
+    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
@@ -1298,6 +1309,293 @@ void lpg_build::run_length_compress(lpg_build::plain_grammar_t &p_gram, sdsl::ca
     rename(rl_rules_file.c_str(), p_gram.rules_file.c_str());
     rename(rl_r_lim_file.c_str(), p_gram.rules_lim_file.c_str());
 }
+
+//lpg_build::plain_grammar_t lpg_build::repair_compress(lpg_build::plain_grammar_t &p_gram, sdsl::cache_config &config) {
+//    //build sequence of rules to apply repair
+//    sdsl::int_vector<> rules_buff;
+//    std::ifstream _buf(p_gram.rules_file,std::ios::in);
+//    sdsl::load(rules_buff,_buf);
+//    bvb_t rules_lim_buff(p_gram.rules_lim_file);
+//    bvb_t is_rules_len(p_gram.is_rl_file);
+//    size_t num_rules = p_gram.r;
+//    size_t initial_rule = p_gram.r - 1;
+//    size_t id = 0;
+//
+//    std::string repair_input_buffer_file = sdsl::cache_file_name("repair_input_buffer", config);
+//    std::vector<size_t> repair_input_buffer;
+//
+//    std::vector<size_t> right_hand;
+//    for (size_t i = 0; i < rules_lim_buff.size(); ++i) {
+//            right_hand.push_back(rules_buff[i]);
+//
+//            if(rules_lim_buff[i] == 1 && !is_rules_len[id] && !p_gram.isTerminal(id)){
+//                //write to the buffer
+//                repair_input_buffer.resize(repair_input_buffer.size() + right_hand.size() + 1,0);
+//                std::copy(right_hand.begin(),right_hand.end(),repair_input_buffer.end() - right_hand.size() - 1);
+//                repair_input_buffer[repair_input_buffer.size() - 1 ] = num_rules++;
+//                right_hand.clear();
+//                ++id;
+//            }else{
+//                if(rules_lim_buff[i] == 1){
+//                    right_hand.clear();
+//                    ++id;
+//                }
+//
+//            }
+//    }
+//    right_hand.clear();
+//    //write file RULE_1$1RULE_2$2.....
+//    std::cout<<"REPAIR INPUT("<<repair_input_buffer_file<<")"<<std::endl;
+//
+//    std::fstream fout(repair_input_buffer_file, std::ios::out);
+//    if(!fout.good()) return p_gram;
+//    for (const size_t &c : repair_input_buffer) {
+//        uint32_t  cr = c;
+//        fout.write((const char *) &cr,sizeof (uint32_t));
+//    }
+//    fout.close();
+//    repair_input_buffer.clear();
+//    //apply repair
+//    std::string command_compressing = REPAIR_DIR + repair_input_buffer_file ;
+//    if(system(command_compressing.c_str()) < 0) return p_gram;
+//    //rebuild the grammar...
+//
+//    std::fstream inR(repair_input_buffer_file + ".R", std::ios::in);
+//    std::fstream inC(repair_input_buffer_file + ".C", std::ios::in);
+//
+//    // read Repair rules...
+//    uint32_t maxsigma = 0;
+//    inR.read((char*)&maxsigma,sizeof(int));
+//    uint32_t X,Y,c = 0;
+//    uint32_t delta = num_rules - p_gram.r;
+//
+//    std::unordered_map<size_t,std::pair<size_t,size_t>> RPrules;
+//    while(!inR.eof() && inR.read((char*)&X,sizeof(uint32_t)) && inR.read((char*)&Y,sizeof(uint32_t)))
+//    {
+//        if(X > p_gram.r) X -= delta;
+//        if(Y > p_gram.r) Y -= delta;
+//
+//        RPrules[c+p_gram.r] = std::make_pair(X,Y);
+//        ++c;
+//    }
+//    // read Repair first rule ...
+//    X = 0;
+//    std::vector<std::vector<size_t>> S;
+//    while(!inC.eof() && inC.read((char*)&X,sizeof(uint32_t)))
+//    {
+//        if(X >= p_gram.r && X < num_rules){
+//            //delimitador de regla...
+//            S.push_back(right_hand);
+//            right_hand.clear();
+//        }else{
+//            if(X >= num_rules)
+//                X -= delta;
+//            right_hand.push_back(X);
+//        }
+//    }
+//    right_hand.clear();
+//    //merge rules.....
+//    id = 0;
+//    size_t r_id = 0;
+//    size_t totalSize = 0;
+//    std::map<size_t,std::vector<size_t>> FinalGrammar;
+//    for (size_t i = 0; i < rules_lim_buff.size(); ++i) {
+//        right_hand.push_back(rules_buff[i]);
+//        if(rules_lim_buff[i] == 1){
+//            if(is_rules_len[id] || p_gram.isTerminal(id) ){
+//                FinalGrammar[id] = right_hand;
+//            }
+//            else{
+//                FinalGrammar[id] = S[r_id];
+//                ++r_id;
+//            }
+//            totalSize += right_hand.size();
+//            ++id;
+//            right_hand.clear();
+//        }
+//    }
+//    std::cout<<initial_rule<<std::endl;
+//    S.clear();
+//    for (const auto &r : RPrules) {
+//        std::vector<size_t> rh;
+//        rh.push_back(r.second.first);
+//        rh.push_back(r.second.second);
+//        FinalGrammar[r.first] = rh;
+//    }
+//
+//    totalSize += RPrules.size()*2;
+//    RPrules.clear();
+//
+//
+//
+//    //swap initial rule with last rule...
+//    auto tt = FinalGrammar[initial_rule];
+//    FinalGrammar[initial_rule]= FinalGrammar[FinalGrammar.size()-1];
+//    FinalGrammar[FinalGrammar.size()-1] = tt;
+//    std::map<size_t,size_t> renumerate_rule;
+//    renumerate_rule[initial_rule] = FinalGrammar.size()-1;
+//    renumerate_rule[FinalGrammar.size()-1] =initial_rule;
+//    initial_rule = FinalGrammar.size()-1;
+//    for ( auto &item : FinalGrammar) {
+//        for (size_t i = 0; i < item.second.size(); ++i) {
+//            if(item.second[i] == FinalGrammar.size()-1)
+//                item.second[i] = initial_rule;
+//        }
+//    }
+//
+//
+//    // compute runs and rename the rules to keep the original format rules.....runs....S
+//    sdsl::bit_vector run(initial_rule + 1 ,0);
+//    size_t nzeros = 0;
+//    for (size_t i = 0 ; i < initial_rule; ++i) {
+//        if(i < is_rules_len.size())
+//            run[i] = is_rules_len[i];
+//        if(!run[i])
+//            ++nzeros;
+//    }
+//    std::cout<<"nzeros-"<<nzeros<<std::endl;
+//    size_t cont = 0;
+//    std::map<size_t,size_t> rrename;
+//    // do not rename the initial rule
+//    for (size_t i = 0 ; i < initial_rule; ++i) {
+//        if(run[i] == 1){
+//            rrename[i] = nzeros++;
+//        }
+//        else{
+//            rrename[i] = cont++;
+//        }
+//    }
+//    rrename[initial_rule] = initial_rule;
+//    std::cout<<"Rename"<<std::endl;
+//    for (const auto &item : rrename) {
+//        std::cout<<item.first<<"-"<<item.second<<std::endl;
+//    }
+//    std::map<size_t,std::vector<size_t>> NewFinalGrammar;
+//    for ( auto &item : FinalGrammar) {
+//        for (size_t i = 0; i < item.second.size(); ++i) {
+//                item.second[i] = rrename[item.second[i]];
+//        }
+//        NewFinalGrammar[rrename[item.first]] = item.second;
+//    }
+//    FinalGrammar.clear();
+//    std::function<void (const size_t&, const uint32_t&)> dfs;
+//    sdsl::bit_vector mark(NewFinalGrammar.size(),0);
+//    std::map<uint32_t,size_t> level;
+//    uint32_t max_level = 0;
+//
+//    dfs = [&mark,&dfs,&p_gram,&level,&max_level,&run,&NewFinalGrammar](const size_t &X,const uint32_t &_l){
+//
+//        if(mark[X]) return ;
+//
+//        mark[X] = 1;
+//
+//        if(_l > max_level) max_level = _l;
+//
+//        auto it = level.find(_l);
+//        if(!run[X] && !p_gram.isTerminal(X)){
+//            if(it == level.end())
+//                level[_l] = 1;
+//            else it->second++;
+//        }
+//
+//        if(p_gram.isTerminal(X)) return;
+//
+//        if(run[X]){
+//            for (size_t i = 0; i < NewFinalGrammar[X][1]; ++i) {
+//                dfs(NewFinalGrammar[X][0],_l+1);
+//            }
+//        }
+//        else
+//            for (size_t i = 0; i < NewFinalGrammar[X].size(); ++i)
+//                    dfs(NewFinalGrammar[X][i],_l+1);
+//
+//    };
+//
+//    dfs(initial_rule,0);
+//    std::vector<size_t> _l(level.size(),0);
+//    for (const auto &l : level) _l[max_level - l.first] = l.second;
+//    level.clear();
+//
+//
+//#ifdef CHECK_OCC
+////    std::function<void (const size_t&, std::ofstream&)> dec;
+////    dec = [&p_gram,&FinalGrammar,&run, &dec](const size_t &X,std::ofstream& out){
+////        if(p_gram.isTerminal(X)){
+//////            std::cout<<p_gram.sym_map[X];
+////            uint8_t c = p_gram.sym_map[X];
+////            out.write((const char*)&c,sizeof(uint8_t));
+////        }
+////        else if(run[X]){
+////            for (size_t i = 0; i < FinalGrammar[X][1]; ++i) {
+////                dec(FinalGrammar[X][0],out);
+////            }
+////        }
+////        else
+////            for (size_t i = 0; i < FinalGrammar[X].size(); ++i)
+////                    dec(FinalGrammar[X][i],out);
+////    };
+////    std::string decompresion_repair = sdsl::cache_file_name("decompresion_repair2", config);
+////    std::ofstream out_dec(decompresion_repair,std::ios::out);
+//////    std::cout<<"Text"<<std::endl;
+////    dec(1,out_dec);
+//////    std::cout<<std::endl;
+//#endif
+//    std::cout<<"Size before re-pair compression:"<<p_gram.g<<"\n";
+//    std::cout<<"num-rules before re-pair compression:"<<p_gram.r<<"\n";
+//    std::cout<<"Size after re-pair compression:"<<totalSize<<"\n";
+//    std::cout<<"num-rules after re-pair compression:"<<NewFinalGrammar.size()<<"\n";
+//
+//
+//    lpg_build::plain_grammar_t p_gram_rp;
+//
+//    p_gram_rp.sigma = p_gram.sigma;
+//    p_gram_rp.r = NewFinalGrammar.size();
+//    p_gram_rp.g = totalSize;
+//    p_gram_rp.c = NewFinalGrammar[NewFinalGrammar.size()-1].size();
+//    p_gram_rp.max_tsym = p_gram.max_tsym;
+//    p_gram_rp.sym_map = p_gram.sym_map;
+//    sdsl::int_vector<> rules(totalSize,0);
+//    sdsl::bit_vector limit(totalSize,0);
+//    size_t j = 0;
+//    std::cout<<"New grammar"<<std::endl;
+//    for (const auto &item : NewFinalGrammar) {
+//        std::cout<<item.first<<"->";
+//        for (size_t i = 0; i <item.second.size() ; ++i) {
+//            std::cout<<item.second[i]<<" ";
+//            rules[j++] = item.second[i];
+//        }
+//        std::cout<<std::endl;
+//        limit[j-1] = true;
+//    }
+//
+////    p_gram.print_grammar();
+//
+//    std::ofstream rules_out(p_gram.rules_file,std::ios::out|std::ios::binary);
+//    sdsl::serialize(rules,rules_out);
+//    rules_out.close();
+//    p_gram_rp.rules_file = p_gram.rules_file;
+//    std::ofstream limit_out(p_gram.rules_lim_file,std::ios::out|std::ios::binary);
+//    sdsl::serialize(limit,limit_out);
+//    limit_out.close();
+//    p_gram_rp.rules_lim_file = p_gram.rules_lim_file;
+//
+//    //todo verificar como arreglar la consistencia de esto
+//    p_gram_rp.rules_per_level = _l;//p_gram.rules_per_level;
+//
+//    std::ofstream rl_out(p_gram.is_rl_file,std::ios::out|std::ios::binary);
+//    sdsl::serialize(run,rl_out);
+//    rl_out.close();
+//    p_gram_rp.is_rl_file = p_gram.is_rl_file;
+//
+//    p_gram_rp.lvl_breaks_file = p_gram.lvl_breaks_file;
+//    p_gram_rp.lms_rounds = p_gram.lms_rounds;
+//
+//
+//
+//    p_gram_rp.print_grammar();
+//
+//    return p_gram_rp;
+//}
 
 void lpg_build::plain_grammar_t::save_to_file(std::string& output_file){
 

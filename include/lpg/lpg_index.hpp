@@ -362,6 +362,7 @@ public:
         std::cout << "  Size of the comp. string: " << plain_gram.c << std::endl;
         std::cout << "  Grammar size:             " << plain_gram.g - plain_gram.sigma << std::endl;
 
+
 #ifdef DEBUG_PRINT
         plain_gram.print_grammar();
 #endif
