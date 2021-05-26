@@ -490,7 +490,7 @@ public:
 //                    X.resize(it - X.begin());
 //                    std::cout<<"missing positions["<<X.size()<<"]\n";
 //                }
-////                return;
+//////                return;
 //            }
 
 #endif
@@ -1303,16 +1303,16 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
         auto partitions  = compute_pattern_cut(pattern);
 
 //        std::cout<<partitions.first.size()<<std::endl;
-        uint32_t level = partitions.second;
+//        uint32_t level = partitions.second;
 //        std::cout<<"level:"<<level<<std::endl;
 //        std::cout<<"corte:"<<std::endl;
 //        for (const auto &item : partitions.first) {
 //            std::cout<<item<<" ";
 //        }
 //        std::cout<<std::endl;
-        for (const auto &item : partitions.first) {
-//        uint32_t level = 0;
-//        for(uint item = 0; item < pattern.size() - 1;++item){
+//        for (const auto &item : partitions.first) {
+        uint32_t level = 0;
+        for(uint item = 0; item < pattern.size() - 1;++item){
             //find primary occ
             grid_query range{};
             //range search
