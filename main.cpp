@@ -4,6 +4,24 @@
 #include "third-party/CLI11.hpp"
 #include "lpg/lpg_index.hpp"
 
+
+void generate_random_samples(const std::string &file, const uint32_t& len, const uint32_t& samples){
+    std::string data;
+    utils::readFile(file,data);
+    std::fstream out_f(file + ".ptt."+std::to_string(len),std::ios::out | std::ios::binary);
+    out_f.write((const char*)&len,sizeof (uint32_t));
+    out_f.write((const char*)&samples,sizeof (uint32_t));
+    std::srand(time(nullptr));
+    for (uint32_t i = 0; i < samples ; ++i) {
+        size_t pos = std::rand()%data.size();
+        if(pos + len >= data.size()) pos -= len;
+        std::string ss; ss.resize(len);
+        std::copy(data.begin()+pos,data.begin()+pos+len,ss.begin());
+        out_f.write(ss.c_str(),len);
+    }
+}
+
+
 struct arguments{
     std::string input_file;
     std::string output_file;
@@ -96,11 +114,23 @@ int main(int argc, char** argv) {
 
         std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
+        generate_random_samples(args.input_file,10,1000)  ;
+        generate_random_samples(args.input_file,100,1000) ;
+        generate_random_samples(args.input_file,200,1000) ;
+        generate_random_samples(args.input_file,300,1000) ;
+        generate_random_samples(args.input_file,400,1000) ;
+        generate_random_samples(args.input_file,500,1000) ;
+        generate_random_samples(args.input_file,600,1000) ;
+        generate_random_samples(args.input_file,700,1000) ;
+        generate_random_samples(args.input_file,800,1000) ;
+        generate_random_samples(args.input_file,900,1000) ;
+        generate_random_samples(args.input_file,1000,1000);
 
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
         lpg_index g;
         sdsl::load_from_file(g, args.input_file);
+
 
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
         std::cout<<"Index name:"<<args.input_file<<std::endl;
@@ -109,6 +139,7 @@ int main(int argc, char** argv) {
         if (!args.patter_list_file.empty()){
             std::fstream in(args.patter_list_file,std::ios::in);
             if(in.good()){
+
                 std::string ss;
                 while(in >> ss){
                     if(ss.size() >= 10){
