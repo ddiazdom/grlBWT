@@ -111,8 +111,10 @@ int main(int argc, char** argv) {
             if(in.good()){
                 std::string ss;
                 while(in >> ss){
-                    patterns_set.insert(ss);
-                    patterns.push_back(ss);
+                    if(ss.size() >= 10){
+                        patterns_set.insert(ss);
+                        patterns.push_back(ss);
+                    }
                 }
 #ifdef DEBUG_INFO
                 std::cout<<"Patterns to search["<<patterns_set.size()<<"]"<<std::endl;
@@ -124,8 +126,8 @@ int main(int argc, char** argv) {
             }
         }
 #ifdef CHECK_OCC
-        std::string file; file.resize(args.input_file.size() - 3);
-        std::copy(args.input_file.begin(),args.input_file.end()-3,file.begin());
+        std::string file; file.resize(args.input_file.size() - 4);
+        std::copy(args.input_file.begin(),args.input_file.end()-4,file.begin());
         std::cout<<"file:"<<file<<std::endl;
 #endif
 //        std::cout<<"descomprimiendo gramatica"<<std::endl;

@@ -467,9 +467,9 @@ public:
             total_occ += occ.size();
             total_time+=elapsed;
             
-            std::set<size_t> positions;
-            bt_search(data,pattern,positions);
-            total_occ_bt += positions.size();
+//            std::set<size_t> positions;
+//            bt_search(data,pattern,positions);
+//            total_occ_bt += positions.size();
 
 
 #ifdef CHECK_OCC
