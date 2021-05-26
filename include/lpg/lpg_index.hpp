@@ -459,7 +459,7 @@ public:
 #ifdef DEBUG_PRINT
             std::cout << pattern << ":";
 #endif
-//            std::cout<<++ii<<"--"<<pattern<<std::endl;
+            std::cout<<++ii<<"--"<<pattern<<std::endl;
             auto start = std::chrono::high_resolution_clock::now();
             std::set<size_type> occ;
             locate(pattern, occ);
