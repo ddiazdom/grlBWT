@@ -105,12 +105,14 @@ int main(int argc, char** argv) {
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
         std::cout<<"Index name:"<<args.input_file<<std::endl;
         std::set<std::string> patterns_set;
+        std::vector<std::string> patterns;
         if (!args.patter_list_file.empty()){
             std::fstream in(args.patter_list_file,std::ios::in);
             if(in.good()){
                 std::string ss;
                 while(in >> ss){
                     patterns_set.insert(ss);
+                    patterns.push_back(ss);
                 }
 #ifdef DEBUG_INFO
                 std::cout<<"Patterns to search["<<patterns_set.size()<<"]"<<std::endl;
@@ -121,8 +123,6 @@ int main(int argc, char** argv) {
 
             }
         }
-        std::vector<std::string> patterns(patterns_set.size());
-        std::copy(patterns_set.begin(),patterns_set.end(),patterns.begin());
 #ifdef CHECK_OCC
         std::string file; file.resize(args.input_file.size() - 3);
         std::copy(args.input_file.begin(),args.input_file.end()-3,file.begin());
