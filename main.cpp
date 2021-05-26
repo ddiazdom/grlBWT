@@ -111,15 +111,15 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
 
     if(app.got_subcommand("index")) {
-//        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
-//
-//        if(args.output_file.empty()){
-//            args.output_file = args.input_file;
-//        }
-//        args.output_file = args.output_file+".idx";
-//
-//        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
-//        sdsl::store_to_file(g, args.output_file);
+        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
+
+        if(args.output_file.empty()){
+            args.output_file = args.input_file;
+        }
+        args.output_file = args.output_file+".idx";
+
+        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
+        sdsl::store_to_file(g, args.output_file);
         generate_random_samples(args.input_file,10,1000)  ;
         generate_random_samples(args.input_file,100,1000) ;
         generate_random_samples(args.input_file,200,1000) ;
