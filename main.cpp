@@ -105,15 +105,15 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
 
     if(app.got_subcommand("index")) {
-        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
-
-        if(args.output_file.empty()){
-            args.output_file = args.input_file;
-        }
-        args.output_file = args.output_file+".idx";
-
-        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
-        sdsl::store_to_file(g, args.output_file);
+//        lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
+//
+//        if(args.output_file.empty()){
+//            args.output_file = args.input_file;
+//        }
+//        args.output_file = args.output_file+".idx";
+//
+//        std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
+//        sdsl::store_to_file(g, args.output_file);
         generate_random_samples(args.input_file,10,1000)  ;
         generate_random_samples(args.input_file,100,1000) ;
         generate_random_samples(args.input_file,200,1000) ;
@@ -130,23 +130,25 @@ int main(int argc, char** argv) {
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
         lpg_index g;
         sdsl::load_from_file(g, args.input_file);
-
-
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
         std::cout<<"Index name:"<<args.input_file<<std::endl;
         std::set<std::string> patterns_set;
         std::vector<std::string> patterns;
         if (!args.patter_list_file.empty()){
-            std::fstream in(args.patter_list_file,std::ios::in);
+            std::fstream in(args.patter_list_file,std::ios::in|std::ios::binary);
             if(in.good()){
-
-                std::string ss;
-                while(in >> ss){
-                    if(ss.size() >= 10){
-                        patterns_set.insert(ss);
-                        patterns.push_back(ss);
-                    }
+                uint32_t len, samples;
+                in.read((char *)&len,sizeof (uint32_t));
+                in.read((char *)&samples,sizeof (uint32_t));
+                char *buff = new char[len];
+                for (uint32_t i = 0; i < samples ; ++i) {
+                    in.read(buff,len);
+                    std::string ss;
+                    patterns_set.insert(ss);
+                    patterns.push_back(ss);
                 }
+                delete buff;
+
 #ifdef DEBUG_INFO
                 std::cout<<"Patterns to search["<<patterns_set.size()<<"]"<<std::endl;
 #endif
