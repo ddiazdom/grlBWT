@@ -107,11 +107,24 @@ private:
         std::cout << "rl_compressed," << sizeof(rl_compressed);
     }
 
-    struct parse_data {
-        uint8_t lvl;
-        size_t idx;
+    struct parsing_data {
+        size_t idx{};
         size_t n_lms;
-        bool tail;
+        size_t round=0;
+        bool tail=true;
+        std::vector<uint16_t> lms_pos;
+        std::vector<uint16_t> new_lms_pos;
+        std::vector<size_t> cuts;
+        std::vector<size_t> parse;
+
+        explicit parsing_data(const std::string& pattern){
+            lms_pos.resize(pattern.size());
+            std::iota(lms_pos.begin(), lms_pos.end(), 0);
+            new_lms_pos.resize(lms_pos.size());
+            parse.reserve(pattern.size());
+            for (auto const &sym : pattern) parse.push_back(sym);
+            n_lms = parse.size();
+        }
     };
 
     static alpha_t get_alphabet(std::string &i_file) {
@@ -144,28 +157,38 @@ private:
         return alphabet;
     }
 
+    //returns a boolean that indicates if the first symbol could belong to another phrase
+    // 0 : the first symbol belong to a phrase in parse
+    // 1 : the first symbol belong (or might) to a phrase to the left of the parse
     template<typename proc>
-    static void lms_scan(proc &task, std::vector<size_t> &parse) {
+    static std::pair<uint8_t, size_t> lms_scan(proc &task, std::vector<size_t> &parse) {
+
+        /*for(size_t i=0;i<parse.size();i++){
+            std::cout<<parse[i]<<" ";
+        }
+        std::cout<<""<<std::endl;*/
 
         int_array<size_t> lms_phrase(2, 32);
-        size_t curr_sym, prev_sym, pos;
+        size_t curr_sym, prev_sym,pos, rm_run;
         bool s_type, prev_s_type;
 
         lms_phrase.push_back(parse.back());
         pos = parse.size() - 2;
-        while (pos > 0 && parse[pos] == parse[pos + 1]) {
+        while (parse[pos] == parse[pos + 1]) {
+            if(pos==0) {
+                return {true, 0};
+            }
+            if(pos==1){
+                return {parse[pos-1]<=parse[pos], parse[pos-1]!=parse[pos]};
+            }
+
             lms_phrase.push_back(parse[pos--]);
         }
-        if (pos == 0) return;
-
-        if (parse[pos] < parse[pos + 1]) {
-            prev_s_type = S_TYPE;
-        } else {
-            prev_s_type = L_TYPE;
-        }
-
+        rm_run = pos+1;
+        prev_s_type = parse[pos]<parse[pos+1];
         prev_sym = parse[pos];
         lms_phrase.push_back(prev_sym);
+
         for (size_t i = pos; i-- > 0;) {
             curr_sym = parse[i];
             if (curr_sym < prev_sym) {//S_TYPE type
@@ -187,26 +210,50 @@ private:
             prev_s_type = s_type;
         }
         task(lms_phrase);
+
+        return {prev_s_type==S_TYPE, rm_run};
+    }
+
+    static void extract_cuts(parsing_data& p_data, std::pair<uint8_t, size_t>& lms_data){
+
+        //the first text position is either S-type or the first symbol of the original text
+        if(lms_data.first || p_data.round==0) p_data.cuts.push_back(p_data.lms_pos[0]);
+
+        //check if the prefix in the text is a run.
+        // If so, create a cut in the after the rightmost symbol of that run
+        if(p_data.round==0){
+            size_t pos = 0;
+            while(pos<p_data.parse.size()-1 && p_data.parse[pos]==p_data.parse[pos+1]) pos++;
+            if(pos>0 && pos<p_data.parse.size()-1) p_data.cuts.push_back(p_data.lms_pos[pos]);
+        }
+
+        //cuts for the leftmost and rightmost
+        // incomplete phrases
+        if(p_data.n_lms>0){
+            p_data.cuts.push_back(p_data.new_lms_pos[p_data.n_lms-1]);
+            if(p_data.n_lms>1){
+                //TODO: we can discard this cut if we determine that the last
+                // phrase in the text is LMS
+                p_data.cuts.push_back(p_data.new_lms_pos[0]);
+            }
+        }
+
+        //when the suffix of the text is a run, and the
+        // symbol before that run is L-type, then create
+        // a cut after the leftmost symbol of that run
+        if(lms_data.second<p_data.parse.size()-1 &&
+           lms_data.second>0 &&
+           p_data.parse[lms_data.second-1]>p_data.parse[lms_data.second] &&
+           (p_data.cuts.empty() || p_data.cuts.back()!=p_data.lms_pos[lms_data.second])){
+            p_data.cuts.push_back(p_data.lms_pos[lms_data.second]);
+        }
     }
 
 public:
 
-    std::pair<std::vector<size_t>, uint8_t> compute_pattern_cut(const std::string &pattern) const {
+    std::pair<std::vector<size_t>, uint8_t> compute_pattern_cuts(const std::string &pattern) const {
 
-        std::vector<size_t> parse;
-
-        //positions in pattern that will be
-        // tried out in the grid
-        std::vector<size_t> cuts ={0};
-
-        std::vector<uint16_t> lms_pos(pattern.size());
-        std::iota(lms_pos.begin(), lms_pos.end(), 0);
-
-        parse.reserve(pattern.size());
-        for (auto const &sym : pattern) parse.push_back(sym);
-
-        parse_data p_data{};
-        p_data.n_lms = parse.size();
+        parsing_data p_data(pattern);
 
         //hash table to hash the LMS phrases
         bit_hash_table<size_t, 44> ht;
@@ -224,8 +271,7 @@ public:
 
             if (p_data.idx > phrase.size()) {
                 p_data.idx -= phrase.size();
-                p_data.n_lms++;
-                lms_pos[lms_pos.size()-p_data.n_lms] = lms_pos[p_data.idx];
+                p_data.new_lms_pos[p_data.n_lms++] = p_data.lms_pos[p_data.idx];
             }
         };
 
@@ -237,32 +283,59 @@ public:
                 phrase.mask_tail();
                 auto res = ht.find(phrase.data(), phrase.n_bits());
                 assert(res.second);
-                parse[p_data.idx--] = res.first.value();
+                p_data.parse[p_data.idx--] = res.first.value();
                 p_data.n_lms--;
             }
         };
 
+        //uint8_t p_round=0;
+
         //hash the LMS phrases in the text
         while (true) {
 
-            if(p_data.lvl>parsing_rounds){//the pattern is longer than the text
+            //the pattern is longer than the text
+            if(p_data.round>parsing_rounds){
                 return {{},parsing_rounds};
             }
 
-            assert(parse.size() > 1);
-            p_data.idx = parse.size() - 1;
+            assert(p_data.parse.size() > 1);
+            p_data.idx = p_data.parse.size() - 1;
             p_data.n_lms = 0;
             p_data.tail = true;
 
-            lms_scan(hash_task, parse);
+            auto lms_data = lms_scan(hash_task, p_data.parse);
 
-            if (p_data.n_lms < 3) {//report the cuts
-                if(p_data.n_lms>0){
-                    cuts.push_back(lms_pos[lms_pos.size()-p_data.n_lms]);
-                }else{
-                    //TODO here I should include the first symbol in case it is S-type
+            if (p_data.n_lms < 4) {//report the cuts
+                /*
+                //parse[0] is either S-type or the first symbol of the pattern
+                if(lms_data.first || p_data.round==0) p_data.cuts.push_back(p_data.lms_pos[0]);
+                //check if the prefix in the text is a run.
+                // If so, create a cut in the after the rightmost symbol of that run
+                if(p_data.round==0){
+                    size_t pos = 0;
+                    while(pos<p_data.parse.size()-1 && p_data.parse[pos]==p_data.parse[pos+1]) pos++;
+                    if(pos>0 && pos<p_data.parse.size()-1) p_data.cuts.push_back(p_data.lms_pos[pos]);
                 }
-                return {cuts, p_data.lvl};
+                //cuts for the leftmost and rightmost
+                // incomplete phrases
+                if(p_data.n_lms>0){
+                    p_data.cuts.push_back(p_data.new_lms_pos[p_data.n_lms-1]);
+                    if(p_data.n_lms>1){
+                        p_data.cuts.push_back(p_data.new_lms_pos[0]);
+                    }
+                }
+                //when the suffix of the text is a run, and the
+                // symbol before that run is L-type, then create
+                // a cut after the leftmost symbol of that run
+                if(lms_data.second<p_data.parse.size()-1 &&
+                   lms_data.second>0 &&
+                   p_data.parse[lms_data.second-1]>p_data.parse[lms_data.second] &&
+                   (p_data.cuts.empty() || p_data.cuts.back()!=p_data.lms_pos[lms_data.second])){
+                    p_data.cuts.push_back(p_data.lms_pos[lms_data.second]);
+                }*/
+                extract_cuts(p_data, lms_data);
+                return {p_data.cuts, p_data.round};
+
             } else {
                 //assign ranks to the LMS phrases
                 {
@@ -285,15 +358,43 @@ public:
                 }
 
                 p_data.tail = true;
-                p_data.idx = parse.size() - 1;
-                cuts.push_back(lms_pos[lms_pos.size()-p_data.n_lms]);
-                lms_pos.erase(lms_pos.begin(), lms_pos.end()-p_data.n_lms+1);
+                p_data.idx = p_data.parse.size() - 1;
 
-                lms_scan(parse_task, parse);
-                parse.erase(parse.begin(), parse.begin() + p_data.idx + 1);
+                /*
+                //parse[0] is either S-type or the first symbol of the pattern
+                if(lms_data.first || p_data.round==0) p_data.cuts.push_back(p_data.lms_pos[0]);
+
+                //cuts for the leftmost and rightmost
+                // incomplete phrases
+                if(p_data.round==0){
+                    size_t pos=0;
+                    while(pos<p_data.parse.size()-1 && p_data.parse[pos]==p_data.parse[pos+1]) pos++;
+                    if(pos>0 && pos<p_data.parse.size()-1) p_data.cuts.push_back(p_data.lms_pos[pos]);
+                }
+
+                p_data.cuts.push_back(p_data.new_lms_pos[p_data.n_lms-1]);
+                p_data.cuts.push_back(p_data.new_lms_pos[0]);
+
+                //when the suffix of the text is a run, and the
+                // symbol before that run is L-type, then create
+                // a cut after the leftmost symbol of that run
+                if(lms_data.second<p_data.parse.size()-1 &&
+                   lms_data.second>0 &&
+                   p_data.parse[lms_data.second-1]>p_data.parse[lms_data.second] &&
+                   p_data.cuts.back()!=p_data.lms_pos[lms_data.second]){
+                    p_data.cuts.push_back(p_data.lms_pos[lms_data.second]);
+                }*/
+                extract_cuts(p_data, lms_data);
+
+                p_data.new_lms_pos.resize(p_data.n_lms-1);
+                std::reverse(p_data.new_lms_pos.begin(), p_data.new_lms_pos.end());
+                std::swap(p_data.new_lms_pos, p_data.lms_pos);
+
+                lms_scan(parse_task, p_data.parse);
+                p_data.parse.erase(p_data.parse.begin(), p_data.parse.begin() + p_data.idx + 1);
             }
             ht.flush();
-            p_data.lvl++;
+            p_data.round++;
         }
     }
 
@@ -1300,7 +1401,7 @@ void lpg_index::compute_grammar_sfx(
 }
 
 void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  const {
-        auto partitions  = compute_pattern_cut(pattern);
+        auto partitions  = compute_pattern_cuts(pattern);
 
 //        std::cout<<partitions.first.size()<<std::endl;
         uint32_t level = partitions.second;
@@ -1310,8 +1411,8 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
 //            std::cout<<item<<" ";
 //        }
 //        std::cout<<std::endl;
-//        for (const auto &item : partitions.first) {
-        for(uint item = 0; item < pattern.size() - 1;++item){
+        for (const auto &item : partitions.first) {
+//        for(uint item = 0; item < pattern.size() - 1;++item){
             //find primary occ
             grid_query range{};
             //range search
@@ -1319,6 +1420,7 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
                 std::vector<utils::primaryOcc> pOcc;
                 // grid search
                 grid_search(range,item + 1,pattern.size(),level,pOcc);
+
                 // find secondary occ
                 for (const auto &occ : pOcc) {
                     find_secondary_occ(occ,pos);
