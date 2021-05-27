@@ -120,17 +120,17 @@ int main(int argc, char** argv) {
 
         std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
-        generate_random_samples(args.input_file,10,1000)  ;
-        generate_random_samples(args.input_file,100,1000) ;
-        generate_random_samples(args.input_file,200,1000) ;
-        generate_random_samples(args.input_file,300,1000) ;
-        generate_random_samples(args.input_file,400,1000) ;
-        generate_random_samples(args.input_file,500,1000) ;
-        generate_random_samples(args.input_file,600,1000) ;
-        generate_random_samples(args.input_file,700,1000) ;
-        generate_random_samples(args.input_file,800,1000) ;
-        generate_random_samples(args.input_file,900,1000) ;
-        generate_random_samples(args.input_file,1000,1000);
+//        generate_random_samples(args.input_file,10,1000)  ;
+//        generate_random_samples(args.input_file,100,1000) ;
+//        generate_random_samples(args.input_file,200,1000) ;
+//        generate_random_samples(args.input_file,300,1000) ;
+//        generate_random_samples(args.input_file,400,1000) ;
+//        generate_random_samples(args.input_file,500,1000) ;
+//        generate_random_samples(args.input_file,600,1000) ;
+//        generate_random_samples(args.input_file,700,1000) ;
+//        generate_random_samples(args.input_file,800,1000) ;
+//        generate_random_samples(args.input_file,900,1000) ;
+//        generate_random_samples(args.input_file,1000,1000);
 
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
