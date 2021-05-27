@@ -134,19 +134,19 @@ int main(int argc, char** argv) {
 //        if(!utils::compareFiles(args.input_file + ".ucmp",file))
 //            std::cout<<"ERROR GRAMMAR DOES NOT REPRESENT THE TEXT\n";
 
-        for(auto const& pattern : patterns){
+        /*for(auto const& pattern : patterns){
             std::cout<<pattern<<std::endl;
             auto cuts = g.compute_pattern_cuts(pattern);
             for(unsigned long j : cuts.first){
                 std::cout<<j<<std::endl;
             }
-        }
-        /*std::cout<<"Searching for the patterns "<<std::endl;
+        }*/
+        std::cout<<"Searching for the patterns "<<std::endl;
         g.search(patterns
 #ifdef CHECK_OCC
                  ,file
 #endif
-                 );*/
+                 );
         //g.search(args.patterns);
         //g.search(args.patter_list_file);
     }
