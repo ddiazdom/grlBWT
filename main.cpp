@@ -177,7 +177,7 @@ int main(int argc, char** argv) {
 
         /*for(auto const& pattern : patterns){
             std::cout<<pattern<<std::endl;
-            auto cuts = g.compute_pattern_cut(pattern);
+            auto cuts = g.compute_pattern_cuts(pattern);
             for(unsigned long j : cuts.first){
                 std::cout<<j<<std::endl;
             }
