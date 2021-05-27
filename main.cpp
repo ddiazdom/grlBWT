@@ -4,6 +4,30 @@
 #include "third-party/CLI11.hpp"
 #include "lpg/lpg_index.hpp"
 
+
+void generate_random_samples(const std::string &file, const uint32_t& len, const uint32_t& samples){
+    std::string data;
+    utils::readFile(file,data);
+    std::fstream out_f(file + ".ptt."+std::to_string(len),std::ios::out | std::ios::binary);
+    out_f.write((const char*)&len,sizeof (uint32_t));
+    out_f.write((const char*)&samples,sizeof (uint32_t));
+    std::srand(time(nullptr));
+    uint32_t i = 0;
+    std::set<std::string> M;
+    while (i < samples){
+        size_t pos = std::rand()%data.size();
+        if(pos + len >= data.size()) pos -= len;
+        std::string ss; ss.resize(len);
+        std::copy(data.begin()+pos,data.begin()+pos+len,ss.begin());
+        if(M.find(ss) == M.end()){
+            M.insert(ss);
+            out_f.write(ss.c_str(),len);
+            i++;
+        }
+    }
+}
+
+
 struct arguments{
     std::string input_file;
     std::string output_file;
@@ -96,24 +120,42 @@ int main(int argc, char** argv) {
 
         std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
+        generate_random_samples(args.input_file,10,1000)  ;
+        generate_random_samples(args.input_file,100,1000) ;
+        generate_random_samples(args.input_file,200,1000) ;
+        generate_random_samples(args.input_file,300,1000) ;
+        generate_random_samples(args.input_file,400,1000) ;
+        generate_random_samples(args.input_file,500,1000) ;
+        generate_random_samples(args.input_file,600,1000) ;
+        generate_random_samples(args.input_file,700,1000) ;
+        generate_random_samples(args.input_file,800,1000) ;
+        generate_random_samples(args.input_file,900,1000) ;
+        generate_random_samples(args.input_file,1000,1000);
 
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
         lpg_index g;
         sdsl::load_from_file(g, args.input_file);
-
         std::cout<<"Index size:"<<sdsl::size_in_bytes(g)<<std::endl;
         std::cout<<"Index name:"<<args.input_file<<std::endl;
         std::set<std::string> patterns_set;
         std::vector<std::string> patterns;
         if (!args.patter_list_file.empty()){
-            std::fstream in(args.patter_list_file,std::ios::in);
+            std::fstream in(args.patter_list_file,std::ios::in|std::ios::binary);
             if(in.good()){
-                std::string ss;
-                while(in >> ss){
+                uint32_t len, samples;
+                in.read((char *)&len,sizeof (uint32_t));
+                in.read((char *)&samples,sizeof (uint32_t));
+                char *buff = new char[len];
+                for (uint32_t i = 0; i < samples ; ++i) {
+                    in.read(buff,len);
+                    std::string ss;ss.resize(len);
+                    std::copy(buff,buff+len,ss.begin());
                     patterns_set.insert(ss);
                     patterns.push_back(ss);
                 }
+                delete buff;
+
 #ifdef DEBUG_INFO
                 std::cout<<"Patterns to search["<<patterns_set.size()<<"]"<<std::endl;
 #endif
@@ -124,9 +166,8 @@ int main(int argc, char** argv) {
             }
         }
 #ifdef CHECK_OCC
-        std::string file;
-        file.resize(args.input_file.size() - 3);
-        std::copy(args.input_file.begin(),args.input_file.end()-3,file.begin());
+        std::string file; file.resize(args.input_file.size() - 4);
+        std::copy(args.input_file.begin(),args.input_file.end()-4,file.begin());
         std::cout<<"file:"<<file<<std::endl;
 #endif
 //        std::cout<<"descomprimiendo gramatica"<<std::endl;
