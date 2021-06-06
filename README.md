@@ -44,5 +44,5 @@ make
 ./lpg search sample_file.txt.idx -F pattern_list.txt -p "test pattern"
 ```
 
-The variable **sample_file.txt.idx** is the index created in the previous step and *pattern_list.txt* is a plain text file with a list of patterns separated by a new line
+The variable **sample_file.txt.idx** is the index created in the previous step and **pattern_list.txt** is a plain text file with a list of patterns separated by a new line
 
