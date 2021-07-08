@@ -18,8 +18,7 @@ As a result, we obtain a self-index that searches in time $O((m\log m+occ) \log 
 The xxHash library is already included in the source files. We include a CMake module that will search for
 the local installation of the SDSL-library. No need to indicate the path during the compilation.
 
-**Important** : before installing the SDSL-lite, you need to make the following classes public:
-
+** Important **: You must overwrite some original files from the sdsl-lib library with the ones in the sdsl-files folder.
 
 ## Installation
 
