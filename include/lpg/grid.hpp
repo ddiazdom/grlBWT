@@ -52,7 +52,13 @@ public:
     typedef grid_point                                     point;
     typedef grid_query                                     query;
     typedef size_t                                     size_type;
-    typedef sdsl::wt_int<>                                  wt_s;
+    typedef sdsl::rrr_vector<>                             wt_bv;
+    typedef sdsl::wt_int<
+            wt_bv,
+            wt_bv::rank_1_type,
+            wt_bv::select_1_type,
+            wt_bv::select_0_type
+            >                                               wt_s;
     typedef sdsl::rrr_vector<>                              bv_x;
     typedef sdsl::int_vector<>                                vi;
 
