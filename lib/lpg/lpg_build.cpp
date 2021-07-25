@@ -187,7 +187,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     run_length_compress(p_gram, config);
-    repair(p_gram, config);
+//    repair(p_gram, config);
 
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
@@ -201,7 +201,7 @@ void lpg_build::compute_LPG(std::string &i_file, std::string &p_gram_file, size_
     p_gram.save_to_file(p_gram_file);
 
     //TODO testing
-    check_plain_grammar(p_gram, i_file);
+//    check_plain_grammar(p_gram, i_file);
     //
 
     std::cout <<"  Final grammar: " << std::endl;

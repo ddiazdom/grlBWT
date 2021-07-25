@@ -1354,7 +1354,7 @@ void lpg_index::compute_grammar_sfx(
 
 void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  const {
         auto partitions  = compute_pattern_cuts(pattern);
-        std::cout<<pattern<<std::endl;
+//        std::cout<<pattern<<std::endl;
 
 //        std::cout<<partitions.first.size()<<std::endl;
         uint32_t level = partitions.second;
@@ -1375,9 +1375,9 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
                 // grid search
                 grid_search(range,item + 1,pattern.size(),level,pOcc);
 
-                if(!pOcc.empty()){
-                    std::cout<<item<<std::endl;
-                }
+  //              if(!pOcc.empty()){
+    //                std::cout<<item<<std::endl;
+      //          }
 
                 // find secondary occ
                 for (const auto &occ : pOcc) {

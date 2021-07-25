@@ -47,7 +47,11 @@ public:
 };
 
 static void parse_app(CLI::App& app, struct arguments& args){
-    auto fmt = std::make_shared<MyFormatter>();
+    
+
+	std::cout<<"WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW\n";
+	
+	auto fmt = std::make_shared<MyFormatter>();
 
     fmt->column_width(23);
     app.formatter(fmt);
@@ -99,11 +103,15 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.require_subcommand(1);
 
     app.footer("By default, lpg_index will compress FILE if -c,-d or -b are not set\n\nReport bugs to <diediaz@dcc.uchile.cl>");
+
+    std::cout<<"AAAAAAAAAAAAAAAAAAAA\n";
 }
 
 int main(int argc, char** argv) {
 
-    arguments args;
+	std::cout<<"XXXXXXXXXXXXXXXXXXXXXXXx"<<std::endl;
+    
+	arguments args;
 
     CLI::App app("A grammar-based self-index");
     parse_app(app, args);
@@ -116,21 +124,21 @@ int main(int argc, char** argv) {
         if(args.output_file.empty()){
             args.output_file = args.input_file;
         }
-        args.output_file = args.output_file+".idx";
+        args.output_file = args.output_file+".rrr-idx";
 
         std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
-//        generate_random_samples(args.input_file,10,1000)  ;
-//        generate_random_samples(args.input_file,100,1000) ;
-//        generate_random_samples(args.input_file,200,1000) ;
-//        generate_random_samples(args.input_file,300,1000) ;
-//        generate_random_samples(args.input_file,400,1000) ;
-//        generate_random_samples(args.input_file,500,1000) ;
-//        generate_random_samples(args.input_file,600,1000) ;
-//        generate_random_samples(args.input_file,700,1000) ;
-//        generate_random_samples(args.input_file,800,1000) ;
-//        generate_random_samples(args.input_file,900,1000) ;
-//        generate_random_samples(args.input_file,1000,1000);
+        //generate_random_samples(args.input_file,10 ,1000)  ;
+        //generate_random_samples(args.input_file,100,1000) ;
+	//generate_random_samples(args.input_file,200,1000) ;
+        //generate_random_samples(args.input_file,300,1000) ;
+        //generate_random_samples(args.input_file,400,1000) ;
+        //generate_random_samples(args.input_file,500,1000) ;
+        //generate_random_samples(args.input_file,600,1000) ;
+        //generate_random_samples(args.input_file,700,1000) ;
+        //generate_random_samples(args.input_file,800,1000) ;
+        //generate_random_samples(args.input_file,900,1000) ;
+        //generate_random_samples(args.input_file,1000,1000);
 
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
@@ -148,7 +156,8 @@ int main(int argc, char** argv) {
                 in.read((char *)&samples,sizeof (uint32_t));
                 char *buff = new char[len];
                 for (uint32_t i = 0; i < samples ; ++i) {
-                    in.read(buff,len);
+		//	std::cout<<i<<" "<<len<<std::endl;
+			in.read(buff,len);
                     std::string ss;ss.resize(len);
                     std::copy(buff,buff+len,ss.begin());
                     patterns_set.insert(ss);
@@ -183,12 +192,23 @@ int main(int argc, char** argv) {
             }
         }*/
         std::cout<<"Searching for the patterns "<<std::endl;
-        g.search(patterns
+        //g.search(patterns
 #ifdef CHECK_OCC
-                 ,file
+          //       ,file
 #endif
-                 );
-        //g.search(args.patterns);
+            //     );
+        
+	 if(patterns.empty()){
+	                 std::cout<<"Empty list()\n";
+		        }else{
+
+		            g.search(patterns
+#ifdef CHECK_OCC
+			                    ,file
+#endif
+			            );
+	        }		    
+	//g.search(args.patterns);
         //g.search(args.patter_list_file);
     }
     return 0;
