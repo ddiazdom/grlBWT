@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
 	                 std::cout<<"Empty list()\n";
 		        }else{
 
-		            g.search(patterns
+		            g.search_split_time(patterns
 #ifdef CHECK_OCC
 			                    ,file
 #endif
