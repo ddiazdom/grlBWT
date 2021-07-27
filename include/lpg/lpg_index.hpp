@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <iostream>
 #include <cstdlib>
+#include <mem_monitor/mem_monitor.hpp>
 #include "lpg_build.hpp"
 #include "grammar_tree.hpp"
 #include "grid.hpp"
@@ -367,6 +368,9 @@ public:
 
     lpg_index(std::string &input_file, std::string &tmp_folder, size_t n_threads, float hbuff_frac) {
 
+        mem_monitor mem(input_file + "-mem.csv");
+        std::cout<<"measuring peak memory\n";
+        mem.event("LPG-BUILD-GRAMMAR");
         std::cout << "Input file: " << input_file << std::endl;
         if (!just_one_zero(input_file)) {
             std::cout << "More than one zero error" << std::endl;
@@ -400,33 +404,40 @@ public:
         //maximum amount of RAM allowed to spend in parallel for the hashing step
         auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(n_chars) * hbuff_frac)));
 
+
         std::cout << "Computing the grammar for the self-index" << std::endl;
         auto start = std::chrono::high_resolution_clock::now();
         lpg_build::compute_LPG(input_file, g_file, n_threads, config, hbuff_size, alphabet);
         auto end = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        std::cout << "  Elap. time (microsec): " << elapsed.count() << std::endl;
+        auto elapsed_grammar = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "  Elap. time (microsec): " << elapsed_grammar.count() << std::endl;
 
         //plain representation of the grammar
         plain_grammar_t plain_gram;
         plain_gram.load_from_file(g_file);
 
-
 #ifdef DEBUG_PRINT
         plain_gram.print_grammar();
 #endif
 
+        mem.event("LPG-BUILD-INDEX");
         std::cout << "Building the self-index" << std::endl;
         start = std::chrono::high_resolution_clock::now();
         build_index(input_file, plain_gram, n_chars, config);
         end = std::chrono::high_resolution_clock::now();
-        elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        std::cout << "  Elap. time (microsec): " << elapsed.count() << std::endl;
+        auto elapsed_index = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "  Elap. time (microsec): " << elapsed_index.count() << std::endl;
         double text_size = grammar_tree.get_text_len();
         double index_size = sdsl::size_in_bytes(*this);
         std::cout << "  Index size(bytes) " << sdsl::size_in_bytes(*this) << std::endl;
         std::cout << "  Text size(bytes) " << grammar_tree.get_text_len() << std::endl;
         std::cout << "  (bits/sym) " << index_size * 8 /text_size << std::endl;
+
+        std::ofstream csv_file;
+        csv_file.open (input_file + "build-time.csv");
+        csv_file << "name,time-grammar,time-index\n";
+        csv_file << "LPG-INDEX-RRR,"+std::to_string(elapsed_grammar.count())+","+std::to_string(elapsed_index.count())+"\n";
+
 
     }
 

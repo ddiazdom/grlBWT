@@ -119,6 +119,7 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
 
     if(app.got_subcommand("index")) {
+
         lpg_index g(args.input_file, args.tmp_dir, args.n_threads, args.hbuff_frac);
 
         if(args.output_file.empty()){
@@ -128,17 +129,18 @@ int main(int argc, char** argv) {
 
         std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
-        //generate_random_samples(args.input_file,10 ,1000)  ;
-        //generate_random_samples(args.input_file,100,1000) ;
-	//generate_random_samples(args.input_file,200,1000) ;
-        //generate_random_samples(args.input_file,300,1000) ;
-        //generate_random_samples(args.input_file,400,1000) ;
-        //generate_random_samples(args.input_file,500,1000) ;
-        //generate_random_samples(args.input_file,600,1000) ;
-        //generate_random_samples(args.input_file,700,1000) ;
-        //generate_random_samples(args.input_file,800,1000) ;
-        //generate_random_samples(args.input_file,900,1000) ;
-        //generate_random_samples(args.input_file,1000,1000);
+
+        generate_random_samples(args.input_file,900,1000) ;
+        generate_random_samples(args.input_file,1000,1000) ;
+	    generate_random_samples(args.input_file,2000,1000) ;
+        generate_random_samples(args.input_file,3000,1000) ;
+        generate_random_samples(args.input_file,4000,1000) ;
+        generate_random_samples(args.input_file,5000,1000) ;
+        generate_random_samples(args.input_file,6000,1000) ;
+        generate_random_samples(args.input_file,7000,1000) ;
+        generate_random_samples(args.input_file,8000,1000) ;
+        generate_random_samples(args.input_file,9000,1000) ;
+        generate_random_samples(args.input_file,10000,1000);
 
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
@@ -179,28 +181,11 @@ int main(int argc, char** argv) {
         std::copy(args.input_file.begin(),args.input_file.end()-4,file.begin());
         std::cout<<"file:"<<file<<std::endl;
 #endif
-//        std::cout<<"descomprimiendo gramatica"<<std::endl;
-//        g.uncompress_grammar(args.input_file + ".ucmp");
-//        if(!utils::compareFiles(args.input_file + ".ucmp",file))
-//            std::cout<<"ERROR GRAMMAR DOES NOT REPRESENT THE TEXT\n";
 
-        /*for(auto const& pattern : patterns){
-            std::cout<<pattern<<std::endl;
-            auto cuts = g.compute_pattern_cuts(pattern);
-            for(unsigned long j : cuts.first){
-                std::cout<<j<<std::endl;
-            }
-        }*/
         std::cout<<"Searching for the patterns "<<std::endl;
-        //g.search(patterns
-#ifdef CHECK_OCC
-          //       ,file
-#endif
-            //     );
-        
+
 	 if(patterns.empty()){
-	                 std::cout<<"Empty list()\n";
-		        }else{
+	            }else{
 
 		            g.search_split_time(patterns
 #ifdef CHECK_OCC
