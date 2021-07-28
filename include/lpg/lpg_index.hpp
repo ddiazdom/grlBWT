@@ -151,6 +151,7 @@ public:
                     if( n_lms < 4 ){
                         cuts.push_back(new_lms_pos[1]);
                     }
+
                     cuts.push_back(new_lms_pos[0]);
                 }
             }
@@ -235,7 +236,13 @@ public:
         prev_sym = parse[pos];
         lms_phrase.push_back(prev_sym);
 
+        std::cout<<"lms_scan:parse"<<std::endl;
+        for (const auto &item : parse) {
+            std::cout<<item<<" ";
+        }
+        std::cout<<std::endl;
         for (size_t i = pos; i-- > 0;) {
+            std::cout<<parse[i]<<std::endl;
             curr_sym = parse[i];
             if (curr_sym < prev_sym) {//S_TYPE type
                 s_type = S_TYPE;
@@ -244,6 +251,7 @@ public:
             } else {//L_TYPE type
                 s_type = L_TYPE;
                 if (prev_s_type == S_TYPE) {//LMS-type
+                    std::cout<<prev_sym<<std::endl;
                     lms_phrase.pop_back();
                     task(lms_phrase);
                     lms_phrase.clear();
@@ -307,8 +315,19 @@ public:
             p_data.n_lms = 0;
             p_data.tail = true;
 
+            std::cout<<"before:lms_scan:lms_pos"<<std::endl;
+            for (const auto &item : p_data.lms_pos) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
+
             auto lms_data = lms_scan(hash_task, p_data.parse);
 
+            std::cout<<"after:lms_scan:lms_pos"<<std::endl;
+            for (const auto &item : p_data.new_lms_pos) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
 
             if (p_data.n_lms < 4) {
                 //report the cuts
@@ -341,7 +360,21 @@ public:
                 //create the new parse
                 p_data.tail = true;
                 p_data.idx = p_data.parse.size() - 1;
+
+                std::cout<<"before:lms_scan:lms_pos"<<std::endl;
+                for (const auto &item : p_data.lms_pos) {
+                    std::cout<<item<<" ";
+                }
+                std::cout<<std::endl;
+
                 lms_scan(parse_task, p_data.parse);
+
+                std::cout<<"after:lms_scan:lms_pos"<<std::endl;
+                for (const auto &item : p_data.new_lms_pos) {
+                    std::cout<<item<<" ";
+                }
+                std::cout<<std::endl;
+
                 p_data.parse.erase(p_data.parse.begin(), p_data.parse.begin() + p_data.idx + 1);
             }
             ht.flush();
@@ -1024,6 +1057,7 @@ public:
         if (!utils::upper_bound(col_1, col_2, cmp_suffix_grammar_rule)) return false;
         q.col2 = col_2;
         //search suffixes
+
         return true;
     }
 
@@ -1322,6 +1356,32 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
                 // grid search
                 grid_search(range,item + 1,pattern.size(),level,pOcc);
                 // find secondary occ
+
+
+                if( item == 6 ){
+                    for (const auto &p : pOcc) {
+                        auto node = grammar_tree.getT().operator[](p.preorder);
+                        auto f = [this](const size_type& node){
+
+                            size_type preorder = grammar_tree.getT().pre_order(node);
+                            size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
+                            std::cout<<X<<"["<<preorder<<"]:->"<< std::endl;
+                            size_type n = grammar_tree.getT().children(node);
+
+                            for (uint64_t i = 1; i <= n; ++i){
+
+                                size_type node_ch = grammar_tree.getT().child(node,i);
+                                size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
+                                X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
+                                std::cout<<X<<"["<<pre_node_ch<<"]"<<std::endl;
+
+                            }
+                            return true;
+                        };
+                        grammar_tree.getT().dfs_preorder(node,f);
+                    }
+                }
+
                 for (const auto &occ : pOcc) {
                     find_secondary_occ(occ,pos);
                 }

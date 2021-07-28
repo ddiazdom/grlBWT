@@ -171,7 +171,7 @@ public:
     template<typename K>
     void dfs_preorder(const size_type &node, const K &f) const {
 
-        auto keep = f(node, this);
+        auto keep = f(node);
         if (!keep)
             return;
         size_type n = children(node);
