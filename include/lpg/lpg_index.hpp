@@ -16,7 +16,7 @@
 
 class lpg_index {
 
-private:
+public:
     typedef sdsl::sd_vector<> bv_y;
     typedef typename lpg_build::plain_grammar_t plain_grammar_t;
     typedef typename lpg_build::alpha_t alpha_t;
@@ -129,29 +129,33 @@ private:
 
         void extract_cuts(std::pair<uint8_t, size_t>& lms_data){
 
-            //the first text position is either S-type or the first symbol of the original text
+            // the first text position is either S-type or the first symbol of the original text
             if(lms_data.first || round==0) cuts.push_back(lms_pos[0]);
 
-            //check if the prefix in the text is a run.
+            // check if the prefix in the text is a run.
             // If so, create a cut in the after the rightmost symbol of that run
             if(round==0){
                 size_t pos = 0;
                 while(pos<parse.size()-1 && parse[pos]==parse[pos+1]) pos++;
                 if(pos>0 && pos<parse.size()-1) cuts.push_back(lms_pos[pos]);
             }
-
-            //cuts for the leftmost and rightmost
+            // cuts for the leftmost and rightmost
             // incomplete phrases
+
             if(n_lms>0){
                 cuts.push_back(new_lms_pos[n_lms-1]);
                 if(n_lms>1){
                     //TODO: we can discard this cut if we determine that the last
                     // phrase in the text is LMS
+
+                    if( n_lms < 4 ){
+                        cuts.push_back(new_lms_pos[1]);
+                    }
                     cuts.push_back(new_lms_pos[0]);
                 }
             }
 
-            //when the suffix of the text is a run, and the
+            // when the suffix of the text is a run, and the
             // symbol before that run is L-type, then create
             // a cut after the leftmost symbol of that run
             if(lms_data.second<parse.size()-1 &&
@@ -242,7 +246,6 @@ private:
                 if (prev_s_type == S_TYPE) {//LMS-type
                     lms_phrase.pop_back();
                     task(lms_phrase);
-
                     lms_phrase.clear();
                     lms_phrase.push_back(prev_sym);
                 }
@@ -253,7 +256,7 @@ private:
         }
         task(lms_phrase);
 
-        return {prev_s_type==S_TYPE, rm_run};
+        return {prev_s_type == S_TYPE, rm_run};
     }
 
 
@@ -262,10 +265,8 @@ public:
     std::pair<std::vector<size_t>, uint8_t> compute_pattern_cuts(const std::string &pattern) const {
 
         parsing_data p_data(pattern);
-
         //hash table to hash the LMS phrases
         bit_hash_table<size_t, 44> ht;
-
         //lambda function to hash the LMS phrases
         auto hash_task = [&](auto &phrase) {
             if (p_data.tail) {
@@ -282,7 +283,6 @@ public:
                 p_data.new_lms_pos[p_data.n_lms++] = p_data.lms_pos[p_data.idx];
             }
         };
-
         //lambda function to create the LMS parse
         auto parse_task = [&](auto &phrase) {
             if (p_data.tail) {
@@ -295,17 +295,13 @@ public:
                 p_data.n_lms--;
             }
         };
-
         //uint8_t p_round=0;
-
         //hash the LMS phrases in the text
         while (true) {
-
             //the pattern is longer than the text
-            if(p_data.round>parsing_rounds){
+            if(p_data.round > parsing_rounds){
                 return {{},parsing_rounds};
             }
-
             assert(p_data.parse.size() > 1);
             p_data.idx = p_data.parse.size() - 1;
             p_data.n_lms = 0;
@@ -313,7 +309,9 @@ public:
 
             auto lms_data = lms_scan(hash_task, p_data.parse);
 
-            if (p_data.n_lms < 4) {//report the cuts
+
+            if (p_data.n_lms < 4) {
+                //report the cuts
                 p_data.extract_cuts(lms_data);
                 return {p_data.cuts, p_data.round};
             } else {
@@ -476,6 +474,7 @@ public:
     void text_stats(std::string &list) {}
 
     void locate(const std::string &pattern, std::set<uint64_t> &pos) const;
+    void locate_all_cuts(const std::string &pattern, std::set<uint64_t> &pos) const;
     void locate_split_time(const std::string &pattern, std::set<uint64_t> &pos, uint64_t&, uint64_t&) const;
     //extract text[start, end] from the index
     void extract(size_t start, size_t end) {}
@@ -517,23 +516,89 @@ public:
 
 #ifdef CHECK_OCC
             //
-//            bt_search(data,pattern,positions);
-//            total_occ_bt += positions.size();
-//            if(positions != occ){
-//                std::cout<<"Locate error\n";
-//                std::cout<<"pattern:"<<pattern<<std::endl;
-//                std::cout<<"occ:"<<occ.size()<<std::endl;
-//                std::cout<<"bt-occ:"<<positions.size()<<std::endl;
-//                if(positions.size() > occ.size())
-//                {
-//                    std::vector<size_type> X;
-//                    X.resize(positions.size(),0);
-//                    auto it = std::set_difference(positions.begin(),positions.end(),occ.begin(),occ.end(),X.begin());
-//                    X.resize(it - X.begin());
-//                    std::cout<<"missing positions["<<X.size()<<"]\n";
-//                }
-//////                return;
-//            }
+            std::set<size_type> positions;
+            bt_search(data,pattern,positions);
+            total_occ_bt += positions.size();
+            if(positions != occ){
+                std::cout<<"Locate error\n";
+                std::cout<<"pattern:"<<pattern<<std::endl;
+                std::cout<<"occ:"<<occ.size()<<std::endl;
+                std::cout<<"bt-occ:"<<positions.size()<<std::endl;
+                if(positions.size() > occ.size())
+                {
+                    std::vector<size_type> X;
+                    X.resize(positions.size(),0);
+                    auto it = std::set_difference(positions.begin(),positions.end(),occ.begin(),occ.end(),X.begin());
+                    X.resize(it - X.begin());
+                    std::cout<<"missing positions["<<X.size()<<"]\n";
+                }
+////                return;
+            }
+
+#endif
+
+        }
+
+        auto text_size = (double)grammar_tree.get_text_len();
+        auto index_size = (double)sdsl::size_in_bytes(*this);
+        std::cout << "Elap. time (microsec): " << total_time << std::endl;
+        std::cout << "Total occ: " << total_occ << std::endl;
+        std::cout << "Real Total occ: " << total_occ_bt << std::endl;
+        double time_per_occ = (double)total_time/(double)total_occ;
+        std::cout << "Time/occ (microsec): " << time_per_occ << std::endl;
+        std::cout << "Index size " << sdsl::size_in_bytes(*this) << std::endl;
+        std::cout << "Text size " << grammar_tree.get_text_len() << std::endl;
+        std::cout << "Bps " << index_size * 8 /text_size << std::endl;
+
+
+    }
+
+    void search_all_cuts(std::vector<std::string> &list
+#ifdef CHECK_OCC
+            ,const std::string& file
+#endif
+    ) {
+#ifdef CHECK_OCC
+        std::string data;
+        utils::readFile(file,data);
+        int ii = 0;
+#endif
+        std::cout << "Locate pattern list["<<list.size()<<"]" << std::endl;
+        size_t total_occ = 0,total_time = 0 , total_occ_bt = 0;
+        for (auto const &pattern : list) {
+#ifdef DEBUG_PRINT
+            std::cout << pattern << ":";
+#endif
+//            std::cout<<++ii<<"--"<<pattern<<std::endl;
+            auto start = std::chrono::high_resolution_clock::now();
+            std::set<size_type> occ;
+            locate_all_cuts(pattern, occ);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+            total_occ += occ.size();
+            total_time+=elapsed;
+
+
+#ifdef CHECK_OCC
+            //
+            std::set<size_type> positions;
+            bt_search(data,pattern,positions);
+            total_occ_bt += positions.size();
+            if(positions != occ){
+                std::cout<<"Locate error\n";
+                std::cout<<"pattern:"<<pattern<<std::endl;
+                std::cout<<"occ:"<<occ.size()<<std::endl;
+                std::cout<<"bt-occ:"<<positions.size()<<std::endl;
+                if(positions.size() > occ.size())
+                {
+                    std::vector<size_type> X;
+                    X.resize(positions.size(),0);
+                    auto it = std::set_difference(positions.begin(),positions.end(),occ.begin(),occ.end(),X.begin());
+                    X.resize(it - X.begin());
+                    std::cout<<"missing positions["<<X.size()<<"]\n";
+                }
+////                return;
+            }
 
 #endif
 
@@ -765,7 +830,7 @@ public:
             return true;
         };
         process_prefix_rule(preorder_node,cmp);
-
+        std::cout<<"\n";
     }
 
 
@@ -1188,18 +1253,7 @@ void lpg_index::compute_grammar_sfx(
                             r.second[i-1], //prev-sibling id
                             _ch_pre,//preorder
                             0
-//                        cuts[r.first][i-1]//cut level
                     );
-//                    if(r.second[i-1] == 0)
-//                    {
-//                        s.print();
-//                        std::cout<<"rule:"<<r.first<<std::endl;
-//                        for (size_type i = 0; i < r.second.size(); ++i) {
-//                            std::cout<<r.second[i]<<" ";
-//                        }
-//                        std::cout<<std::endl;
-//                        int ct;std::cout<<"pres 0 enter to continue"<<std::endl;std::cin>>ct;
-//                    }
 
                     grammar_sfx.push_back(s);
 
@@ -1256,8 +1310,11 @@ void lpg_index::compute_grammar_sfx(
 void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  const {
         //find primary occ
         auto partitions  = compute_pattern_cuts(pattern);
+//        std::cout<<"cortes:\n";
+
         uint32_t level = partitions.second;
         for (const auto &item : partitions.first) {
+//            std::cout<<item<<" ";
             grid_query range{};
             //range search
             if(search_grid_range(pattern.c_str(),pattern.size(),item + 1,level, range)){
@@ -1270,6 +1327,33 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
                 }
             }
         }
+        std::cout<<std::endl;
+}
+
+
+
+void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &pos)  const {
+    //find primary occ
+//    auto partitions  = compute_pattern_cuts(pattern);
+    uint32_t level = 0;
+//    std::cout<<"ptt:"<<pattern<<std::endl;
+//    std::cout<<"cortes occ primarias:";
+    for (uint64_t item = 0; item < pattern.size() - 1; ++item) {
+        grid_query range{};
+        //range search
+        if(search_grid_range(pattern.c_str(),pattern.size(),item + 1,level, range)){
+            std::vector<utils::primaryOcc> pOcc;
+            // grid search
+            grid_search(range,item + 1,pattern.size(),level,pOcc);
+            // find secondary occ
+//            std::cout<<item<<" ";
+            for (const auto &occ : pOcc) {
+                find_secondary_occ(occ,pos);
+            }
+        }
+    }
+
+    std::cout<<"\n";
 }
 
 void lpg_index::locate_split_time(const std::string &pattern, std::set<uint64_t> &pos, uint64_t& p_time, uint64_t& s_time) const {
