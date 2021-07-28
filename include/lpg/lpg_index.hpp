@@ -1327,7 +1327,7 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
                 }
             }
         }
-        std::cout<<std::endl;
+//        std::cout<<std::endl;
 }
 
 
@@ -1353,7 +1353,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
         }
     }
 
-    std::cout<<"\n";
+//    std::cout<<"\n";
 }
 
 void lpg_index::locate_split_time(const std::string &pattern, std::set<uint64_t> &pos, uint64_t& p_time, uint64_t& s_time) const {
