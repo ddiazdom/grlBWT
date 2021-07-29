@@ -1402,11 +1402,11 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //                            std::cout<<X<<"["<<pre_node_ch<<"]"<<" ";
 
                         }
-                        std::cout<<std::endl;
+//                        std::cout<<std::endl;
                         return true;
                     };
                     grammar_tree.getT().dfs_preorder(node,f);
-
+    
             }
 
 
