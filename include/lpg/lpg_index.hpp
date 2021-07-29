@@ -165,6 +165,12 @@ public:
                (cuts.empty() || cuts.back()!=lms_pos[lms_data.second])){
                 cuts.push_back(lms_pos[lms_data.second]);
             }
+
+            std::cout<<"extract_cuts:cuts"<<std::endl;
+            for (const auto &item : cuts) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
         }
 
         void update_lms_pos(){
@@ -242,7 +248,7 @@ public:
         }
         std::cout<<std::endl;
         for (size_t i = pos; i-- > 0;) {
-            std::cout<<parse[i]<<std::endl;
+//            std::cout<<parse[i]<<std::endl;
             curr_sym = parse[i];
             if (curr_sym < prev_sym) {//S_TYPE type
                 s_type = S_TYPE;
@@ -251,7 +257,7 @@ public:
             } else {//L_TYPE type
                 s_type = L_TYPE;
                 if (prev_s_type == S_TYPE) {//LMS-type
-                    std::cout<<prev_sym<<std::endl;
+//                    std::cout<<prev_sym<<std::endl;
                     lms_phrase.pop_back();
                     task(lms_phrase);
                     lms_phrase.clear();
@@ -1461,9 +1467,15 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //                print_suffix_grammar(init_preorder,1000);
 
                 std::cout<<"left"<<std::endl;
-                down_up_print(foccX,"");
-                std::cout<<"rigth"<<std::endl;
-                down_up_print_mirror(foccY,"");
+//                down_up_print(foccX,"");
+                auto nn = grammar_tree.getT().operator[](foccX);
+                uint64_t nnend = 0;
+                grammar_tree.getT().subtree(nn,nnend);
+                while(nn <= nnend)
+                    std::cout<<grammar_tree.getT().bit_vector[nn++];
+                std::cout<<std::endl;
+//                std::cout<<"rigth"<<std::endl;
+//                down_up_print_mirror(foccY,"");
             }
 
 
