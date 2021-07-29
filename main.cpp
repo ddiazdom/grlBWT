@@ -130,17 +130,16 @@ int main(int argc, char** argv) {
         std::cout<<"Saving the self-index to file "<<args.output_file<<std::endl;
         sdsl::store_to_file(g, args.output_file);
 
-        generate_random_samples(args.input_file,900,1000) ;
-        generate_random_samples(args.input_file,1000,1000) ;
-	    generate_random_samples(args.input_file,2000,1000) ;
-        generate_random_samples(args.input_file,3000,1000) ;
-        generate_random_samples(args.input_file,4000,1000) ;
-        generate_random_samples(args.input_file,5000,1000) ;
-        generate_random_samples(args.input_file,6000,1000) ;
-        generate_random_samples(args.input_file,7000,1000) ;
-        generate_random_samples(args.input_file,8000,1000) ;
-        generate_random_samples(args.input_file,9000,1000) ;
-        generate_random_samples(args.input_file,10000,1000);
+        generate_random_samples(args.input_file,10,10) ;
+	    generate_random_samples(args.input_file,20,10) ;
+        generate_random_samples(args.input_file,30,10) ;
+//        generate_random_samples(args.input_file,40,1000) ;
+//        generate_random_samples(args.input_file,50,1000) ;
+//        generate_random_samples(args.input_file,60,1000) ;
+//        generate_random_samples(args.input_file,70,1000) ;
+//        generate_random_samples(args.input_file,80,1000) ;
+//        generate_random_samples(args.input_file,90,1000) ;
+//        generate_random_samples(args.input_file,10000,1000);
 
     }else if(app.got_subcommand("search")){
         std::cout<<"Searching for patterns in the self-index"<<std::endl;
@@ -177,22 +176,50 @@ int main(int argc, char** argv) {
             }
         }
 #ifdef CHECK_OCC
-        std::string file; file.resize(args.input_file.size() - 4);
-        std::copy(args.input_file.begin(),args.input_file.end()-4,file.begin());
+        std::string file; file.resize(args.input_file.size() - 8);
+        std::copy(args.input_file.begin(),args.input_file.end()-8,file.begin());
         std::cout<<"file:"<<file<<std::endl;
 #endif
+//
+//        uint64_t rules = g.grammar_tree.Z.size();
+//        for (uint64_t i = 0; i < rules - 1 ; ++i) {
+//            uint64_t X = g.grammar_tree.get_rule_from_preorder_node(i+1);
+//            std::cout<<i+1<<"["<<X<<"]"<<"->";
+//            g.print_prefix_rule(i+1,1000);
+//
+//        }
+
 
         std::cout<<"Searching for the patterns "<<std::endl;
+
+//        patterns = {"GTAGGTAAAGAGTTCAACCACCTGGAAAAAAGAATAGAGAATTTAAATAAAAAAGTTGATGATGGTTTCCTGGACATTTGGACTTACAATGCCGAACTGT"};
+//        patterns = {"GTAGGTAAAGAGTTCAACCAC"};
 
 	 if(patterns.empty()){
 	            }else{
 
-		            g.search_split_time(patterns
+		            g.search(patterns
 #ifdef CHECK_OCC
 			                    ,file
 #endif
 			            );
-	        }		    
+
+//         g.search_split_time(patterns
+//#ifdef CHECK_OCC
+//                 ,file
+//#endif
+//         );
+
+
+std::cout<<"search_all_cuts"<<std::endl;
+         g.search_all_cuts(patterns
+#ifdef CHECK_OCC
+                 ,file
+#endif
+         );
+
+
+	        }
 	//g.search(args.patterns);
         //g.search(args.patter_list_file);
     }

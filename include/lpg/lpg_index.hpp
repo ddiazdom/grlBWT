@@ -128,15 +128,9 @@ public:
         }
 
         void extract_cuts(std::pair<uint8_t, size_t>& lms_data){
-
-            std::cout<<"extract_cuts:before:new_lms_pos"<<std::endl;
-            for (int i = 0; i < n_lms; i++) {
-                std::cout<< new_lms_pos[i]<<" ";
-            }
-
-            std::cout<<std::endl;
             // the first text position is either S-type or the first symbol of the original text
-            if(lms_data.first || round==0) cuts.push_back(lms_pos[0]);
+//            if(lms_data.first || round==0)
+                cuts.push_back(lms_pos[0]);
 
             // check if the prefix in the text is a run.
             // If so, create a cut in the after the rightmost symbol of that run
@@ -154,10 +148,6 @@ public:
                     //TODO: we can discard this cut if we determine that the last
                     // phrase in the text is LMS
 
-                    if( n_lms < 4 ){
-                        cuts.push_back(new_lms_pos[1]);
-                    }
-
                     cuts.push_back(new_lms_pos[0]);
                 }
             }
@@ -172,26 +162,9 @@ public:
                 cuts.push_back(lms_pos[lms_data.second]);
             }
 
-            std::cout<<"extract_cuts:after:cuts"<<std::endl;
-            for (const auto &item : cuts) {
-                std::cout<<item<<" ";
-            }
-            std::cout<<std::endl;
         }
 
         void update_lms_pos(){
-
-            std::cout<<"update_lms_pos:lms_pos"<<std::endl;
-            for (int i = 0;i < n_lms - 1 ; ++i) {
-                std::cout<<lms_pos[i]<<" ";
-            }
-            std::cout<<std::endl;
-
-            std::cout<<"update_lms_pos:new_lms_pos"<<std::endl;
-            for (int i = 0;i < n_lms - 1 ; ++i) {
-                std::cout<<new_lms_pos[i]<<" ";
-            }
-            std::cout<<std::endl;
 
             new_lms_pos.resize(n_lms-1);
             std::reverse(new_lms_pos.begin(), new_lms_pos.end());
@@ -235,12 +208,6 @@ public:
     template<typename proc>
     static std::pair<uint8_t, size_t> lms_scan(proc &task, std::vector<size_t> &parse) {
 
-        std::cout<<"lms_scan:parse"<<std::endl;
-        for(size_t i=0;i<parse.size();i++){
-            std::cout<<parse[i]<<" ";
-        }
-        std::cout<<""<<std::endl;
-
         int_array<size_t> lms_phrase(2, 32);
         size_t curr_sym, prev_sym,pos, rm_run;
         bool s_type, prev_s_type;
@@ -259,12 +226,6 @@ public:
         }
 
 
-        std::cout<<"lms_scan:parse:after-while"<<std::endl;
-        for(size_t i=0;i<parse.size();i++){
-            std::cout<<parse[i]<<" ";
-        }
-        std::cout<<""<<std::endl;
-
         rm_run = pos+1;
         prev_s_type = parse[pos] < parse[pos+1];
         prev_sym = parse[pos];
@@ -280,9 +241,8 @@ public:
             } else {//L_TYPE type
                 s_type = L_TYPE;
                 if (prev_s_type == S_TYPE) {//LMS-type
-                    std::cout<<i<<" "<<curr_sym<<std::endl;
                     lms_phrase.pop_back();
-                    task(lms_phrase);
+                    task(lms_phrase,false);
                     lms_phrase.clear();
                     lms_phrase.push_back(prev_sym);
                 }
@@ -291,8 +251,7 @@ public:
             prev_sym = curr_sym;
             prev_s_type = s_type;
         }
-        task(lms_phrase);
-
+        task(lms_phrase,true);
         return {prev_s_type == S_TYPE, rm_run};
     }
 
@@ -305,7 +264,7 @@ public:
         //hash table to hash the LMS phrases
         bit_hash_table<size_t, 44> ht;
         //lambda function to hash the LMS phrases
-        auto hash_task = [&](auto &phrase) {
+        auto hash_task = [&](auto &phrase, bool last) {
             if (p_data.tail) {
                 p_data.tail = false;
             } else {
@@ -314,14 +273,15 @@ public:
                     ht.insert(phrase.data(), phrase.n_bits(), 0);
                 }
             }
-
             if (p_data.idx > phrase.size()) {
                 p_data.idx -= phrase.size();
                 p_data.new_lms_pos[p_data.n_lms++] = p_data.lms_pos[p_data.idx];
+            }else{
             }
+
         };
         //lambda function to create the LMS parse
-        auto parse_task = [&](auto &phrase) {
+        auto parse_task = [&](auto &phrase, bool last) {
             if (p_data.tail) {
                 p_data.tail = false;
             } else if (p_data.n_lms > 1) {
@@ -345,7 +305,6 @@ public:
             p_data.tail = true;
 
             auto lms_data = lms_scan(hash_task, p_data.parse);
-
 
             if (p_data.n_lms < 4) {
                 //report the cuts
@@ -863,43 +822,7 @@ public:
 
     }
 
-    void down_up_print_mirror(const uint64_t &preorder_node,const std::string& prefix) const {
 
-        auto node = grammar_tree.getT().operator[](preorder_node);
-        auto leaf = grammar_tree.getT().lastleaf(node);
-
-        std::function<void(const uint64_t &node,uint l)> expand_node;
-        expand_node = [this,prefix,expand_node](const uint64_t &node,uint l){
-                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
-                    std::cout<<prefix<<" "<<X<<std::endl;
-                    print_prefix_rule(X,10);
-                    std::cout<<std::endl;
-                if(l > 0)
-                    expand_node(grammar_tree.getT().parent(node),l-1);
-        };
-
-        expand_node(leaf,3);
-    }
-
-
-    void down_up_print(const uint64_t &preorder_node,const std::string& prefix) const {
-
-        auto node = grammar_tree.getT().operator[](preorder_node);
-        auto rleaf = grammar_tree.getT().leafrank(node);
-        auto leaf = grammar_tree.getT().leafselect(rleaf);
-
-        std::function<void(const uint64_t &node,uint l)> expand_node;
-        expand_node = [this,prefix,expand_node](const uint64_t &node,uint l){
-            uint64_t pp = grammar_tree.getT().pre_order(node);
-            uint64_t X = grammar_tree.get_rule_from_preorder_node(pp);
-            std::cout<<prefix<<" "<<X<<std::endl;
-            print_suffix_grammar(pp,10);
-            std::cout<<std::endl;
-            if(l > 0)
-                expand_node(grammar_tree.getT().parent(node),l-1);
-        };
-        expand_node(leaf,3);
-    }
 
 
     void print_prefix_rule(const size_type &preorder_node,const  size_type& l) const {
@@ -1423,7 +1346,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //    auto partitions  = compute_pattern_cuts(pattern);
     uint32_t level = 0;
 //    std::cout<<"ptt:"<<pattern<<std::endl;
-//    std::cout<<"cortes occ primarias:";
+    std::cout<<"cortes occ primarias:";
     for (uint64_t item = 0; item < pattern.size() - 1; ++item) {
         grid_query range{};
         //range search
@@ -1432,18 +1355,18 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
             // grid search
             grid_search(range,item + 1,pattern.size(),level,pOcc);
             // find secondary occ
-//            std::cout<<item<<" ";
+            std::cout<<item<<" ";
 
-            if( item == 6 ){
-//                std::cout<<"66666666666666666666666666666666666666\n";
-                    uint64_t init_preorder  = 2256704;
-                    uint64_t node_1  = grammar_tree.getT().operator[](init_preorder);
-                    uint64_t init_parent = grammar_tree.getT().parent(node_1);
-                    uint64_t chr  = grammar_tree.getT().childrank(node_1);
-                    uint64_t prev_sib  = grammar_tree.getT().child(init_parent,chr - 1);
-                    uint64_t prev_sib_pre  = grammar_tree.getT().pre_order(prev_sib);
-                    uint64_t foccX = grammar_tree.first_occ_preorder_node(prev_sib_pre);
-                    uint64_t foccY = grammar_tree.first_occ_preorder_node(init_preorder);
+//            if( item == 6 ){
+////                std::cout<<"66666666666666666666666666666666666666\n";
+//                    uint64_t init_preorder  = 2256704;
+//                    uint64_t node_1  = grammar_tree.getT().operator[](init_preorder);
+//                    uint64_t init_parent = grammar_tree.getT().parent(node_1);
+//                    uint64_t chr  = grammar_tree.getT().childrank(node_1);
+//                    uint64_t prev_sib  = grammar_tree.getT().child(init_parent,chr - 1);
+//                    uint64_t prev_sib_pre  = grammar_tree.getT().pre_order(prev_sib);
+//                    uint64_t foccX = grammar_tree.first_occ_preorder_node(prev_sib_pre);
+//                    uint64_t foccY = grammar_tree.first_occ_preorder_node(init_preorder);
 
 //                    auto f = [this](const size_type& node){
 //
@@ -1476,7 +1399,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //                std::cout<<std::endl;
 //                std::cout<<"rigth"<<std::endl;
 //                down_up_print_mirror(foccY,"");
-            }
+//            }
 
 
             for (const auto &occ : pOcc) {
