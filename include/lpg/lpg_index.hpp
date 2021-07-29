@@ -1345,8 +1345,6 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
     //find primary occ
 //    auto partitions  = compute_pattern_cuts(pattern);
     uint32_t level = 0;
-//    std::cout<<"ptt:"<<pattern<<std::endl;
-    std::cout<<"cortes occ primarias:";
     for (uint64_t item = 0; item < pattern.size() - 1; ++item) {
         grid_query range{};
         //range search
@@ -1355,60 +1353,12 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
             // grid search
             grid_search(range,item + 1,pattern.size(),level,pOcc);
             // find secondary occ
-            std::cout<<item<<" ";
-
-//            if( item == 6 ){
-////                std::cout<<"66666666666666666666666666666666666666\n";
-//                    uint64_t init_preorder  = 2256704;
-//                    uint64_t node_1  = grammar_tree.getT().operator[](init_preorder);
-//                    uint64_t init_parent = grammar_tree.getT().parent(node_1);
-//                    uint64_t chr  = grammar_tree.getT().childrank(node_1);
-//                    uint64_t prev_sib  = grammar_tree.getT().child(init_parent,chr - 1);
-//                    uint64_t prev_sib_pre  = grammar_tree.getT().pre_order(prev_sib);
-//                    uint64_t foccX = grammar_tree.first_occ_preorder_node(prev_sib_pre);
-//                    uint64_t foccY = grammar_tree.first_occ_preorder_node(init_preorder);
-
-//                    auto f = [this](const size_type& node){
-//
-//                        size_type preorder = grammar_tree.getT().pre_order(node);
-//                        size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
-//                        std::cout<<X<<"["<<preorder<<"]:->";
-//                        size_type n = grammar_tree.getT().children(node);
-//
-//                        for (uint64_t i = 1; i <= n; ++i){
-//
-//                            size_type node_ch = grammar_tree.getT().child(node,i);
-//                            size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
-//                            X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
-//                            std::cout<<X<<"["<<pre_node_ch<<"]"<<" ";
-//
-//                        }
-////                        std::cout<<std::endl;
-//                        return true;
-//                    };
-//                print_prefix_rule(prev_sib_pre,1000);
-//                print_suffix_grammar(init_preorder,1000);
-
-//                std::cout<<"left"<<std::endl;
-//                down_up_print(foccX,"");
-//                auto nn = grammar_tree.getT().operator[](foccX);
-//                uint64_t nnend = 0;
-//                grammar_tree.getT().subtree(nn,nnend);
-//                while(nn <= nnend)
-//                    std::cout<<grammar_tree.getT().bit_vector[nn++];
-//                std::cout<<std::endl;
-//                std::cout<<"rigth"<<std::endl;
-//                down_up_print_mirror(foccY,"");
-//            }
-
-
             for (const auto &occ : pOcc) {
                 find_secondary_occ(occ,pos);
             }
         }
     }
 
-//    std::cout<<"\n";
 }
 
 void lpg_index::locate_split_time(const std::string &pattern, std::set<uint64_t> &pos, uint64_t& p_time, uint64_t& s_time) const {
