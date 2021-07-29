@@ -1385,6 +1385,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //            std::cout<<item<<" ";
 
             if( item == 6 ){
+                std::cout<<"66666666666666666666666666666666666666\n";
                     auto p = pOcc[0];
                     auto node = grammar_tree.getT().operator[](p.preorder);
                     auto f = [this](const size_type& node){
@@ -1406,7 +1407,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
                         return true;
                     };
                     grammar_tree.getT().dfs_preorder(node,f);
-    
+
             }
 
 
