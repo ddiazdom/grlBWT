@@ -1391,7 +1391,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 
                         size_type preorder = grammar_tree.getT().pre_order(node);
                         size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
-                        std::cout<<X<<"["<<preorder<<"]:->";
+//                        std::cout<<X<<"["<<preorder<<"]:->";
                         size_type n = grammar_tree.getT().children(node);
 
                         for (uint64_t i = 1; i <= n; ++i){
@@ -1399,7 +1399,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
                             size_type node_ch = grammar_tree.getT().child(node,i);
                             size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
                             X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
-                            std::cout<<X<<"["<<pre_node_ch<<"]"<<" ";
+//                            std::cout<<X<<"["<<pre_node_ch<<"]"<<" ";
 
                         }
                         std::cout<<std::endl;
