@@ -1459,9 +1459,9 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //                print_suffix_grammar(init_preorder,1000);
 
                 std::cout<<"left"<<std::endl;
-                down_up_print(init_preorder,"");
+                down_up_print(prev_sib_pre,"");
                 std::cout<<"rigth"<<std::endl;
-                down_up_print_mirror(prev_sib_pre,"");
+                down_up_print_mirror(init_preorder,"");
             }
 
 
