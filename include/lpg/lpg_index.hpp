@@ -280,7 +280,7 @@ public:
             } else {//L_TYPE type
                 s_type = L_TYPE;
                 if (prev_s_type == S_TYPE) {//LMS-type
-                    std::cout<<i<<curr_sym<<std::endl;
+                    std::cout<<i<<" "<<curr_sym<<std::endl;
                     lms_phrase.pop_back();
                     task(lms_phrase);
                     lms_phrase.clear();
