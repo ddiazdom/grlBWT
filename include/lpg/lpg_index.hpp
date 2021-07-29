@@ -180,6 +180,19 @@ public:
         }
 
         void update_lms_pos(){
+
+            std::cout<<"update_lms_pos:lms_pos"<<std::endl;
+            for (const auto &item : lms_pos) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
+
+            std::cout<<"update_lms_pos:new_lms_pos"<<std::endl;
+            for (const auto &item : new_lms_pos) {
+                std::cout<<item<<" ";
+            }
+            std::cout<<std::endl;
+
             new_lms_pos.resize(n_lms-1);
             std::reverse(new_lms_pos.begin(), new_lms_pos.end());
             std::swap(new_lms_pos, lms_pos);
@@ -244,7 +257,7 @@ public:
             lms_phrase.push_back(parse[pos--]);
         }
         rm_run = pos+1;
-        prev_s_type = parse[pos]<parse[pos+1];
+        prev_s_type = parse[pos] < parse[pos+1];
         prev_sym = parse[pos];
         lms_phrase.push_back(prev_sym);
 
