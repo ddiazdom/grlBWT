@@ -1436,6 +1436,8 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
                     uint64_t chr  = grammar_tree.getT().childrank(node_1);
                     uint64_t prev_sib  = grammar_tree.getT().child(init_parent,chr - 1);
                     uint64_t prev_sib_pre  = grammar_tree.getT().pre_order(prev_sib);
+                    uint64_t foccX = grammar_tree.first_occ_preorder_node(prev_sib_pre);
+                    uint64_t foccY = grammar_tree.first_occ_preorder_node(init_preorder);
 
 //                    auto f = [this](const size_type& node){
 //
@@ -1459,9 +1461,9 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //                print_suffix_grammar(init_preorder,1000);
 
                 std::cout<<"left"<<std::endl;
-                down_up_print(prev_sib_pre,"");
+                down_up_print(foccX,"");
                 std::cout<<"rigth"<<std::endl;
-                down_up_print_mirror(init_preorder,"");
+                down_up_print_mirror(foccY,"");
             }
 
 
