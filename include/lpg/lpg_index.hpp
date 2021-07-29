@@ -1466,14 +1466,14 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //                print_prefix_rule(prev_sib_pre,1000);
 //                print_suffix_grammar(init_preorder,1000);
 
-                std::cout<<"left"<<std::endl;
+//                std::cout<<"left"<<std::endl;
 //                down_up_print(foccX,"");
-                auto nn = grammar_tree.getT().operator[](foccX);
-                uint64_t nnend = 0;
-                grammar_tree.getT().subtree(nn,nnend);
-                while(nn <= nnend)
-                    std::cout<<grammar_tree.getT().bit_vector[nn++];
-                std::cout<<std::endl;
+//                auto nn = grammar_tree.getT().operator[](foccX);
+//                uint64_t nnend = 0;
+//                grammar_tree.getT().subtree(nn,nnend);
+//                while(nn <= nnend)
+//                    std::cout<<grammar_tree.getT().bit_vector[nn++];
+//                std::cout<<std::endl;
 //                std::cout<<"rigth"<<std::endl;
 //                down_up_print_mirror(foccY,"");
             }
