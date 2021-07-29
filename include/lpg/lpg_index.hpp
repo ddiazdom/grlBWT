@@ -800,6 +800,8 @@ public:
             auto len = grammar_tree.is_run(preorder_node);
             const auto &T = grammar_tree.getT();
             if (len) {
+                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
+                std::cout<<"NODO-LEN["<<len<<"] X:"<<X<<std::endl;
                 for (uint32_t i = 0; i < len; ++i) {
                     auto chnode = T.child(node, 1);
                     bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode, f);
@@ -808,6 +810,8 @@ public:
                 return true;
             } else {
                 uint32_t n = T.children(node); //number of children
+                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
+                std::cout<<"NODO-BLOCK["<<n<<"] X:"<<X<<std::endl;
                 for (uint32_t i = n; i > 0; --i) { // from right to left
                     auto chnode = T.child(node, i); //get i-child node
                     bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode,
@@ -1386,28 +1390,33 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 
             if( item == 6 ){
                 std::cout<<"66666666666666666666666666666666666666\n";
-                    auto p = pOcc[0];
-                    auto node = grammar_tree.getT().operator[](p.preorder);
-                    auto f = [this](const size_type& node){
+                    uint64_t init_preorder  = 2256704;
+                    uint64_t node_1  = grammar_tree.getT().operator[](init_preorder);
+                    uint64_t init_parent = grammar_tree.getT().parent(node_1);
+                    uint64_t chr  = grammar_tree.getT().childrank(node_1);
+                    uint64_t prev_sib  = grammar_tree.getT().child(init_parent,chr - 1);
+                    uint64_t prev_sib_pre  = grammar_tree.getT().pre_order(prev_sib);
 
-                        size_type preorder = grammar_tree.getT().pre_order(node);
-                        size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
+//                    auto f = [this](const size_type& node){
+//
+//                        size_type preorder = grammar_tree.getT().pre_order(node);
+//                        size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
 //                        std::cout<<X<<"["<<preorder<<"]:->";
-                        size_type n = grammar_tree.getT().children(node);
-
-                        for (uint64_t i = 1; i <= n; ++i){
-
-                            size_type node_ch = grammar_tree.getT().child(node,i);
-                            size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
-                            X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
+//                        size_type n = grammar_tree.getT().children(node);
+//
+//                        for (uint64_t i = 1; i <= n; ++i){
+//
+//                            size_type node_ch = grammar_tree.getT().child(node,i);
+//                            size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
+//                            X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
 //                            std::cout<<X<<"["<<pre_node_ch<<"]"<<" ";
-
-                        }
-//                        std::cout<<std::endl;
-                        return true;
-                    };
-                    grammar_tree.getT().dfs_preorder(node,f);
-
+//
+//                        }
+////                        std::cout<<std::endl;
+//                        return true;
+//                    };
+                print_prefix_rule(prev_sib_pre,1000);
+                print_suffix_grammar(init_preorder,1000);
             }
 
 
