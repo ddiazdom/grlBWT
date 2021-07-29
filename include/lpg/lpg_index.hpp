@@ -130,8 +130,8 @@ public:
         void extract_cuts(std::pair<uint8_t, size_t>& lms_data){
 
             std::cout<<"extract_cuts:before:new_lms_pos"<<std::endl;
-            for (const auto &item : new_lms_pos) {
-                std::cout<<item<<" ";
+            for (int i = 0; i < n_lms; i++) {
+                std::cout<< new_lms_pos[i]<<" ";
             }
 
             std::cout<<std::endl;
@@ -182,14 +182,14 @@ public:
         void update_lms_pos(){
 
             std::cout<<"update_lms_pos:lms_pos"<<std::endl;
-            for (const auto &item : lms_pos) {
-                std::cout<<item<<" ";
+            for (int i = 0;i < n_lms - 1 ; ++i) {
+                std::cout<<lms_pos[i]<<" ";
             }
             std::cout<<std::endl;
 
             std::cout<<"update_lms_pos:new_lms_pos"<<std::endl;
-            for (const auto &item : new_lms_pos) {
-                std::cout<<item<<" ";
+            for (int i = 0;i < n_lms - 1 ; ++i) {
+                std::cout<<new_lms_pos[i]<<" ";
             }
             std::cout<<std::endl;
 
@@ -235,10 +235,11 @@ public:
     template<typename proc>
     static std::pair<uint8_t, size_t> lms_scan(proc &task, std::vector<size_t> &parse) {
 
-        /*for(size_t i=0;i<parse.size();i++){
+        std::cout<<"lms_scan:parse"<<std::endl;
+        for(size_t i=0;i<parse.size();i++){
             std::cout<<parse[i]<<" ";
         }
-        std::cout<<""<<std::endl;*/
+        std::cout<<""<<std::endl;
 
         int_array<size_t> lms_phrase(2, 32);
         size_t curr_sym, prev_sym,pos, rm_run;
@@ -256,6 +257,14 @@ public:
 
             lms_phrase.push_back(parse[pos--]);
         }
+
+
+        std::cout<<"lms_scan:parse:after-while"<<std::endl;
+        for(size_t i=0;i<parse.size();i++){
+            std::cout<<parse[i]<<" ";
+        }
+        std::cout<<""<<std::endl;
+
         rm_run = pos+1;
         prev_s_type = parse[pos] < parse[pos+1];
         prev_sym = parse[pos];
@@ -271,7 +280,7 @@ public:
             } else {//L_TYPE type
                 s_type = L_TYPE;
                 if (prev_s_type == S_TYPE) {//LMS-type
-//                    std::cout<<prev_sym<<std::endl;
+                    std::cout<<i<<curr_sym<<std::endl;
                     lms_phrase.pop_back();
                     task(lms_phrase);
                     lms_phrase.clear();
