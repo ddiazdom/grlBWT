@@ -1101,7 +1101,7 @@ public:
 
         for (size_type i = 0; i < sfx.size(); ++i) {
             size_type preorder_node = m_grid.first_label_col(sfx[i]);
-            std::cout<<"preorder_node:"<<preorder_node<<std::endl;
+//            std::cout<<"preorder_node:"<<preorder_node<<std::endl;
             size_type node = T[preorder_node];
             size_type leaf = 0;
             size_type off = grammar_tree.offset_node(node, leaf);
@@ -1413,7 +1413,7 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 //            std::cout<<item<<" ";
 
             if( item == 6 ){
-                std::cout<<"66666666666666666666666666666666666666\n";
+//                std::cout<<"66666666666666666666666666666666666666\n";
                     uint64_t init_preorder  = 2256704;
                     uint64_t node_1  = grammar_tree.getT().operator[](init_preorder);
                     uint64_t init_parent = grammar_tree.getT().parent(node_1);
