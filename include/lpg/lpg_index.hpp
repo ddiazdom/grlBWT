@@ -129,6 +129,12 @@ public:
 
         void extract_cuts(std::pair<uint8_t, size_t>& lms_data){
 
+            std::cout<<"extract_cuts:before:new_lms_pos"<<std::endl;
+            for (const auto &item : new_lms_pos) {
+                std::cout<<item<<" ";
+            }
+
+            std::cout<<std::endl;
             // the first text position is either S-type or the first symbol of the original text
             if(lms_data.first || round==0) cuts.push_back(lms_pos[0]);
 
@@ -166,7 +172,7 @@ public:
                 cuts.push_back(lms_pos[lms_data.second]);
             }
 
-            std::cout<<"extract_cuts:cuts"<<std::endl;
+            std::cout<<"extract_cuts:after:cuts"<<std::endl;
             for (const auto &item : cuts) {
                 std::cout<<item<<" ";
             }
@@ -242,11 +248,6 @@ public:
         prev_sym = parse[pos];
         lms_phrase.push_back(prev_sym);
 
-        std::cout<<"lms_scan:parse"<<std::endl;
-        for (const auto &item : parse) {
-            std::cout<<item<<" ";
-        }
-        std::cout<<std::endl;
         for (size_t i = pos; i-- > 0;) {
 //            std::cout<<parse[i]<<std::endl;
             curr_sym = parse[i];
@@ -321,19 +322,8 @@ public:
             p_data.n_lms = 0;
             p_data.tail = true;
 
-            std::cout<<"before:lms_scan:lms_pos"<<std::endl;
-            for (const auto &item : p_data.lms_pos) {
-                std::cout<<item<<" ";
-            }
-            std::cout<<std::endl;
-
             auto lms_data = lms_scan(hash_task, p_data.parse);
 
-            std::cout<<"after:lms_scan:lms_pos"<<std::endl;
-            for (const auto &item : p_data.new_lms_pos) {
-                std::cout<<item<<" ";
-            }
-            std::cout<<std::endl;
 
             if (p_data.n_lms < 4) {
                 //report the cuts
@@ -367,19 +357,7 @@ public:
                 p_data.tail = true;
                 p_data.idx = p_data.parse.size() - 1;
 
-                std::cout<<"before:lms_scan:lms_pos"<<std::endl;
-                for (const auto &item : p_data.lms_pos) {
-                    std::cout<<item<<" ";
-                }
-                std::cout<<std::endl;
-
                 lms_scan(parse_task, p_data.parse);
-
-                std::cout<<"after:lms_scan:lms_pos"<<std::endl;
-                for (const auto &item : p_data.new_lms_pos) {
-                    std::cout<<item<<" ";
-                }
-                std::cout<<std::endl;
 
                 p_data.parse.erase(p_data.parse.begin(), p_data.parse.begin() + p_data.idx + 1);
             }
