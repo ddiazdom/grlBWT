@@ -1357,30 +1357,8 @@ void lpg_index::locate(const std::string &pattern, std::set<uint64_t> &pos)  con
                 grid_search(range,item + 1,pattern.size(),level,pOcc);
                 // find secondary occ
 
+//GTAGGTAAAGAGTTCAACCACCTGGAAAAAAGAATAGAGAATTTAAATAAAAAAGTTGATGATGGTTTCCTGGACATTTGGACTTACAATGCCGAACTGT"
 
-                if( item == 6 ){
-                    for (const auto &p : pOcc) {
-                        auto node = grammar_tree.getT().operator[](p.preorder);
-                        auto f = [this](const size_type& node){
-
-                            size_type preorder = grammar_tree.getT().pre_order(node);
-                            size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
-                            std::cout<<X<<"["<<preorder<<"]:->"<< std::endl;
-                            size_type n = grammar_tree.getT().children(node);
-
-                            for (uint64_t i = 1; i <= n; ++i){
-
-                                size_type node_ch = grammar_tree.getT().child(node,i);
-                                size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
-                                X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
-                                std::cout<<X<<"["<<pre_node_ch<<"]"<<std::endl;
-
-                            }
-                            return true;
-                        };
-                        grammar_tree.getT().dfs_preorder(node,f);
-                    }
-                }
 
                 for (const auto &occ : pOcc) {
                     find_secondary_occ(occ,pos);
@@ -1407,6 +1385,32 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
             grid_search(range,item + 1,pattern.size(),level,pOcc);
             // find secondary occ
 //            std::cout<<item<<" ";
+
+            if( item == 6 ){
+                for (const auto &p : pOcc) {
+                    auto node = grammar_tree.getT().operator[](p.preorder);
+                    auto f = [this](const size_type& node){
+
+                        size_type preorder = grammar_tree.getT().pre_order(node);
+                        size_type X = grammar_tree.get_rule_from_preorder_node(preorder);
+                        std::cout<<X<<"["<<preorder<<"]:->"<< std::endl;
+                        size_type n = grammar_tree.getT().children(node);
+
+                        for (uint64_t i = 1; i <= n; ++i){
+
+                            size_type node_ch = grammar_tree.getT().child(node,i);
+                            size_type pre_node_ch = grammar_tree.getT().pre_order(node_ch);
+                            X = grammar_tree.get_rule_from_preorder_node(pre_node_ch);
+                            std::cout<<X<<"["<<pre_node_ch<<"]"<<std::endl;
+
+                        }
+                        return true;
+                    };
+                    grammar_tree.getT().dfs_preorder(node,f);
+                }
+            }
+
+
             for (const auto &occ : pOcc) {
                 find_secondary_occ(occ,pos);
             }
