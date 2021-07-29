@@ -800,8 +800,8 @@ public:
             auto len = grammar_tree.is_run(preorder_node);
             const auto &T = grammar_tree.getT();
             if (len) {
-                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
-                std::cout<<"NODO-LEN["<<len<<"] X:"<<X<<std::endl;
+//                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
+//                std::cout<<"("<<node<<")NODO-LEN["<<len<<"] X:"<<X<<std::endl;
                 for (uint32_t i = 0; i < len; ++i) {
                     auto chnode = T.child(node, 1);
                     bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode, f);
@@ -810,8 +810,8 @@ public:
                 return true;
             } else {
                 uint32_t n = T.children(node); //number of children
-                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
-                std::cout<<"NODO-BLOCK["<<n<<"] X:"<<X<<std::endl;
+//                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
+//                std::cout<<"("<<node<<")NODO-BLOCK["<<n<<"] X:"<<X<<std::endl;
                 for (uint32_t i = n; i > 0; --i) { // from right to left
                     auto chnode = T.child(node, i); //get i-child node
                     bool keep = dfs_mirror_leaf(T.pre_order(chnode), chnode,
@@ -856,6 +856,46 @@ public:
         dfs_mirror_leaf(preorder_node, node,f);
 
     }
+
+    void down_up_print_mirror(const uint64_t &preorder_node,const std::string& prefix) const {
+
+        auto node = grammar_tree.getT().operator[](preorder_node);
+        auto leaf = grammar_tree.getT().lastleaf(node);
+
+        std::function<void(const uint64_t &node,uint l)> expand_node;
+        expand_node = [this,prefix,expand_node](const uint64_t &node,uint l){
+                uint64_t X = grammar_tree.get_rule_from_preorder_node(grammar_tree.getT().pre_order(node));
+                    std::cout<<prefix<<" "<<X<<std::endl;
+                    print_prefix_rule(X,10);
+                    std::cout<<std::endl;
+                if(l > 0)
+                    expand_node(grammar_tree.getT().parent(node),l-1);
+        };
+
+        expand_node(leaf,3);
+    }
+
+
+    void down_up_print(const uint64_t &preorder_node,const std::string& prefix) const {
+
+        auto node = grammar_tree.getT().operator[](preorder_node);
+        auto rleaf = grammar_tree.getT().leafrank(node);
+        auto leaf = grammar_tree.getT().leafselect(rleaf);
+
+        std::function<void(const uint64_t &node,uint l)> expand_node;
+        expand_node = [this,prefix,expand_node](const uint64_t &node,uint l){
+            uint64_t pp = grammar_tree.getT().pre_order(node);
+            uint64_t X = grammar_tree.get_rule_from_preorder_node(pp);
+            std::cout<<prefix<<" "<<X<<std::endl;
+            print_suffix_grammar(pp,10);
+            std::cout<<std::endl;
+            if(l > 0)
+                expand_node(grammar_tree.getT().parent(node),l-1);
+        };
+        expand_node(leaf,3);
+    }
+
+
     void print_prefix_rule(const size_type &preorder_node,const  size_type& l) const {
         size_type cont = l;
         auto cmp = [this,&cont](const uint64_t &prenode, const uint64_t &node,const uint64_t &X) {
@@ -1415,8 +1455,13 @@ void lpg_index::locate_all_cuts(const std::string &pattern, std::set<uint64_t> &
 ////                        std::cout<<std::endl;
 //                        return true;
 //                    };
-                print_prefix_rule(prev_sib_pre,1000);
-                print_suffix_grammar(init_preorder,1000);
+//                print_prefix_rule(prev_sib_pre,1000);
+//                print_suffix_grammar(init_preorder,1000);
+
+                std::cout<<"left"<<std::endl;
+                down_up_print(init_preorder,"");
+                std::cout<<"rigth"<<std::endl;
+                down_up_print_mirror(prev_sib_pre,"");
             }
 
 
