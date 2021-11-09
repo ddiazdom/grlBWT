@@ -228,13 +228,13 @@ struct int_array{
         in.read((char *)m_width, 1);
     }
 
-    void set(size_t val, size_t start, size_t end){
+    void set(size_t val){
         if(val==0){
             memset(bits.stream, 0, bits.stream_size*sizeof(word_t));
         }else{
             std::cout<<"not implemented yet"<<std::endl;
+            exit(1);
         }
-        if(end>m_size) m_size = end;
     }
 };
 #endif //LPG_COMPRESSOR_INT_ARRAY_H

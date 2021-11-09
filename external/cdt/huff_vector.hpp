@@ -9,7 +9,7 @@
 #include <sdsl/bit_vectors.hpp>
 #include "inv_bitstream.hpp"
 #include "iterators.hpp"
-#include "cdt/macros.h"
+#include "macros.h"
 #define BUFFER_SIZE 8388608
 
 template<class arr_t=sdsl::int_vector_buffer<64>,

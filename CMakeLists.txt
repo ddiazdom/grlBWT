@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7)
 project(LPG_COMPRESSOR)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 
@@ -8,8 +8,10 @@ find_package(LibSDSL REQUIRED)
 
 add_executable(lpg
         main.cpp
-        lib/lpg/lpg_build.cpp
-        third-party/xxHash-dev/xxhash.c include/lpg/utils.hpp include/lpg/macros.hpp)
+        lib/lpg_build.cpp
+        lib/utils.cpp
+        external/xxHash-dev/xxhash.c
+        )
 
 target_compile_options(lpg
         PRIVATE
@@ -30,6 +32,7 @@ target_link_libraries(lpg
 
 target_include_directories(lpg
         PRIVATE
+        external
         ${LIBSDSL_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/include)
 

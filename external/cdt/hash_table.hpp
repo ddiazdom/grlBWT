@@ -9,7 +9,7 @@
 #include <cassert>
 #include <fstream>
 #include <utility>
-#include "../../third-party/xxHash-dev/xxhash.h"
+#include "../xxHash-dev/xxhash.h"
 #include "bitstream.h"
 #include "prime_generator.hpp"
 

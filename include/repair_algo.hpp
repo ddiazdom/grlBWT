@@ -12,13 +12,12 @@
 #include "cdt/hash_table.hpp"
 #include "cdt/int_array.h"
 #include "cdt/si_int_array.h"
-#include "lpg_build.hpp"
 
 typedef sdsl::bit_vector bv_t;
 typedef sdsl::int_vector_buffer<> ivb;
 typedef std::vector<size_t> pt_vector_t;
-typedef lpg_build::plain_grammar_t plain_gram_t;
-typedef lpg_build::key_wrapper key_wrapper;
+typedef plain_grammar_t plain_gram_t;
+typedef key_wrapper key_wrapper;
 typedef bit_hash_table<size_t, 44> ht_t;
 
 //information of a pair
@@ -153,7 +152,7 @@ struct pair_greater {
         return freq1>freq2;
     }
 
-    inline size_t get_value(size_t pt)const{
+    [[nodiscard]] inline size_t get_value(size_t pt)const{
         return ht_data.read(pt+dist_bits, pt+dist_bits+pt_bits-1);
     }
 };
@@ -239,11 +238,11 @@ struct priority_queue{
 
     explicit priority_queue(pair_greater& comp_, repair_ht_t& ht_): ht(ht_), comp(comp_) {};
 
-    inline bool empty() const{
+    [[nodiscard]] inline bool empty() const{
         return arr.empty();
     }
 
-    inline size_t size() const{
+    [[nodiscard]] inline size_t size() const{
         return arr.size();
     }
 
