@@ -8,7 +8,7 @@
 #include "cdt/parallel_string_sort.hpp"
 //#include "repair_algo.hpp"
 
-void check_plain_grammar(plain_grammar_t& p_gram, std::string& uncomp_file) {
+void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
 
     sdsl::int_vector<> r;
     bv_t r_lim;
@@ -105,6 +105,7 @@ alpha_t get_alphabet(std::string &i_file) {
     }
 
     std::cout << "  Number of characters: " << if_stream.size() << std::endl;
+    std::cout << "  Number of strings:    " << alphabet[0].second << std::endl;
     std::cout << "  Alphabet:             " << alphabet.size() << std::endl;
     std::cout << "  Smallest symbol:      " << (int) alphabet[0].first << std::endl;
     std::cout << "  Greatest symbol:      " << (int) alphabet.back().first << std::endl;
@@ -117,7 +118,7 @@ alpha_t get_alphabet(std::string &i_file) {
     return alphabet;
 }
 
-void compute_LPG_gram(std::string &i_file, std::string &p_gram_file, std::string& tmp_folder,
+void compute_LPG_gram(std::string &i_file, std::string &gram_file, std::string& tmp_folder,
                       size_t n_threads, float hbuff_frac) {
 
     auto alphabet = get_alphabet(i_file);
@@ -127,14 +128,14 @@ void compute_LPG_gram(std::string &i_file, std::string &p_gram_file, std::string
 
     std::cout<<"  Generating the LMS-based locally consistent grammar:    "<<std::endl;
     sdsl::cache_config config(false, tmp_folder);
-    std::string g_file = sdsl::cache_file_name("g_file", config);
+    std::string g_info_file = sdsl::cache_file_name("g_info_file", config);
 
     std::string rules_file = sdsl::cache_file_name("rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
     std::string lvl_breaks_file = sdsl::cache_file_name("lvl_breaks", config);
     std::string is_rl_file = sdsl::cache_file_name("is_rl", config);
 
-    plain_grammar_t p_gram(rules_file, rules_len_file, is_rl_file, lvl_breaks_file);
+    gram_info_t p_gram(rules_file, rules_len_file, is_rl_file, lvl_breaks_file);
     p_gram.sigma = alphabet.size();
 
     // given an index i in symbol_desc
@@ -182,6 +183,15 @@ void compute_LPG_gram(std::string &i_file, std::string &p_gram_file, std::string
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
     }
+
+    //
+    /*size_t n_seqs=0;
+    for(auto const& desc : symbol_desc){
+        if(desc>2) n_seqs++;
+    }
+    std::cout<<"there are "<<n_seqs<<" sequences "<<std::endl;*/
+    //
+
     sdsl::util::clear(symbol_desc);
 
     {//put the compressed string at end
@@ -230,7 +240,7 @@ void compute_LPG_gram(std::string &i_file, std::string &p_gram_file, std::string
     sdsl::util::clear(rem_nts);
 
     //colex_nt_sort(p_gram);
-    p_gram.save_to_file(p_gram_file);
+    //p_gram.save_to_file(p_gram_file);
 
     //TODO testing
     //check_plain_grammar(p_gram, i_file);
@@ -239,11 +249,14 @@ void compute_LPG_gram(std::string &i_file, std::string &p_gram_file, std::string
     std::cout <<"  Final grammar: " << std::endl;
     std::cout <<"    Number of terminals:    " << (size_t) p_gram.sigma << std::endl;
     std::cout <<"    Number of nonterminals: " << p_gram.r - p_gram.sigma<<std::endl;
-    std::cout <<"    Grammar size:           " << p_gram.g - p_gram.sigma<<std::endl;
+    std::cout <<"    Grammar size:           " << p_gram.g<<std::endl;
     std::cout <<"  Compression stats: " << std::endl;
-    std::cout <<"    Original size           " << double(n_chars)/1000000<<std::endl;
+    std::cout <<"    Text size in MB:        " << double(n_chars)/1000000<<std::endl;
     std::cout <<"    Grammar size in MB:     " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(1000000)<< std::endl;
     std::cout <<"    Compression ratio:      " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(n_chars) << std::endl;
+
+    grammar final_gram(p_gram, n_chars, alphabet[0].second);
+    sdsl::store_to_file(final_gram, gram_file);
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -253,7 +266,7 @@ void compute_LPG_gram(std::string &i_file, std::string &p_gram_file, std::string
 template<class sym_type>
 size_t compute_LPG_int(std::string &i_file, std::string &o_file,
                        size_t n_threads, size_t hbuff_size,
-                       plain_grammar_t &p_gram, ivb_t &rules,
+                       gram_info_t &p_gram, ivb_t &rules,
                        bvb_t &rules_lim, sdsl::int_vector<2> &phrase_desc,
                        sdsl::cache_config &config) {
 
@@ -597,7 +610,7 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
 
         auto buffer = reinterpret_cast<char *>(malloc(tot_bytes));
 
-        text_i.read(buffer, tot_bytes);
+        text_i.read(buffer, std::streamsize(tot_bytes));
 
         bitstream<buff_t> bits;
         bits.stream = reinterpret_cast<buff_t*>(buffer);
@@ -642,7 +655,6 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
             std::cout<<"Aborting"<<std::endl;
             exit(1);
         }
-
         free(key);
         free(buffer);
     }
@@ -735,8 +747,7 @@ std::vector<std::pair<size_t, size_t>> compute_thread_ranges(size_t n_threads, s
 }
 
 void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
-                       bv_t::rank_1_type &rem_nt_rs,
-                       ivb_t &dec) {
+            bv_t::rank_1_type &rem_nt_rs, ivb_t &dec) {
 
     std::stack<size_t> stack;
     stack.push(nt);
@@ -756,7 +767,7 @@ void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, 
     }
 }
 
-void simplify_grammar(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
+void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
 
     std::cout<<"  Simplifying the grammar"<<std::endl;
 
@@ -801,7 +812,6 @@ void simplify_grammar(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type 
         pos = i;
         while(!r_lim[i]) i++;
         i++;
-
 
         if(!rem_nts[curr_rule]){
             if(!is_rl[curr_rule]){//regular rule
@@ -853,7 +863,7 @@ void simplify_grammar(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type 
 
 //TODO: these functions are just for debugging
 void shape_int(size_t nt,  sdsl::int_vector<>& rules, sdsl::bit_vector & rem_nts,
-                      sdsl::bit_vector ::select_1_type &r_lim_ss, std::string& shape){
+               sdsl::bit_vector::select_1_type &r_lim_ss, std::string& shape){
 
     if(rem_nts[nt]){
         shape.push_back('(');
@@ -936,7 +946,7 @@ rec_dc(gram_wrapper_t& gram_w, size_t nt, uint8_t lev) {
     return lms_breaks;
 }
 
-void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
+void create_lvl_breaks(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
 
     std::cout<<"  Computing the grid level of every nonterminal cut"<<std::endl;
     ivb_t breaks_buff(p_gram.lvl_breaks_file, std::ios::out);
@@ -991,7 +1001,7 @@ void create_lvl_breaks(plain_grammar_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type
     }
 }
 
-bv_t mark_nonterminals(plain_grammar_t &p_gram) {
+bv_t mark_nonterminals(gram_info_t &p_gram) {
 
     size_t max_tsym = p_gram.max_tsym;
 
@@ -1073,7 +1083,7 @@ bv_t mark_nonterminals(plain_grammar_t &p_gram) {
     return rem_nts;
 }
 
-void colex_nt_sort(plain_grammar_t &p_gram) {
+void colex_nt_sort(gram_info_t &p_gram) {
 
     //that this point, the grammar is supposed to be collapsed
     std::cout<<"  Reordering nonterimnals in Colex"<<std::endl;
@@ -1247,7 +1257,7 @@ void colex_nt_sort(plain_grammar_t &p_gram) {
     new_rlim.close();
 }
 
-void run_length_compress(plain_grammar_t &p_gram, sdsl::cache_config& config) {
+void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
     std::cout<<"  Run-length compressing the grammar"<<std::endl;
 
@@ -1354,107 +1364,4 @@ void run_length_compress(plain_grammar_t &p_gram, sdsl::cache_config& config) {
 
     rename(rl_rules_file.c_str(), p_gram.rules_file.c_str());
     rename(rl_r_lim_file.c_str(), p_gram.rules_lim_file.c_str());
-}
-
-void plain_grammar_t::save_to_file(std::string& output_file){
-
-    size_t buffer[255];
-
-    std::ofstream of_stream(output_file, std::ofstream::binary);
-
-    //write number of rules and alphabet size
-    buffer[0] = sigma;
-    buffer[1] = r;
-    buffer[2] = c;
-    buffer[3] = g;
-    buffer[4] = max_tsym;
-    of_stream.write((char *) buffer, sizeof(size_t)*5);
-
-    assert(sym_map.size()==sigma);
-
-    //write symbol mappings
-    size_t left, right;
-    for(auto const pair : sym_map){
-        left = pair.first;
-        right = pair.second;
-        of_stream.write((char *) &left, sizeof(size_t));
-        of_stream.write((char *) &right, sizeof(size_t));
-    }
-
-    buffer[0] = rules_file.size();
-    of_stream.write((char *) buffer, sizeof(size_t));
-    of_stream.write(rules_file.c_str(), rules_file.size());
-
-    buffer[0] = rules_lim_file.size();
-    of_stream.write((char *) buffer, sizeof(size_t));
-    of_stream.write(rules_lim_file.c_str(), rules_lim_file.size());
-
-    buffer[0] = is_rl_file.size();
-    of_stream.write((char *) buffer, sizeof(size_t));
-    of_stream.write(is_rl_file.c_str(), is_rl_file.size());
-
-    buffer[0] = lvl_breaks_file.size();
-    of_stream.write((char *) buffer, sizeof(size_t));
-    of_stream.write(lvl_breaks_file.c_str(), lvl_breaks_file.size());
-
-    size_t len = rules_per_level.size();
-    of_stream.write((char *) &len, sizeof(size_t));
-    of_stream.write((char *)rules_per_level.data(), sizeof(size_t)*rules_per_level.size());
-
-    of_stream.close();
-}
-
-void plain_grammar_t::load_from_file(std::string &g_file){
-
-    size_t buffer[255];
-    std::ifstream fp(g_file, std::ifstream::binary);
-
-    fp.read((char *)buffer, sizeof(size_t)*5);
-
-    sigma = buffer[0];
-    r = buffer[1];
-    c = buffer[2];
-    g = buffer[3];
-    max_tsym = buffer[4];
-
-    for(size_t i=0;i<sigma;i++){
-        fp.read((char *)&buffer[0], sizeof(size_t));
-        fp.read((char *)&buffer[1], sizeof(size_t));
-        sym_map.insert({buffer[0], buffer[1]});
-    }
-
-    fp.read((char *)buffer, sizeof(size_t));
-    auto tmp_file = reinterpret_cast<char *>(malloc(buffer[0]+1));
-    fp.read(tmp_file, buffer[0]);
-    tmp_file[buffer[0]]='\0';
-    rules_file = std::string(tmp_file);
-
-    fp.read((char *)buffer, sizeof(size_t));
-    tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
-    fp.read(tmp_file, buffer[0]);
-    tmp_file[buffer[0]] = '\0';
-    rules_lim_file = std::string(tmp_file);
-
-    fp.read((char *)buffer, sizeof(size_t));
-    tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
-    fp.read(tmp_file, buffer[0]);
-    tmp_file[buffer[0]] = '\0';
-    is_rl_file = std::string(tmp_file);
-
-    fp.read((char *)buffer, sizeof(size_t));
-    tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
-    fp.read(tmp_file, buffer[0]);
-    tmp_file[buffer[0]] = '\0';
-    lvl_breaks_file = std::string(tmp_file);
-
-    size_t len=0;
-    fp.read((char *)&len, sizeof(size_t));
-    auto tmp_arr = reinterpret_cast<size_t*>(malloc(sizeof(size_t)*len));
-    fp.read((char*)tmp_arr, sizeof(size_t)*len);
-
-    for(size_t i=0;i<len;i++){
-        rules_per_level.push_back(tmp_arr[i]);
-    }
-    fp.close();
-    free(tmp_file);
 }

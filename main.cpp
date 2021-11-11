@@ -29,7 +29,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
     fmt->column_width(23);
     app.formatter(fmt);
 
-    CLI::App *gram = app.add_subcommand("build", "Create the LPG grammar");
+    CLI::App *gram = app.add_subcommand("gram", "Create the LPG grammar");
     app.set_help_all_flag("--help-all", "Expand all help");
 
     app.add_flag("-V,--version",
@@ -65,10 +65,15 @@ int main(int argc, char** argv) {
 
     CLI11_PARSE(app, argc, argv);
 
-    if(app.got_subcommand("build")) {
+    if(app.got_subcommand("gram")) {
 
         std::cout << "Computing the grammar for the self-index" << std::endl;
         std::string tmp_folder = create_temp_folder(args.tmp_dir, "lpg_gram");
+
+        if(args.output_file.empty()){
+            args.output_file = std::filesystem::path(args.input_file).filename();
+            args.output_file += ".gram";
+        }
 
         //maximum amount of RAM allowed to spend in parallel for the hashing step
         compute_LPG_gram(args.input_file, args.output_file, tmp_folder, args.n_threads, args.hbuff_frac);

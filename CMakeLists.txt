@@ -11,7 +11,7 @@ add_executable(lpg
         lib/lpg_build.cpp
         lib/utils.cpp
         external/xxHash-dev/xxhash.c
-        )
+        lib/grammar.cpp include/grammar.hpp)
 
 target_compile_options(lpg
         PRIVATE
