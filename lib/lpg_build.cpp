@@ -7,6 +7,7 @@
 #include <sdsl/select_support_mcl.hpp>
 #include "cdt/parallel_string_sort.hpp"
 //#include "repair_algo.hpp"
+#include "suffpair_algo.hpp"
 
 void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
 
@@ -17,8 +18,8 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
     bv_t::select_1_type r_lim_ss;
     sdsl::util::init_support(r_lim_ss, &r_lim);
 
-    bv_t is_rl;
-    sdsl::load_from_file(is_rl, p_gram.is_rl_file);
+    //bv_t is_rl;
+    //sdsl::load_from_file(is_rl, p_gram.is_rl_file);
 
     std::cout<<"  Checking the grammar produces the exact input string"<<std::endl;
     std::cout<<"    This step is optional and for debugging purposes"<<std::endl;
@@ -46,7 +47,6 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
 
             curr_sym = stack.top() ;
             stack.pop();
-            //std::cout<<curr_sym<<std::endl;
 
             if(curr_sym==0){
                 start = 0;
@@ -63,7 +63,7 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
             }else{
                 //this is a dummy way of handling rl nonterminals,
                 // but I don't have enough time
-                if(is_rl[curr_sym]){
+                if(curr_sym>=p_gram.n_rl_rules && curr_sym<p_gram.n_sp_rules){
                     assert(end-start+1==2);
                     for(size_t k=0;k<r[end];k++){
                         stack.push(r[start]);
@@ -133,9 +133,9 @@ void compute_LPG_gram(std::string &i_file, std::string &gram_file, std::string& 
     std::string rules_file = sdsl::cache_file_name("rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
     std::string lvl_breaks_file = sdsl::cache_file_name("lvl_breaks", config);
-    std::string is_rl_file = sdsl::cache_file_name("is_rl", config);
+    //std::string is_rl_file = sdsl::cache_file_name("is_rl", config);
 
-    gram_info_t p_gram(rules_file, rules_len_file, is_rl_file, lvl_breaks_file);
+    gram_info_t p_gram(rules_file, rules_len_file, lvl_breaks_file);
     p_gram.sigma = alphabet.size();
 
     // given an index i in symbol_desc
@@ -219,17 +219,22 @@ void compute_LPG_gram(std::string &i_file, std::string &gram_file, std::string& 
     }
     p_gram.g = rules.size();
 
+    p_gram.n_lcp_rules = p_gram.r-(p_gram.max_tsym+2);
     rules.close();
     rules_lim.close();
 
     std::cout<<"  Resulting locally consistent grammar:    "<<std::endl;
     std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
-    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
+    std::cout<<"    Number of nonterminals: "<<p_gram.n_lcp_rules+1<<std::endl;
     std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
     std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     run_length_compress(p_gram, config);
     //repair(p_gram, config);
+    suffpair(p_gram, config, n_threads, hbuff_size);
+
+    check_plain_grammar(p_gram, i_file);
+    exit(0);
 
     bv_t rem_nts = mark_nonterminals(p_gram);
     bv_t::rank_1_type rem_nts_rs(&rem_nts);
@@ -779,9 +784,9 @@ void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem
     sdsl::load_from_file(rules, p_gram.rules_file);
     size_t max_tsym = p_gram.max_tsym;
 
-    bv_t is_rl;
-    sdsl::load_from_file(is_rl, p_gram.is_rl_file);
-    sdsl::int_vector_buffer<1> new_is_rl(p_gram.is_rl_file, std::ios::out);
+    //bv_t is_rl;
+    //sdsl::load_from_file(is_rl, p_gram.is_rl_file);
+    //sdsl::int_vector_buffer<1> new_is_rl(p_gram.is_rl_file, std::ios::out);
 
     ivb_t new_rules(p_gram.rules_file, std::ios::out);
     sdsl::int_vector_buffer<1> new_r_lim(p_gram.rules_lim_file, std::ios::out);
@@ -813,7 +818,7 @@ void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem
         while(!r_lim[i]) i++;
         i++;
 
-        if(!rem_nts[curr_rule]){
+        /*if(!rem_nts[curr_rule]){
             if(!is_rl[curr_rule]){//regular rule
                 for(size_t j=pos;j<i;j++){
                     if(rem_nts[rules[j]]){
@@ -826,15 +831,15 @@ void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem
                 assert((i-pos)==2);
                 new_rules.push_back(rules[pos]-rem_nts_rs(rules[pos]));
                 new_rules.push_back(rules[pos+1]);
-                new_is_rl[tr_rule] = true;
+                //new_is_rl[tr_rule] = true;
             }
             new_r_lim[new_rules.size()-1]=true;
             tr_rule++;
-        }
+        }*/
     }
 
     //mark the compressed string as a non-run-length rule
-    new_is_rl[tr_rule-1]=false;
+    //new_is_rl[tr_rule-1]=false;
 
     size_t rm_nt =rem_nts_rs(rem_nts.size());
     float rm_per = float(rm_nt)/float(p_gram.r)*100;
@@ -856,7 +861,7 @@ void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem
 
     new_rules.close();
     new_r_lim.close();
-    new_is_rl.close();
+    //new_is_rl.close();
     p_gram.r -= rm_nt;
     p_gram.g = new_rules.size();
 }
@@ -946,6 +951,7 @@ rec_dc(gram_wrapper_t& gram_w, size_t nt, uint8_t lev) {
     return lms_breaks;
 }
 
+/*
 void create_lvl_breaks(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs) {
 
     std::cout<<"  Computing the grid level of every nonterminal cut"<<std::endl;
@@ -999,7 +1005,7 @@ void create_lvl_breaks(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &re
         }
         curr_rule++;
     }
-}
+}*/
 
 bv_t mark_nonterminals(gram_info_t &p_gram) {
 
@@ -1012,12 +1018,12 @@ bv_t mark_nonterminals(gram_info_t &p_gram) {
     sdsl::int_vector<> rules;
     sdsl::load_from_file(rules, p_gram.rules_file);
 
-    sdsl::int_vector_buffer<1> is_rl(p_gram.is_rl_file, std::ios::in);
+    //sdsl::int_vector_buffer<1> is_rl(p_gram.is_rl_file, std::ios::in);
     size_t rl_rule=max_tsym+1;
     for(unsigned long freq : p_gram.rules_per_level){
         rl_rule+=freq;
     }
-    assert(!is_rl[rl_rule-1]);
+    //assert(!is_rl[rl_rule-1]);
 
     bv_t rem_nts(p_gram.r, false);
 
@@ -1072,9 +1078,9 @@ bv_t mark_nonterminals(gram_info_t &p_gram) {
 
     //unmark the run-length rules
     while(rl_rule<p_gram.r-1){
-        if(is_rl[rl_rule]){
+        /*if(is_rl[rl_rule]){
             rem_nts[rl_rule] = false;
-        }
+        }*/
         rl_rule++;
     }
 
@@ -1083,6 +1089,7 @@ bv_t mark_nonterminals(gram_info_t &p_gram) {
     return rem_nts;
 }
 
+/*
 void colex_nt_sort(gram_info_t &p_gram) {
 
     //that this point, the grammar is supposed to be collapsed
@@ -1131,14 +1138,6 @@ void colex_nt_sort(gram_info_t &p_gram) {
             }
         }
 
-        /*if(curr_rule==1182963) {
-            std::cout << curr_rule << " : ";
-            for (char sym : tmp_buff) {
-                std::cout << (size_t) sym << " ";
-            }
-            std::cout << "" << std::endl;
-        }*/
-
         nt_pairs.emplace_back(curr_rule, std::move(tmp_buff));
         curr_rule++;
     }
@@ -1154,13 +1153,6 @@ void colex_nt_sort(gram_info_t &p_gram) {
         }
         return left.second.size()<right.second.size();
     });
-
-    //TODO testing
-    /*std::cout<<"the string: "<<nt_pairs[0].first<<std::endl;
-    for(size_t i=0;i<nt_pairs[0].second.size();i++){
-        std::cout<<(size_t)nt_pairs[0].second[i]<<std::endl;
-    }*/
-    //
 
     ivb_t new_rules(p_gram.rules_file, std::ios::out);
     sdsl::int_vector_buffer<1> new_rlim(p_gram.rules_lim_file, std::ios::out);
@@ -1195,12 +1187,6 @@ void colex_nt_sort(gram_info_t &p_gram) {
         new_rules.push_back(rules[pos]);
         assert(r_lim[pos]);
         new_rlim[new_rules.size()-1] = true;
-
-        /*std::cout<<nt_data.first<<" = "<<rank-1<<" -> ";
-        for(size_t j=nt_data.second.size();j-->0;){
-            std::cout<<(int)nt_data.second[j]<<" ";
-        }
-        std::cout<<""<<std::endl;*/
     }
     std::swap(p_gram.sym_map, new_map);
     assert(p_gram.sym_map.size()==p_gram.sigma);
@@ -1217,9 +1203,6 @@ void colex_nt_sort(gram_info_t &p_gram) {
     curr_rule=0;
     size_t k=0;
     while(k<new_rules.size()){
-        /*if(renames[new_rules[k]]==0){
-            std::cout<<new_rules[k]<<" "<<p_gram.r<<" "<<rlim_ss(new_rules[k])+1<<" "<<rlim_ss(new_rules[k]+1)<<std::endl;
-        }*/
         new_rules[k] = renames[new_rules[k]];
         if(new_is_rl[curr_rule]){
             assert(!new_rlim[k] && new_rlim[k+1]);
@@ -1230,32 +1213,11 @@ void colex_nt_sort(gram_info_t &p_gram) {
         }
         k++;
     }
-
-    //TODO testing
-    /*size_t cont=0;
-    for(auto && new_rule : new_rules){
-        if(new_rule==0){
-            cont++;
-        }
-    }
-    std::cout<<"there are "<<cont<<" zeroes"<<std::endl;*/
-    //
-
-    //renaming the rules in the lvl_breaks
-    /*ivb_t lvl_breaks(p_gram.lvl_breaks_file, std::ios::in | std::ios::out);
-    k=0;
-    while(k<lvl_breaks.size()){
-        lvl_breaks[k] = renames[lvl_breaks[k]];
-        k++;
-        k+=lvl_breaks[k]+1;
-    }
-    assert(k==lvl_breaks.size());
-    lvl_breaks.close();*/
-
     sdsl::store_to_file(new_is_rl, p_gram.is_rl_file);
     new_rules.close();
     new_rlim.close();
 }
+*/
 
 void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
@@ -1263,7 +1225,7 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
     sdsl::int_vector_buffer<> rules(p_gram.rules_file, std::ios::in);
     sdsl::int_vector_buffer<1> r_lim(p_gram.rules_lim_file, std::ios::in);
-    sdsl::int_vector_buffer<1> is_rl_bv(p_gram.is_rl_file, std::ios::out);
+    //sdsl::int_vector_buffer<1> is_rl_bv(p_gram.is_rl_file, std::ios::out);
 
     std::string rl_rules_file = sdsl::cache_file_name("tmp_rl_file", config);
     sdsl::int_vector_buffer<> rl_rules(rl_rules_file, std::ios::out);
@@ -1283,7 +1245,6 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
     size_t i=p_gram.sigma+1;
     while(i<rules.size()-p_gram.c){
-        //std::cout<<rules[i-1]<<" ";
         if(rules[i]!=rules[i-1] || r_lim[i-1]){
             if(run_len>1){
                 pair.write(0, rules[i-1]);
@@ -1296,7 +1257,6 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
                 }else{
                     tmp_sym = res.first.value();
                 }
-                //std::cout<<"("<<pair[0]<<" "<<pair[1]<<")"<<" "<<tmp_sym<<std::endl;
             }else{
                 tmp_sym = rules[i-1];
             }
@@ -1307,9 +1267,6 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
                 rl_r_lim[rl_rules.size()-1] = true;
             }
         }
-        /*if(r_lim[i-1]){
-            std::cout<<""<<std::endl;
-        }*/
         run_len++;
         i++;
     }
@@ -1338,15 +1295,16 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
         rl_rules.push_back(key_w.read(phrase, 0));
         rl_rules.push_back(key_w.read(phrase, 1));
         rl_r_lim[rl_rules.size()-1] = true;
-        is_rl_bv[new_id++]=true;
+        //is_rl_bv[new_id++]=true;
     }
-    is_rl_bv[new_id]=false;
+    //is_rl_bv[new_id]=false;
 
     for(size_t k=rules.size()-p_gram.c;k<rules.size();k++){
         rl_rules.push_back(rules[k]);
     }
     rl_r_lim[rl_rules.size()-1] = true;
 
+    p_gram.n_rl_rules = p_gram.r-1;//first rl-run
     p_gram.r+=ht.size();
     p_gram.g = rl_rules.size();
 
@@ -1360,7 +1318,7 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
     r_lim.close();
     rl_rules.close();
     rl_r_lim.close();
-    is_rl_bv.close();
+    //is_rl_bv.close();
 
     rename(rl_rules_file.c_str(), p_gram.rules_file.c_str());
     rename(rl_r_lim_file.c_str(), p_gram.rules_lim_file.c_str());

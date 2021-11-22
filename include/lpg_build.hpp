@@ -201,10 +201,11 @@ template<class sym_t> void * record_phrases(void *data);
 //mark the nonterminals that can be removed from the grammar
 bv_t mark_nonterminals(gram_info_t& p_gram);
 void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
-void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
-            bv_t::rank_1_type &rem_nt_rs, ivb_t &dec);
+void run_length_compress(gram_info_t& p_gram, sdsl::cache_config& config);
 
 //this source code is for debugging
+void decomp(size_t nt, sdsl::int_vector<> &rules, bv_t::select_1_type &rlim_ss, bv_t &rem_nt,
+            bv_t::rank_1_type &rem_nt_rs, ivb_t &dec);
 struct gram_wrapper_t{
     const gram_info_t&         p_gram;
     const sdsl::int_vector<>&  rules;
@@ -231,5 +232,4 @@ std::vector<uint8_t> rec_dc(gram_wrapper_t& gram_w, size_t nt, uint8_t lev);
 void rec_dc_int(gram_wrapper_t& gram_w, size_t nt, uint8_t lev, size_t &pos, bool rm,
                        std::vector<uint8_t> &lms_breaks);
 void colex_nt_sort(gram_info_t &p_gram);
-void run_length_compress(gram_info_t& p_gram, sdsl::cache_config& config);
 #endif //LG_COMPRESSOR_LMS_ALGO_H
