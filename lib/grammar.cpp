@@ -10,13 +10,14 @@ grammar::size_type grammar::serialize(std::ostream& out, sdsl::structure_tree_no
     written_bytes+= sdsl::write_member(n_seqs, out, child, "n_seqs");
     written_bytes+= sdsl::write_member(grammar_size, out, child, "grammar_size");
     written_bytes+= sdsl::write_member(sigma, out, child, "n_ter");
-    written_bytes+= sdsl::write_member(n_nter, out, child, "n_nter");
+    written_bytes+= sdsl::write_member(n_gram_symbols, out, child, "n_gram_symbols");
     written_bytes+= sdsl::write_member(comp_string_size, out, child, "comp_string_size");
+    written_bytes+= sdsl::write_member(n_p_rounds, out, child, "n_p_rounds");
+    written_bytes+= rules_breaks.serialize(out, child, "rules_breaks");
     written_bytes+= symbols_map.serialize(out, child, "symbols_map");
     written_bytes+= rules.serialize(out, child, "rules");
     written_bytes+= nter_ptr.serialize(out, child, "nter_pointers");
     written_bytes+= seq_pointers.serialize(out, child, "seq_pointers");
-    //written_bytes+= is_rl.serialize(out, child, "is_rl");
     return written_bytes;
 }
 
@@ -25,23 +26,24 @@ void grammar::load(std::ifstream& in){
     sdsl::read_member(n_seqs, in);
     sdsl::read_member(grammar_size, in);
     sdsl::read_member(sigma, in);
-    sdsl::read_member(n_nter, in);
+    sdsl::read_member(n_gram_symbols, in);
     sdsl::read_member(comp_string_size, in);
+    sdsl::read_member(n_p_rounds, in);
+    rules_breaks.load(in);
     symbols_map.load(in);
     rules.load(in);
     nter_ptr.load(in);
     seq_pointers.load(in);
-    //is_rl.load(in);
 }
 
 void grammar::mark_str_boundaries() {
 
     std::stack<size_t> stack;
-    size_t pos = nter_ptr[n_nter-1], sym, suff_sym, sym_state, seq=0;
+    size_t pos = nter_ptr[n_gram_symbols - 1], sym, suff_sym, sym_state, seq=0;
     //0 : the symbol's rule has not been visited yet
     //1 : the symbol recursively expands to a string suffix
     //2 : the symbol does not recursively expand to a string suffix
-    sdsl::int_vector<2> state(n_nter, 0);
+    sdsl::int_vector<2> state(n_gram_symbols, 0);
     seq_pointers.width(sdsl::bits::hi(comp_string_size)+1);
     seq_pointers.resize(n_seqs);
     state[0] = 1;
@@ -50,13 +52,12 @@ void grammar::mark_str_boundaries() {
         sym =  rules[pos];
         if(sym>=sigma && state[sym]==0){
 
-            //suff_sym = is_rl[sym] ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
+            suff_sym = is_rl(sym) ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
 
             while(suff_sym!=sym && state[suff_sym]==0){
-
                 stack.push(suff_sym);
                 sym = suff_sym;
-                //suff_sym = is_rl[sym] ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
+                suff_sym = is_rl(sym) ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
             }
 
             sym_state = state[suff_sym]==1 ? 1: 2;
@@ -73,7 +74,14 @@ void grammar::mark_str_boundaries() {
         }
         pos++;
     }
-    std::cout<<seq<<" "<<n_seqs<<std::endl;
+}
+
+std::string grammar::im_decomp_seq(size_t idx) {
+    return std::string();
+}
+
+std::string grammar::decomp_seq(size_t idx) {
+    return std::string();
 }
 
 void gram_info_t::save_to_file(std::string& output_file){
@@ -109,23 +117,9 @@ void gram_info_t::save_to_file(std::string& output_file){
     of_stream.write((char *) buffer, sizeof(size_t));
     of_stream.write(rules_lim_file.c_str(), std::streamsize(rules_lim_file.size()));
 
-    /*buffer[0] = is_rl_file.size();
-    of_stream.write((char *) buffer, sizeof(size_t));
-    of_stream.write(is_rl_file.c_str(), std::streamsize(is_rl_file.size()));*/
-
-    buffer[0] = lvl_breaks_file.size();
-    of_stream.write((char *) buffer, sizeof(size_t));
-    of_stream.write(lvl_breaks_file.c_str(), std::streamsize(lvl_breaks_file.size()));
-
-    size_t len = rules_per_level.size();
+    size_t len = rules_breaks.size();
     of_stream.write((char *) &len, sizeof(size_t));
-    of_stream.write((char *)rules_per_level.data(), std::streamsize(sizeof(size_t)*rules_per_level.size()));
-
-    buffer[0] = n_lcp_rules;
-    buffer[1] = n_rl_rules;
-    buffer[2] = n_sp_rules;
-
-    of_stream.write((char *) buffer, sizeof(size_t)*3);
+    of_stream.write((char *)rules_breaks.data(), std::streamsize(sizeof(size_t) * rules_breaks.size()));
 
     of_stream.close();
 }
@@ -161,31 +155,14 @@ void gram_info_t::load_from_file(std::string &g_file){
     tmp_file[buffer[0]] = '\0';
     rules_lim_file = std::string(tmp_file);
 
-    /*fp.read((char *)buffer, sizeof(size_t));
-    tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
-    fp.read(tmp_file, std::streamsize(buffer[0]));
-    tmp_file[buffer[0]] = '\0';
-    is_rl_file = std::string(tmp_file);*/
-
-    fp.read((char *)buffer, sizeof(size_t));
-    tmp_file = reinterpret_cast<char *>(realloc(tmp_file, buffer[0]+1));
-    fp.read(tmp_file, std::streamsize(buffer[0]));
-    tmp_file[buffer[0]] = '\0';
-    lvl_breaks_file = std::string(tmp_file);
-
     size_t len=0;
     fp.read((char *)&len, sizeof(size_t));
     auto tmp_arr = reinterpret_cast<size_t*>(malloc(sizeof(size_t)*len));
     fp.read((char*)tmp_arr, std::streamsize(sizeof(size_t)*len));
 
     for(size_t i=0;i<len;i++){
-        rules_per_level.push_back(tmp_arr[i]);
+        rules_breaks.push_back(tmp_arr[i]);
     }
     fp.close();
     free(tmp_file);
-
-    fp.read((char *)buffer, sizeof(size_t)*3);
-    n_lcp_rules = buffer[0];
-    n_rl_rules = buffer[1];
-    n_sp_rules = buffer[2];
 }

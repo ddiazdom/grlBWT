@@ -199,7 +199,7 @@ template<class sym_t> void * hash_phrases(void * data);
 template<class sym_t> void * record_phrases(void *data);
 
 //mark the nonterminals that can be removed from the grammar
-bv_t mark_nonterminals(gram_info_t& p_gram);
+bv_t mark_unique_nonterminals(gram_info_t& p_gram);
 void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &rem_nts_rs);
 void run_length_compress(gram_info_t& p_gram, sdsl::cache_config& config);
 

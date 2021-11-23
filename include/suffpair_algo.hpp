@@ -51,7 +51,7 @@ struct pairing_data{
         hbuff_size = hbuff_size_;
         n_threads = n_treads_;
         next_av_rule = gram_info.r - 1; //I subtract one as the last rule is the compressed string
-        tot_lms_rules = gram_info.n_lcp_rules; // the same
+        tot_lms_rules = gram_info.rules_breaks[gram_info.n_p_rounds]-(gram_info.max_tsym+1); // the same
         lim_id = 2*gram_info.g - gram_info.r;
         s_width = sdsl::bits::hi(lim_id)+1;
         r_file = gram_info.rules_file;
@@ -228,24 +228,14 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     p_data.r_lim.resize(n_av);
     sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
 
-    /*{
-        sdsl::bit_vector is_rl;
-        sdsl::load_from_file(is_rl, gram.is_rl_file);
-        is_rl.resize(gram.r+1+p_data.new_rules.size()/2);
-        for(size_t i=gram.r;i<is_rl.size();i++){
-            is_rl[i] = false;
-        }
-        sdsl::store_to_file(is_rl, gram.is_rl_file);
-    }*/
-
-    gram.n_sp_rules = gram.r-1;
     gram.r += p_data.new_rules.size()/2;
+    gram.rules_breaks.push_back(gram.rules_breaks.back() + p_data.new_rules.size() / 2);
 
     col_rules.close();
     rules.close();
     rename(col_rules.filename().c_str(), gram.rules_file.c_str());
 
-    std::cout<<"    SuffPair stats:"<<std::endl;
+    std::cout<<"    Stats:"<<std::endl;
     std::cout<<"      Grammar size before:         "<<gram.g<< std::endl;
     std::cout<<"      Grammar size after:          "<<n_av<<std::endl;
     std::cout<<"      Number of new nonterminals:  "<<p_data.new_rules.size()/2<<std::endl;
@@ -262,14 +252,14 @@ void prepare_input(gram_info_t& gram_info, bv_t& rep_syms, sdsl::cache_config& c
     std::string tmp_string = sdsl::cache_file_name("tmp_rules", config);
     o_file_stream<size_t> tmp_r(tmp_string,  BUFFER_SIZE, std::ios::out);
     sdsl::int_vector<2> tmp_rep(gram_info.r - 1, 0);
-    size_t rule_id=0, sym;
+    size_t rule_id=gram_info.max_tsym+1, sym;
 
     for(size_t i=0;i<=gram_info.max_tsym;i++) tmp_r.push_back(rules[i]);
     for (size_t i=gram_info.max_tsym+1;i<rules.size();i++){
         sym = rules[i];
         tmp_r.push_back(sym);
 
-        if(rule_id<gram_info.n_lcp_rules && tmp_rep[sym]<2) tmp_rep[sym]++;
+        if(rule_id<gram_info.rules_breaks[gram_info.n_p_rounds] && tmp_rep[sym]<2) tmp_rep[sym]++;
         if(rules_lim[i]) rule_id++;
     }
     rules.close(true);
