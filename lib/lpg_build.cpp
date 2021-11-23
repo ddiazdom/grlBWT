@@ -261,6 +261,7 @@ void compute_LPG_gram(std::string &i_file, std::string &gram_file, std::string& 
     std::cout<<"    Grammar size in MB:     " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(1000000)<< std::endl;
     std::cout<<"    Compression ratio:      " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(n_chars) << std::endl;
 
+    std::cout<<"  Storing the final grammar" << std::endl;
     grammar final_gram(p_gram, n_chars, alphabet[0].second);
     sdsl::store_to_file(final_gram, gram_file);
 
@@ -1002,6 +1003,7 @@ void create_lvl_breaks(gram_info_t &p_gram, bv_t &rem_nts, bv_t::rank_1_type &re
 
 bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
 
+    std::cout<<"  Marking the rules to remove from the grammar"<<std::endl;
     size_t max_tsym = p_gram.max_tsym;
 
     bv_t r_lim;

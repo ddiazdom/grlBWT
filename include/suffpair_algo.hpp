@@ -187,7 +187,6 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     std::cout<<"    Updating the grammar"<<std::endl;
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
 
-    std::cout<<"    Collapsing LMS rules"<<std::endl;
     std::string tr_file = sdsl::cache_file_name("col_rules", p_data.config);
     ivb col_rules(tr_file, std::ios::out);
 
