@@ -10,15 +10,16 @@
 #include "cdt/file_streams.hpp"
 
 #define BUFFER_SIZE 8388608 //8MB of buffer
-typedef sdsl::bit_vector                       bv_t;
-typedef sdsl::bit_vector::rank_1_type          bv_rs_t;
-typedef sdsl::bit_vector::select_1_type        bv_ss_t;
-typedef sdsl::int_vector_buffer<1>             bvb_t;
-typedef sdsl::int_vector_buffer<>              ivb_t;
-typedef int_array<size_t>                      string_t;
-typedef bit_hash_table<size_t,44>              phrase_map_t;
-typedef bit_hash_table<bool,1>                 dict_t;
-typedef typename dict_t::buff_t                ht_buff_t;
+typedef sdsl::bit_vector                        bv_t;
+typedef sdsl::bit_vector::rank_1_type           bv_rs_t;
+typedef sdsl::bit_vector::select_1_type         bv_ss_t;
+typedef sdsl::int_vector_buffer<1>              bvb_t;
+typedef sdsl::int_vector_buffer<>               ivb_t;
+typedef int_array<size_t>                       string_t;
+typedef bit_hash_table<size_t,44>               phrase_map_t;
+typedef bit_hash_table<bool,1>                  dict_t;
+typedef typename dict_t::buff_t                 ht_buff_t;
+typedef std::vector<std::pair<uint8_t, size_t>> alpha_t;
 
 // the phrases are stored in a bit-compressed hash table:
 // this wrapper reinterprets the bits back as phrases

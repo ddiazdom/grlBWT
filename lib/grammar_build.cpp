@@ -370,7 +370,6 @@ void build_gram(std::string &i_file,
     for (auto const &sym : alphabet) n_chars += sym.second;
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(n_chars) * hbuff_frac)));
 
-    std::cout<<"  Generating the LMS-based locally consistent grammar:    "<<std::endl;
     sdsl::cache_config config(false, tmp_folder);
     std::string g_info_file = sdsl::cache_file_name("g_info_file", config);
 
@@ -379,97 +378,13 @@ void build_gram(std::string &i_file,
 
     gram_info_t p_gram(rules_file, rules_len_file);
     p_gram.sigma = alphabet.size();
-
-    // given an index i in symbol_desc
-    //0 symbol i is in alphabet is unique
-    //1 symbol i is repeated
-    //>2 symbol i is sep symbol
-    sdsl::int_vector<2> symbol_desc(alphabet.back().first+1,0);
-
     for(auto & sym : alphabet){
         p_gram.sym_map[sym.first] = sym.first;
-        symbol_desc[sym.first] = sym.second > 1;
     }
     p_gram.max_tsym = alphabet.back().first;
     p_gram.r = p_gram.max_tsym + 1;
-    symbol_desc[alphabet[0].first]+=2;
 
-    ivb_t rules(p_gram.rules_file, std::ios::out, BUFFER_SIZE);
-    bvb_t rules_lim(p_gram.rules_lim_file, std::ios::out);
-    for(size_t i=0;i<p_gram.r; i++){
-        rules.push_back(i);
-        rules_lim.push_back(true);
-    }
-    for(auto const& pair : p_gram.sym_map){
-        rules[pair.first] = pair.first;
-    }
-
-    std::string output_file = sdsl::cache_file_name("tmp_output", config);
-    std::string tmp_i_file = sdsl::cache_file_name("tmp_input", config);
-
-    size_t iter=1;
-    size_t rem_phrases;
-
-    std::cout<<"    Parsing round "<<iter++<<std::endl;
-    rem_phrases = lc_algo<uint8_t>(i_file, tmp_i_file,
-                                   n_threads, hbuff_size,
-                                   p_gram, rules, rules_lim,
-                                   symbol_desc, config);
-
-    while (rem_phrases > 0) {
-        std::cout<<"    Parsing round "<<iter++<<std::endl;
-        rem_phrases = lc_algo<size_t>(tmp_i_file, output_file,
-                                      n_threads, hbuff_size,
-                                      p_gram, rules, rules_lim,
-                                      symbol_desc, config);
-        remove(tmp_i_file.c_str());
-        rename(output_file.c_str(), tmp_i_file.c_str());
-    }
-
-    sdsl::util::clear(symbol_desc);
-
-    {//put the compressed string at end
-        std::ifstream c_vec(tmp_i_file, std::ifstream::binary);
-        c_vec.seekg(0, std::ifstream::end);
-        size_t tot_bytes = c_vec.tellg();
-        c_vec.seekg(0, std::ifstream::beg);
-        auto *buffer = reinterpret_cast<size_t*>(malloc(BUFFER_SIZE));
-        size_t read_bytes =0;
-        p_gram.c=0;
-        while(read_bytes<tot_bytes){
-            c_vec.read((char *) buffer, BUFFER_SIZE);
-            read_bytes+=c_vec.gcount();
-            assert((c_vec.gcount() % sizeof(size_t))==0);
-            for(size_t i=0;i<c_vec.gcount()/sizeof(size_t);i++){
-                rules.push_back(buffer[i]);
-                rules_lim.push_back(false);
-                p_gram.c++;
-            }
-        }
-        rules_lim[rules_lim.size() - 1] = true;
-        p_gram.r++;
-        c_vec.close();
-        free(buffer);
-    }
-    p_gram.g = rules.size();
-
-    p_gram.n_p_rounds = p_gram.rules_breaks.size();
-    std::vector<size_t> rule_breaks;
-    rule_breaks.push_back(p_gram.max_tsym+1);
-    for(unsigned long i : p_gram.rules_breaks){
-        rule_breaks.push_back(rule_breaks.back()+i);
-    }
-    std::swap(p_gram.rules_breaks, rule_breaks);
-
-    rules.close();
-    rules_lim.close();
-
-    std::cout<<"    Resulting locally consistent grammar:    "<<std::endl;
-    std::cout<<"      Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
-    std::cout<<"      Number of nonterminals: "<<p_gram.rules_breaks.back()-(p_gram.max_tsym+1)+1<<std::endl;
-    std::cout<<"      Grammar size:           "<<p_gram.g<<std::endl;
-    std::cout<<"      Compressed string:      "<<p_gram.c<<std::endl;
-
+    build_lc_gram(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     run_length_compress(p_gram, config);
     suffpair(p_gram, config, n_threads, hbuff_size);
 
@@ -507,8 +422,5 @@ void build_gram(std::string &i_file,
     grammar final_gram(p_gram, n_chars, alphabet[0].second);
     sdsl::store_to_file(final_gram, p_gram_file);
 
-    if(remove(tmp_i_file.c_str())){
-        std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
-    }
 }
 

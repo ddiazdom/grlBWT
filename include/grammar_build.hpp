@@ -8,7 +8,6 @@
 #include "lms_algo.hpp"
 #include "suffpair_algo.hpp"
 
-typedef std::vector<std::pair<uint8_t, size_t>>      alpha_t;
 
 //this source code is for debugging
 void decomp(size_t nt, sdsl::int_vector<> &rules,

@@ -22,7 +22,7 @@ struct parsing_info {
     size_t                     start;
     size_t                     end;
     const uint8_t              sym_width;
-    dict_t                     thread_dict;
+    dict_t                     dict;
 
     parsing_info(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
                  size_t start_, size_t end_,
@@ -35,14 +35,14 @@ struct parsing_info {
                                                             start(start_),
                                                             end(end_),
                                                             sym_width(sdsl::bits::hi(alph)+1),
-                                                            thread_dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
+                                                            dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
         //TODO for the moment the input string has to have a sep_symbol appended at the end
         //TODO assertion : sep_symbols cannot be consecutive
     };
 
     inline void hash_phrase(string_t& phrase) {
         phrase.mask_tail();
-        auto res = thread_dict.insert(phrase.data(), phrase.n_bits(), false);
+        auto res = dict.insert(phrase.data(), phrase.n_bits(), false);
     };
 
     inline void store_phrase(string_t& phrase){
@@ -59,6 +59,22 @@ struct parsing_info {
     inline bool is_suffix(sym_type symbol) const{
         return phrase_desc[symbol] & 2;
     }
+
+    /*void common_op(std::string str, const std::function<void(std::string&)>& func){
+        func(str);
+    }
+
+    void wrapper1(){
+        common_op("hola", [&](std::string& str){
+            std::cout<<"Wrapper 1 for "<<str<<std::endl;
+        });
+    }
+
+    void wrapper2(){
+        common_op("chao", [&](std::string& str){
+            std::cout<<"Wrapper 2 for "<<str<<std::endl;
+        });
+    }*/
 };
 
 /***
@@ -110,10 +126,12 @@ void * hash_phrases(void * data);
 template<class sym_t>
 void * record_phrases(void *data);
 
+void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
+                      gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);
 template<class sym_type>
-size_t lc_algo(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-               gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
-               sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
+size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
+                         gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
+                         sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
 void join_parse_chunks(const std::string &output_file,
                        std::vector<std::string> &chunk_files);
 void join_thread_phrases(phrase_map_t& mp_map, std::vector<std::string> &chunk_files);
