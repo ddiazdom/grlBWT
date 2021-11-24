@@ -6,11 +6,11 @@
 
 grammar::size_type grammar::serialize(std::ostream& out, sdsl::structure_tree_node * v, std::string name) const {
     sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
-    size_type written_bytes= sdsl::write_member(orig_size, out, child, "orig_size");
-    written_bytes+= sdsl::write_member(n_seqs, out, child, "n_seqs");
+    size_type written_bytes= sdsl::write_member(text_size, out, child, "text_size");
+    written_bytes+= sdsl::write_member(n_strings, out, child, "n_strings");
     written_bytes+= sdsl::write_member(grammar_size, out, child, "grammar_size");
-    written_bytes+= sdsl::write_member(sigma, out, child, "n_ter");
-    written_bytes+= sdsl::write_member(n_gram_symbols, out, child, "n_gram_symbols");
+    written_bytes+= sdsl::write_member(text_alph, out, child, "n_ter");
+    written_bytes+= sdsl::write_member(gram_alph, out, child, "gram_alph");
     written_bytes+= sdsl::write_member(comp_string_size, out, child, "comp_string_size");
     written_bytes+= sdsl::write_member(n_p_rounds, out, child, "n_p_rounds");
     written_bytes+= rules_breaks.serialize(out, child, "rules_breaks");
@@ -22,11 +22,11 @@ grammar::size_type grammar::serialize(std::ostream& out, sdsl::structure_tree_no
 }
 
 void grammar::load(std::ifstream& in){
-    sdsl::read_member(orig_size, in);
-    sdsl::read_member(n_seqs, in);
+    sdsl::read_member(text_size, in);
+    sdsl::read_member(n_strings, in);
     sdsl::read_member(grammar_size, in);
-    sdsl::read_member(sigma, in);
-    sdsl::read_member(n_gram_symbols, in);
+    sdsl::read_member(text_alph, in);
+    sdsl::read_member(gram_alph, in);
     sdsl::read_member(comp_string_size, in);
     sdsl::read_member(n_p_rounds, in);
     rules_breaks.load(in);
@@ -39,18 +39,18 @@ void grammar::load(std::ifstream& in){
 void grammar::mark_str_boundaries() {
 
     std::stack<size_t> stack;
-    size_t pos = nter_ptr[n_gram_symbols - 1], sym, suff_sym, sym_state, seq=0;
+    size_t pos = nter_ptr[gram_alph - 1], sym, suff_sym, sym_state, seq=0;
     //0 : the symbol's rule has not been visited yet
     //1 : the symbol recursively expands to a string suffix
     //2 : the symbol does not recursively expand to a string suffix
-    sdsl::int_vector<2> state(n_gram_symbols, 0);
+    sdsl::int_vector<2> state(gram_alph, 0);
     seq_pointers.width(sdsl::bits::hi(comp_string_size)+1);
-    seq_pointers.resize(n_seqs);
+    seq_pointers.resize(n_strings);
     state[0] = 1;
 
     while(pos<rules.size()){
         sym =  rules[pos];
-        if(sym>=sigma && state[sym]==0){
+        if(sym >= text_alph && state[sym] == 0){
 
             suff_sym = is_rl(sym) ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
 
@@ -76,11 +76,11 @@ void grammar::mark_str_boundaries() {
     }
 }
 
-std::string grammar::im_decomp_seq(size_t idx) {
+std::string grammar::im_decomp_str(size_t idx) {
     return std::string();
 }
 
-std::string grammar::decomp_seq(size_t idx) {
+std::string grammar::decomp_str(size_t idx) {
     return std::string();
 }
 

@@ -4,6 +4,7 @@
 
 #ifndef LPG_COMPRESSOR_GRAMMAR_HPP
 #define LPG_COMPRESSOR_GRAMMAR_HPP
+
 #include <iostream>
 #include <sdsl/int_vector.hpp>
 
@@ -34,14 +35,14 @@ struct gram_info_t{
 
 class grammar {
 private:
-    size_t orig_size{}; //original size of the text
-    size_t n_seqs{}; //original size of the text
-    size_t grammar_size;//size of the grammar (i.e., sum of the lengths of the right-hand sides of the rules)
-    size_t sigma; //number of terminals
-    size_t n_gram_symbols; //number of nonterminals
+    size_t text_size; //original size of the text
+    size_t n_strings; //original size of the text
+    size_t grammar_size; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the rules)
+    size_t text_alph; //alphabet size of the text
+    size_t gram_alph; //alphabet size of the grammar (ter + nters)
     size_t comp_string_size; //size of the compressed string
-    size_t n_p_rounds;
-    sdsl::int_vector<> rules_breaks;
+    size_t n_p_rounds; //number of parsing rounds
+    sdsl::int_vector<> rules_breaks; //mark the first rule of every parsing round
     sdsl::int_vector<8> symbols_map; //map a terminal to its original byte symbol
     sdsl::int_vector<> rules; //list of rules
     sdsl::int_vector<> nter_ptr; //pointers of the rules in the rules' array
@@ -50,11 +51,11 @@ private:
     void mark_str_boundaries();
 public:
     typedef size_t size_type;
-    explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): orig_size(_orig_size),
-                                                                                 n_seqs(_n_seqs),
+    explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): text_size(_orig_size),
+                                                                                 n_strings(_n_seqs),
                                                                                  grammar_size(gram_info.g),
-                                                                                 sigma(gram_info.sigma),
-                                                                                 n_gram_symbols(gram_info.r),
+                                                                                 text_alph(gram_info.sigma),
+                                                                                 gram_alph(gram_info.r),
                                                                                  comp_string_size(gram_info.c),
                                                                                  n_p_rounds(gram_info.n_p_rounds){
 
@@ -70,7 +71,7 @@ public:
         }
 
         sdsl::int_vector_buffer<> rules_buff(gram_info.rules_file, std::ios::in);
-        rules.width(sdsl::bits::hi(sigma + n_gram_symbols) + 1);
+        rules.width(sdsl::bits::hi(text_alph + gram_alph) + 1);
         rules.resize(rules_buff.size());
         size_t i=0;
         for(auto const& sym : rules_buff) rules[i++] = sym;
@@ -78,7 +79,7 @@ public:
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
         nter_ptr.width(sdsl::bits::hi(grammar_size)+1);
-        nter_ptr.resize(n_gram_symbols);
+        nter_ptr.resize(gram_alph);
         nter_ptr[0] = 0;
 
         i=1;
@@ -96,7 +97,7 @@ public:
     }
 
     [[nodiscard]] inline long long int parsing_level(size_t symbol) const{
-        if(symbol<sigma) return 0;
+        if(symbol < text_alph) return 0;
         if(symbol>=rules_breaks[n_p_rounds]) return -1;
 
         for(long long int i=0;i<int(n_p_rounds);i++){
@@ -105,8 +106,8 @@ public:
         return -1;
     }
 
-    std::string im_decomp_seq(size_t idx);//in-memory decompression
-    std::string decomp_seq(size_t idx);//in-memory decompression
+    std::string im_decomp_str(size_t idx);//in-memory decompression
+    std::string decomp_str(size_t idx);//memory decompression
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const;
     void load(std::ifstream& in);
 };

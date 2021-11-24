@@ -1,8 +1,8 @@
 #include <thread>
 
 #include "external/CLI11.hpp"
-#include "lpg_build.hpp"
 #include "utils.hpp"
+#include "grammar_build.hpp"
 
 struct arguments{
     std::string input_file;
@@ -74,9 +74,7 @@ int main(int argc, char** argv) {
             args.output_file = std::filesystem::path(args.input_file).filename();
             args.output_file += ".gram";
         }
-
-        //maximum amount of RAM allowed to spend in parallel for the hashing step
-        compute_LPG_gram(args.input_file, args.output_file, tmp_folder, args.n_threads, args.hbuff_frac);
+        build_gram(args.input_file, args.output_file, tmp_folder, args.n_threads, args.hbuff_frac);
     }else{
 
     }

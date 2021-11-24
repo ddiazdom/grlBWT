@@ -8,10 +8,12 @@ find_package(LibSDSL REQUIRED)
 
 add_executable(lpg
         main.cpp
-        lib/lpg_build.cpp
-        lib/utils.cpp
         external/xxHash-dev/xxhash.c
-        lib/grammar.cpp include/grammar.hpp)
+        lib/grammar.cpp
+        lib/grammar_build.cpp
+        lib/lms_algo.cpp
+        lib/utils.cpp
+        lib/suffpair_algo.cpp)
 
 target_compile_options(lpg
         PRIVATE
