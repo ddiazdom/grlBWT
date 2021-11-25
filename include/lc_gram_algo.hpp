@@ -9,10 +9,10 @@
 #include "common.h"
 #include "lc_parsings.hpp"
 
-template<class sym_type>
-struct parsing_thread {
+template<class sym_t>
+struct parse_data_t {
 
-    i_file_stream<sym_type>    ifs;
+    i_file_stream<sym_t>       ifs;
     o_file_stream<size_t>      ofs;
     const sdsl::int_vector<2>& phrase_desc;
 
@@ -20,43 +20,84 @@ struct parsing_thread {
     size_t                     start;
     size_t                     end;
     const uint8_t              sym_width;
-    dict_t                     dict;
+    dict_t                     thread_dict;
 
-    parsing_thread(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
-                   size_t start_, size_t end_,
-                   const size_t &alph,
-                   const size_t &hb_size, void *hb_addr,
-                   const sdsl::int_vector<2> &phrase_desc_) : ifs(i_file_, BUFFER_SIZE),
-                                                              ofs(o_file_, BUFFER_SIZE, std::ios::out),
-                                                              phrase_desc(phrase_desc_),
-                                                              m_map(m_map_),
-                                                              start(start_),
-                                                              end(end_),
-                                                              sym_width(sdsl::bits::hi(alph)+1),
-                                                              dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
+    parse_data_t(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
+                 size_t start_, size_t end_,
+                 const size_t &alph,
+                 const size_t &hb_size, void *hb_addr,
+                 const sdsl::int_vector<2> &phrase_desc_) : ifs(i_file_, BUFFER_SIZE),
+                                                            ofs(o_file_, BUFFER_SIZE, std::ios::out),
+                                                            phrase_desc(phrase_desc_),
+                                                            m_map(m_map_),
+                                                            start(start_),
+                                                            end(end_),
+                                                            sym_width(sdsl::bits::hi(alph)+1),
+                                                            thread_dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
         //TODO for the moment the input string has to have a sep_symbol appended at the end
         //TODO assertion : sep_symbols cannot be consecutive
     };
 
-    inline void hash_phrase(string_t& phrase) {
+    /*inline void hash_phrase(string_t& phrase, bool is_full_str) {
         phrase.mask_tail();
-        auto res = dict.insert(phrase.data(), phrase.n_bits(), false);
+        if(!is_full_str){
+            thread_dict.insert(phrase.data(), phrase.n_bits(), false);
+        }
     };
 
-    inline void store_phrase(string_t& phrase){
+    inline void store_phrase(string_t& phrase, bool is_full_str){
         phrase.mask_tail();
-        auto res = m_map.find(phrase.data(), phrase.n_bits());
-        if(res.second){
+        if(!is_full_str){
+            auto res = m_map.find(phrase.data(), phrase.n_bits());
+            assert(res.second);
             ofs.push_back(res.first.value()>>1UL);
         }else{
             assert(phrase.size()==1 && is_suffix(phrase[0]));
             ofs.push_back(phrase[0]);
         }
-    };
+    };*/
 
-    inline bool is_suffix(sym_type symbol) const{
+    inline bool is_suffix(sym_t symbol) const{
         return phrase_desc[symbol] & 2;
     }
+};
+
+template<typename parse_data_t,
+         typename parser_t>
+struct hash_functor{
+    void operator()(parse_data_t& data, parser_t& parser){
+        auto task = [&](string_t& phrase, bool is_full_str){
+            phrase.mask_tail();
+            if(!is_full_str){
+                data.thread_dict.insert(phrase.data(), phrase.n_bits(), false);
+            }
+        };
+        parser(data.ifs, data.start, data.end, task);
+        data.thread_dict.flush();
+        pthread_exit(nullptr);
+    };
+};
+
+template<typename parse_data_t,
+         typename parser_t>
+struct parse_functor{
+    void operator()(parse_data_t& data, parser_t& parser){
+        auto task = [&](string_t& phrase, bool is_full_str){
+            phrase.mask_tail();
+            if(!is_full_str){
+                auto res = data.m_map.find(phrase.data(), phrase.n_bits());
+                assert(res.second);
+                data.ofs.push_back(res.first.value()>>1UL);
+            }else{
+                //assert(phrase.size()==1 && is_suffix(phrase[0]));
+                data.ofs.push_back(phrase[0]);
+            }
+        };
+        parser(data.ifs, data.start, data.end, task);
+        data.ofs.close();
+        data.ifs.close();
+        pthread_exit(nullptr);
+    };
 };
 
 /***
@@ -103,10 +144,10 @@ long long prev_lms_sym(long long idx, i_file_stream<sym_t>& ifs, sdsl::int_vecto
 template<class sym_type> std::vector<std::pair<size_t, size_t>>
 compute_thread_ranges(size_t n_threads, std::string& i_file, sdsl::int_vector<2>& phrase_desct);
 
-template<class sym_t>
+/*template<class sym_t>
 void * hash_phrases(void * data);
 template<class sym_t>
-void * record_phrases(void *data);
+void * record_phrases(void *data);*/
 
 void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                       gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);

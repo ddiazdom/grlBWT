@@ -5,6 +5,7 @@
 #include "lc_gram_algo.hpp"
 #include <cmath>
 #include "cdt/parallel_string_sort.hpp"
+#include <thread>
 
 void assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r,
                 bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
@@ -167,10 +168,11 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
     map.shrink_databuff();
 }
 
-template<class sym_t>
+template<class sym_t,
+         class parser_t>
 void * hash_phrases(void * data) {
 
-    auto par_data = (parsing_thread<sym_t> *) data;
+    auto par_data = (parse_data_t<sym_t> *) data;
 
     bool s_type, prev_s_type = S_TYPE;
     sym_t curr_sym, prev_sym;
@@ -188,8 +190,8 @@ void * hash_phrases(void * data) {
         //this is a junction between two strings = ...$ $...
         if(par_data->is_suffix(curr_sym)){
             bool full_str = curr_lms.size()==1 && par_data->is_suffix(curr_lms[0]);
-            if(!curr_lms.empty() && !full_str){
-                par_data->hash_phrase(curr_lms);
+            if(!curr_lms.empty()){
+                par_data->hash_phrase(curr_lms, full_str);
             }
             curr_lms.clear();
             s_type = S_TYPE;
@@ -204,7 +206,7 @@ void * hash_phrases(void * data) {
                 if(prev_s_type == S_TYPE) {//Leftmost S-type suffix
                     curr_lms.pop_back();
                     if(!curr_lms.empty()){
-                        par_data->hash_phrase(curr_lms);
+                        par_data->hash_phrase(curr_lms, false);
                         curr_lms.clear();
                     }
                     curr_lms.push_back(prev_sym);
@@ -221,35 +223,37 @@ void * hash_phrases(void * data) {
                     par_data->is_suffix(curr_lms[0]) &&
                     (par_data->start == 0 || par_data->is_suffix(par_data->ifs.read(par_data->start - 1)));
 
-    if(!curr_lms.empty() && !full_str){
-        par_data->hash_phrase(curr_lms);
+    if(!curr_lms.empty()){
+        par_data->hash_phrase(curr_lms, full_str);
     }
 
-    par_data->dict.flush();
+    par_data->thread_dict.flush();
     pthread_exit(nullptr);
 }
-template<class sym_t>
+template<class sym_t,
+         class parser_t>
 void * record_phrases(void *data) {
 
-    auto lms_data = (parsing_thread<sym_t> *) data;
+    auto par_data = (parse_data_t<sym_t> *) data;
 
     bool s_type, prev_s_type = S_TYPE;
     sym_t curr_sym, prev_sym;
 
-    string_t curr_lms(2, lms_data->sym_width);
-    prev_sym = lms_data->ifs.read(lms_data->end);
+    string_t curr_lms(2, par_data->sym_width);
+    prev_sym = par_data->ifs.read(par_data->end);
     curr_lms.push_back(prev_sym);
 
-    for(size_t i = lms_data->end; i-- > lms_data->start;){
+    for(size_t i = par_data->end; i-- > par_data->start;){
 
-        curr_sym = lms_data->ifs.read(i);
+        curr_sym = par_data->ifs.read(i);
 
         //                                     L_TYPE   S_TYPE*
         //                                        ---- ----
         //this is a junction between two strings = ...$ $...
-        if(lms_data->is_suffix(curr_sym)){
+        if(par_data->is_suffix(curr_sym)){
+            bool full_str = curr_lms.size()==1 && par_data->is_suffix(curr_lms[0]);
             if(!curr_lms.empty()){
-                lms_data->store_phrase(curr_lms);
+                par_data->store_phrase(curr_lms, full_str);
             }
             curr_lms.clear();
             s_type = S_TYPE;
@@ -264,7 +268,7 @@ void * record_phrases(void *data) {
                 if(prev_s_type == S_TYPE) {//Left-most suffix
                     curr_lms.pop_back();
                     if(!curr_lms.empty()){
-                        lms_data->store_phrase(curr_lms);
+                        par_data->store_phrase(curr_lms, false);
                         curr_lms.clear();
                     }
                     curr_lms.push_back(prev_sym);
@@ -277,12 +281,15 @@ void * record_phrases(void *data) {
     }
 
     assert(curr_lms[0]!=1);
+    bool full_str = curr_lms.size()==1 &&
+                    par_data->is_suffix(curr_lms[0]) &&
+                    (par_data->start == 0 || par_data->is_suffix(par_data->ifs.read(par_data->start - 1)));
     if(!curr_lms.empty()){
-        lms_data->store_phrase(curr_lms);
+        par_data->store_phrase(curr_lms, full_str);
     }
 
-    lms_data->ofs.close();
-    lms_data->ifs.close();
+    par_data->ofs.close();
+    par_data->ifs.close();
     pthread_exit(nullptr);
 }
 template<class sym_type>
@@ -408,18 +415,20 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
     }
 }
 
-template<class sym_type>
+template<class sym_t>
 size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                          size_t n_threads, size_t hbuff_size,
                          gram_info_t &p_gram, ivb_t &rules,
                          bvb_t &rules_lim, sdsl::int_vector<2> &phrase_desc,
                          sdsl::cache_config &config) {
 
+    typedef lms_parsing<i_file_stream<sym_t>, string_t, sym_t> parser_t;
+
     phrase_map_t mp_table(0, "", 0.85);
 
-    auto thread_ranges = compute_thread_ranges<sym_type>(n_threads, i_file, phrase_desc);
+    auto thread_ranges = compute_thread_ranges<sym_t>(n_threads, i_file, phrase_desc);
 
-    std::vector<parsing_thread<sym_type>> threads_data;
+    std::vector<parse_data_t<sym_t>> threads_data;
     threads_data.reserve(thread_ranges.size());
 
     //how many size_t cells we can fit in the buffer
@@ -441,22 +450,17 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         k++;
     }
 
+    parser_t parser(phrase_desc);
     std::cout<<"      Computing the phrases in the text"<<std::endl;
     {
-        std::vector<pthread_t> threads(threads_data.size());
+        std::vector<std::thread> threads(threads_data.size());
+        hash_functor<parse_data_t<sym_t>, parser_t> hf;
         for(size_t i=0;i<threads_data.size();i++){
-            int ret =  pthread_create(&threads[i],
-                                      nullptr,
-                                      &hash_phrases<sym_type>,
-                                      (void*)&threads_data[i]);
-            if(ret != 0) {
-                printf("Error: pthread_create() failed\n");
-                exit(EXIT_FAILURE);
-            }
+            threads[i] = std::thread(hf, std::ref(threads_data[i]), std::ref(parser));
         }
 
         for(size_t i=0;i<threads_data.size();i++) {
-            pthread_join(threads[i], nullptr);
+            threads[i].join();
         }
     }
     free(buff_addr);
@@ -464,7 +468,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     //join the different phrase files
     std::vector<std::string> phrases_files;
     for(size_t i=0;i<threads_data.size();i++){
-        phrases_files.push_back(threads_data[i].dict.dump_file());
+        phrases_files.push_back(threads_data[i].thread_dict.dump_file());
     }
     join_thread_phrases(mp_table, phrases_files);
 
@@ -494,20 +498,14 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         std::cout<<"      Creating the parse of the text"<<std::endl;
         {//store the phrases into a new file
-            std::vector<pthread_t> threads(threads_data.size());
+            std::vector<std::thread> threads(threads_data.size());
+            parse_functor<parse_data_t<sym_t>, parser_t> pf;
             for(size_t i=0;i<threads_data.size();i++){
-                int ret =  pthread_create(&threads[i],
-                                          nullptr,
-                                          &record_phrases<sym_type>,
-                                          (void*)&threads_data[i]);
-                if(ret != 0) {
-                    printf("Error: pthread_create() failed\n");
-                    exit(EXIT_FAILURE);
-                }
+                threads[i] = std::thread(pf, std::ref(threads_data[i]), std::ref(parser));
             }
 
             for(size_t i=0;i<threads_data.size();i++) {
-                pthread_join(threads[i], nullptr);
+                threads[i].join();
             }
         }
 
@@ -560,7 +558,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             psize+=in.gcount();
         } while (in.gcount() > 0);
         free(buffer);
-        psize/=sizeof(sym_type);
+        psize/=sizeof(sym_t);
 
         //remove remaining files
         for(size_t i=0;i<threads_data.size();i++){

@@ -8,12 +8,14 @@
 #define L_TYPE false
 #define S_TYPE true
 
-template<class stream_t, class string_t, class sym_t>
+template<class stream_t,
+         class string_t,
+         class sym_t>
 struct lms_parsing{
 
     const sdsl::int_vector<2>& phrase_desc;
 
-    lms_parsing(const sdsl::int_vector<2>& pr_desc): phrase_desc(pr_desc){};
+    explicit lms_parsing(const sdsl::int_vector<2>& pr_desc): phrase_desc(pr_desc){};
 
     inline bool is_suffix(sym_t symbol) const{
         return phrase_desc[symbol] & 2;
@@ -57,9 +59,10 @@ struct lms_parsing{
         }
     }
 
-    void operator()(stream_t ifs,
+    void operator()(stream_t& ifs,
                     size_t start, size_t end,
-                    std::function<void(std::string&)>& task) {
+                    std::function<void(string_t&, bool)> task) {
+
 
         bool s_type, prev_s_type = S_TYPE;
         sym_t curr_sym, prev_sym;
@@ -76,8 +79,9 @@ struct lms_parsing{
             //                                        ---- ----
             //this is a junction between two strings = ...$ $...
             if (is_suffix(curr_sym)) {
+                bool full_str = curr_lms.size()==1 && is_suffix(curr_lms[0]);
                 if (!curr_lms.empty()) {
-                    task(curr_lms);
+                    task(curr_lms, full_str);
                 }
                 curr_lms.clear();
                 s_type = S_TYPE;
@@ -92,7 +96,7 @@ struct lms_parsing{
                     if (prev_s_type == S_TYPE) {//Left-most suffix
                         curr_lms.pop_back();
                         if (!curr_lms.empty()) {
-                            task(curr_lms);
+                            task(curr_lms, false);
                             curr_lms.clear();
                         }
                         curr_lms.push_back(prev_sym);
@@ -104,7 +108,10 @@ struct lms_parsing{
             prev_s_type = s_type;
         }
         assert(curr_lms[0]!=1);
-        if(!curr_lms.empty()) task(curr_lms);
+        bool full_str = curr_lms.size()==1 &&
+                        is_suffix(curr_lms[0]) &&
+                        (start == 0 || is_suffix(ifs.read(start - 1)));
+        if(!curr_lms.empty()) task(curr_lms, full_str);
     }
 };
 
