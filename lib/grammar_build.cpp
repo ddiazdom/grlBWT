@@ -384,7 +384,7 @@ void build_gram(std::string &i_file,
     p_gram.max_tsym = alphabet.back().first;
     p_gram.r = p_gram.max_tsym + 1;
 
-    build_lc_gram(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
+    build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     run_length_compress(p_gram, config);
     suffpair(p_gram, config, n_threads, hbuff_size);
 

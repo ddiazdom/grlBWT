@@ -8,7 +8,6 @@
 #include "lc_gram_algo.hpp"
 #include "suffpair_algo.hpp"
 
-
 //this source code is for debugging
 void decomp(size_t nt, sdsl::int_vector<> &rules,
             bv_ss_t &rlim_ss, bv_t &rem_nt,

@@ -2,22 +2,24 @@
 // Created by Diaz, Diego on 24.11.2021.
 //
 
-#ifndef LPG_COMPRESSOR_LC_PARSINGS_HPP
-#define LPG_COMPRESSOR_LC_PARSINGS_HPP
+#ifndef LPG_COMPRESSOR_LC_PARSERS_HPP
+#define LPG_COMPRESSOR_LC_PARSERS_HPP
 
 #define L_TYPE false
 #define S_TYPE true
 
 template<class stream_t,
-         class string_t,
-         class sym_t>
+         class string_t>
 struct lms_parsing{
+
+    typedef stream_t                       stream_type;
+    typedef typename stream_type::sym_type sym_type;
 
     const sdsl::int_vector<2>& phrase_desc;
 
     explicit lms_parsing(const sdsl::int_vector<2>& pr_desc): phrase_desc(pr_desc){};
 
-    inline bool is_suffix(sym_t symbol) const{
+    inline bool is_suffix(sym_type symbol) const{
         return phrase_desc[symbol] & 2;
     }
 
@@ -65,7 +67,7 @@ struct lms_parsing{
 
 
         bool s_type, prev_s_type = S_TYPE;
-        sym_t curr_sym, prev_sym;
+        sym_type curr_sym, prev_sym;
 
         string_t curr_lms(2, sdsl::bits::hi(phrase_desc.size())+1);
         prev_sym = ifs.read(end);
@@ -115,4 +117,4 @@ struct lms_parsing{
     }
 };
 
-#endif //LPG_COMPRESSOR_LC_PARSINGS_HPP
+#endif //LPG_COMPRESSOR_LC_PARSERS_HPP

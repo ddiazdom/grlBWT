@@ -15,6 +15,7 @@
 template<class sym_t>
 struct i_file_stream{
 
+    typedef sym_t sym_type;
     std::ifstream text_i;
     size_t tot_cells{};
     size_t block_bg{};
@@ -120,6 +121,7 @@ template<class sym_t>
 struct o_file_stream{
 
     typedef long long int size_type;
+    typedef sym_t         sym_type;
     std::ofstream ofs;
     std::ifstream ifs;
     std::string file;

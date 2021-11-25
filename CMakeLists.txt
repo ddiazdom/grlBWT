@@ -13,7 +13,7 @@ add_executable(lpg
         lib/grammar_build.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
-        lib/suffpair_algo.cpp include/lc_parsings.hpp)
+        lib/suffpair_algo.cpp include/lc_parsers.hpp)
 
 target_compile_options(lpg
         PRIVATE
