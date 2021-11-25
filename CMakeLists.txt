@@ -11,9 +11,9 @@ add_executable(lpg
         external/xxHash-dev/xxhash.c
         lib/grammar.cpp
         lib/grammar_build.cpp
-        lib/lms_algo.cpp
+        lib/lc_gram_algo.cpp
         lib/utils.cpp
-        lib/suffpair_algo.cpp)
+        lib/suffpair_algo.cpp include/lc_parsings.hpp)
 
 target_compile_options(lpg
         PRIVATE

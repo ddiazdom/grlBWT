@@ -2,12 +2,12 @@
 // Created by Diego Diaz on 4/7/20.
 //
 
-#include "lms_algo.hpp"
+#include "lc_gram_algo.hpp"
 #include <cmath>
 #include "cdt/parallel_string_sort.hpp"
 
 void assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r,
-                      bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
+                bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
 
     std::string syms_file = sdsl::cache_file_name("syms_file", config);
     {
@@ -170,7 +170,7 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
 template<class sym_t>
 void * hash_phrases(void * data) {
 
-    auto par_data = (parsing_info<sym_t> *) data;
+    auto par_data = (parsing_thread<sym_t> *) data;
 
     bool s_type, prev_s_type = S_TYPE;
     sym_t curr_sym, prev_sym;
@@ -231,7 +231,7 @@ void * hash_phrases(void * data) {
 template<class sym_t>
 void * record_phrases(void *data) {
 
-    auto lms_data = (parsing_info<sym_t> *) data;
+    auto lms_data = (parsing_thread<sym_t> *) data;
 
     bool s_type, prev_s_type = S_TYPE;
     sym_t curr_sym, prev_sym;
@@ -419,7 +419,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
     auto thread_ranges = compute_thread_ranges<sym_type>(n_threads, i_file, phrase_desc);
 
-    std::vector<parsing_info<sym_type>> threads_data;
+    std::vector<parsing_thread<sym_type>> threads_data;
     threads_data.reserve(thread_ranges.size());
 
     //how many size_t cells we can fit in the buffer
@@ -433,7 +433,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
     size_t k=0;
     for(auto &range : thread_ranges) {
-
         std::stringstream ss;
         ss << o_file.substr(0, o_file.size() - 5) << "_range_" << range.first << "_" << range.second;
         std::string tmp_o_file = ss.str();

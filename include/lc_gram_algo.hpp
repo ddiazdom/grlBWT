@@ -7,12 +7,10 @@
 
 #include "grammar.hpp"
 #include "common.h"
-
-#define L_TYPE false
-#define S_TYPE true
+#include "lc_parsings.hpp"
 
 template<class sym_type>
-struct parsing_info {
+struct parsing_thread {
 
     i_file_stream<sym_type>    ifs;
     o_file_stream<size_t>      ofs;
@@ -24,18 +22,18 @@ struct parsing_info {
     const uint8_t              sym_width;
     dict_t                     dict;
 
-    parsing_info(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
-                 size_t start_, size_t end_,
-                 const size_t &alph,
-                 const size_t &hb_size, void *hb_addr,
-                 const sdsl::int_vector<2> &phrase_desc_) : ifs(i_file_, BUFFER_SIZE),
-                                                            ofs(o_file_, BUFFER_SIZE, std::ios::out),
-                                                            phrase_desc(phrase_desc_),
-                                                            m_map(m_map_),
-                                                            start(start_),
-                                                            end(end_),
-                                                            sym_width(sdsl::bits::hi(alph)+1),
-                                                            dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
+    parsing_thread(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
+                   size_t start_, size_t end_,
+                   const size_t &alph,
+                   const size_t &hb_size, void *hb_addr,
+                   const sdsl::int_vector<2> &phrase_desc_) : ifs(i_file_, BUFFER_SIZE),
+                                                              ofs(o_file_, BUFFER_SIZE, std::ios::out),
+                                                              phrase_desc(phrase_desc_),
+                                                              m_map(m_map_),
+                                                              start(start_),
+                                                              end(end_),
+                                                              sym_width(sdsl::bits::hi(alph)+1),
+                                                              dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
         //TODO for the moment the input string has to have a sep_symbol appended at the end
         //TODO assertion : sep_symbols cannot be consecutive
     };
@@ -59,22 +57,6 @@ struct parsing_info {
     inline bool is_suffix(sym_type symbol) const{
         return phrase_desc[symbol] & 2;
     }
-
-    /*void common_op(std::string str, const std::function<void(std::string&)>& func){
-        func(str);
-    }
-
-    void wrapper1(){
-        common_op("hola", [&](std::string& str){
-            std::cout<<"Wrapper 1 for "<<str<<std::endl;
-        });
-    }
-
-    void wrapper2(){
-        common_op("chao", [&](std::string& str){
-            std::cout<<"Wrapper 2 for "<<str<<std::endl;
-        });
-    }*/
 };
 
 /***

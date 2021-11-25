@@ -5,7 +5,7 @@
 #ifndef LPG_COMPRESSOR_GRAMMAR_BUILD_HPP
 #define LPG_COMPRESSOR_GRAMMAR_BUILD_HPP
 
-#include "lms_algo.hpp"
+#include "lc_gram_algo.hpp"
 #include "suffpair_algo.hpp"
 
 
