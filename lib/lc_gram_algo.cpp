@@ -287,7 +287,8 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
     rules.close();
     rules_lim.close();
 
-    std::cout<<"    Resulting locally consistent grammar:    "<<std::endl;
+    std::cout<<"  Locally consistent grammar finished"<<std::endl;
+    std::cout<<"    Stats:"<<std::endl;
     std::cout<<"      Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
     std::cout<<"      Number of nonterminals: "<<p_gram.rules_breaks.back()-(p_gram.max_tsym+1)+1<<std::endl;
     std::cout<<"      Grammar size:           "<<p_gram.g<<std::endl;

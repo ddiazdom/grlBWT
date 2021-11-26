@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <sdsl/int_vector.hpp>
+#include "cdt/hash_table.hpp"
 
 struct gram_info_t{
     uint8_t                            sigma{}; // terminal's alphabet
@@ -35,6 +36,8 @@ struct gram_info_t{
 
 class grammar {
 private:
+
+    typedef bit_hash_table<size_t, 64, size_t, 7> hash_table_t;
     size_t text_size; //original size of the text
     size_t n_strings; //original size of the text
     size_t grammar_size; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the rules)
@@ -49,6 +52,9 @@ private:
     sdsl::int_vector<> seq_pointers; //pointers to the boundaries of the strings in the text
 
     void mark_str_boundaries();
+    template<class vector_t>
+    void buff_decomp_nt_int(size_t nt, vector_t& exp, hash_table_t& ht);
+
 public:
     typedef size_t size_type;
     explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): text_size(_orig_size),
@@ -71,10 +77,12 @@ public:
         }
 
         sdsl::int_vector_buffer<> rules_buff(gram_info.rules_file, std::ios::in);
-        rules.width(sdsl::bits::hi(text_alph + gram_alph) + 1);
+        rules.width(sdsl::bits::hi(gram_alph) + 1);
         rules.resize(rules_buff.size());
         size_t i=0;
-        for(auto const& sym : rules_buff) rules[i++] = sym;
+        for(auto const& sym : rules_buff){
+            rules[i++] = sym;
+        }
         rules_buff.close();
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
@@ -90,6 +98,18 @@ public:
         }
         rules_lim_buff.close();
         mark_str_boundaries();
+
+        //TODO testing
+        for(size_t j=text_alph;j<(gram_alph-1);j++){
+            std::string str1,str2;
+            str1 = decomp_nt(j);
+            buff_decomp_nt(j, str2);
+            assert(str1==str2);
+        }
+        for(size_t j=0;j<seq_pointers.size();j++){
+            std::cout<<decomp_str(j)<<std::endl;
+        }
+        //
     }
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{
@@ -106,8 +126,12 @@ public:
         return -1;
     }
 
-    std::string im_decomp_str(size_t idx);//in-memory decompression
-    std::string decomp_str(size_t idx);//memory decompression
+    std::string im_decomp_str(size_t idx);
+    std::string decomp_str(size_t idx);
+
+    template<class vector_t>
+    void buff_decomp_nt(size_t nt, vector_t& exp, size_t ht_buff_size=1024*1024);
+    std::string decomp_nt(size_t idx);
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const;
     void load(std::ifstream& in);
 };

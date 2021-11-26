@@ -32,7 +32,6 @@ void create_new_rules(phrase_map_t& ht, pairing_data& p_data){
 //insert the suffix pair rules into the grammar
 void update_grammar(pairing_data& p_data, gram_info_t& gram){
 
-    std::cout<<"    Updating the grammar"<<std::endl;
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
 
     std::string tr_file = sdsl::cache_file_name("col_rules", p_data.config);
@@ -83,10 +82,10 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     rename(col_rules.filename().c_str(), gram.rules_file.c_str());
 
     std::cout<<"    Stats:"<<std::endl;
-    std::cout<<"      Grammar size before:         "<<gram.g<< std::endl;
-    std::cout<<"      Grammar size after:          "<<n_av<<std::endl;
-    std::cout<<"      Number of new nonterminals:  "<<p_data.new_rules.size()/2<<std::endl;
-    std::cout<<"      Compression ratio:           "<<double(n_av)/double(gram.g) << std::endl;
+    std::cout<<"      Grammar size before:        "<<gram.g<< std::endl;
+    std::cout<<"      Grammar size after:         "<<n_av<<std::endl;
+    std::cout<<"      Number of new nonterminals: "<<p_data.new_rules.size()/2<<std::endl;
+    std::cout<<"      Compression ratio:          "<<double(n_av)/double(gram.g) << std::endl;
     gram.g = n_av;
 }
 

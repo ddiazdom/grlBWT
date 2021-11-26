@@ -47,6 +47,7 @@ void grammar::mark_str_boundaries() {
     seq_pointers.width(sdsl::bits::hi(comp_string_size)+1);
     seq_pointers.resize(n_strings);
     state[0] = 1;
+    size_t c_start = nter_ptr[nter_ptr.size()-1];
 
     while(pos<rules.size()){
         sym =  rules[pos];
@@ -68,20 +69,114 @@ void grammar::mark_str_boundaries() {
                 stack.pop();
             }
             state[rules[pos]] = sym_state;
-            if(sym_state==1) seq_pointers[seq++] = pos;
+            if(sym_state==1) seq_pointers[seq++] = pos-c_start;
         }else if(state[sym]==1){
-            seq_pointers[seq++] = pos;
+            seq_pointers[seq++] = pos-c_start;
         }
         pos++;
     }
 }
 
-std::string grammar::im_decomp_str(size_t idx) {
-    return std::string();
+std::string grammar::decomp_str(size_t idx) {
+    assert(idx<seq_pointers.size());
+    std::string exp;
+    size_t c_start = nter_ptr[nter_ptr.size()-1];
+    size_t str_start, str_end;
+    str_start = seq_pointers[idx]+c_start;
+    str_end = seq_pointers[idx+1]+c_start;
+    for(size_t j=str_start;j<str_end;j++){
+        buff_decomp_nt(rules[j], exp);
+    }
+    return exp;
 }
 
-std::string grammar::decomp_str(size_t idx) {
-    return std::string();
+//buffered decompression
+template<class vector_t>
+void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
+
+    size_t pos1, pos2, len, val, freq, start, end;
+    if(sym<text_alph){
+        exp.push_back((char)symbols_map[sym]);
+    }else{
+        pos1 = exp.size();
+        auto res = ht.find(&sym, 64);
+        if(res.second){
+            ht.get_value_from(*res.first, val);
+            pos2 = val >>32UL;
+            len = val & ((1UL<<32UL)-1UL);
+            //TODO use memcpy
+            for(size_t j=pos2;j<pos2+len;j++){
+                exp.push_back(exp[j]);
+            }
+            val = (pos1<<32UL) |  len;
+            ht.insert_value_at(*res.first, val);
+        }else{
+            auto res2 = ht.insert(&sym, 64, 0);
+            start = nter_ptr[sym];
+            end = nter_ptr[sym+1]-1;
+            if(is_rl(sym)){
+                sym = rules[start];
+                freq = rules[end];
+                buff_decomp_nt_int<vector_t>(sym, exp, ht);
+                len = exp.size()-pos1;
+                for(size_t i=1;i<freq;i++){
+                    //TODO use memcpy
+                    for(size_t j=pos1;j<(pos1+len);j++){
+                        exp.push_back(exp[j]);
+                    }
+                }
+            }else{
+                for(size_t i=start;i<=end;i++){
+                    buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
+                }
+            }
+            len = exp.length() - pos1;
+            val = (pos1<<32UL) |  len;
+            ht.insert_value_at(*res2.first, val);
+        }
+    }
+}
+
+template<class vector_t>
+void grammar::buff_decomp_nt(size_t nt, vector_t& exp, size_t ht_buff_size){
+    void * buff = malloc(ht_buff_size);
+    hash_table_t ht(ht_buff_size, "", 0.8, buff);
+    buff_decomp_nt_int<vector_t>(nt, exp, ht);
+    free(buff);
+}
+
+std::string grammar::decomp_nt(size_t nt) {
+    std::string exp;
+    assert(nt<gram_alph);
+    size_t start, end, sym, rl_sym, freq;
+    std::stack<size_t> stack;
+    stack.push(nt);
+
+    while(!stack.empty()){
+        sym = stack.top();
+        stack.pop();
+
+        if(sym<text_alph){
+            exp.push_back((char)symbols_map[sym]);
+        }else{
+            start = nter_ptr[sym];
+            if(is_rl(sym)){
+                rl_sym = rules[start];
+                freq = rules[start+1];
+                assert(freq>1);
+                std::string res = decomp_nt(rl_sym);
+                for(size_t i=0;i<freq;i++){
+                    exp+=res;
+                }
+            }else{
+                end = nter_ptr[sym+1];
+                for(size_t j=end;j-->start;){
+                    stack.push(rules[j]);
+                }
+            }
+        }
+    }
+    return exp;
 }
 
 void gram_info_t::save_to_file(std::string& output_file){
@@ -166,3 +261,6 @@ void gram_info_t::load_from_file(std::string &g_file){
     fp.close();
     free(tmp_file);
 }
+
+template void grammar::buff_decomp_nt_int<std::string>(size_t nt, std::string& exp, grammar::hash_table_t& ht);
+template void grammar::buff_decomp_nt<std::string>(size_t nt, std::string& exp, size_t ht_buff_size);
