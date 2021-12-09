@@ -7,13 +7,14 @@
 struct arguments{
     std::string input_file;
     std::string output_file;
-    std::string patter_list_file;
-    std::vector<std::string> patterns;
 
     std::string tmp_dir;
     size_t n_threads{};
+    size_t b_buff=16;
+    size_t h_buff=1;
     float hbuff_frac=0.5;
     bool ver=false;
+    bool keep=false;
 };
 
 class MyFormatter : public CLI::Formatter {
@@ -29,7 +30,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
     fmt->column_width(23);
     app.formatter(fmt);
 
-    CLI::App *gram = app.add_subcommand("gram", "Create the LPG grammar");
+    CLI::App *gram = app.add_subcommand("gram", "Create a locally consistent grammar");
     app.set_help_all_flag("--help-all", "Expand all help");
 
     app.add_flag("-V,--version",
@@ -50,8 +51,33 @@ static void parse_app(CLI::App& app, struct arguments& args){
             check(CLI::Range(0.0,1.0))->default_val(0.5);
     gram->add_option("-T,--tmp",
                       args.tmp_dir,
-                      "Temporal folder (def. /tmp/lpg_gram.xxxx)")->
+                      "Temporal folder (def. /tmp/lc_gram.xxxx)")->
             check(CLI::ExistingDirectory)->default_val("/tmp");
+
+    CLI::App *dc = app.add_subcommand("decomp", "Decompress a locally consistent grammar to a file");
+    dc->add_option("GRAM",
+                     args.input_file,
+                     "Input locally consistent grammar")->check(CLI::ExistingFile)->required();
+    dc->add_option("-T,--tmp",
+                     args.tmp_dir,
+                     "Temporal folder (def. /tmp/lc_gram.xxxx)")->
+                     check(CLI::ExistingDirectory)->default_val("/tmp");
+    dc->add_option("-o,--output-file",
+                     args.output_file,
+                     "Output file")->type_name("");
+    dc->add_option("-t,--threads",
+                     args.n_threads,
+                     "Number of threads")->default_val(1);
+    dc->add_flag("-k,--keep",
+                 args.keep,
+                 "Keep the input grammar");
+    dc->add_flag("-b,--hash-buffer",
+                 args.keep,
+                 "Size in MiB for the hash buffer (def. 1 MiB)");
+    dc->add_flag("-B,--file-buffer",
+                 args.keep,
+                 "Size in MiB for the file buffer (def. 16 MiB)");
+
     app.require_subcommand(1);
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
@@ -67,16 +93,33 @@ int main(int argc, char** argv) {
 
     if(app.got_subcommand("gram")) {
 
-        std::cout << "Computing the grammar for the self-index" << std::endl;
-        std::string tmp_folder = create_temp_folder(args.tmp_dir, "lpg_gram");
+        std::cout << "Computing a locally consistent grammar" << std::endl;
+        std::string tmp_folder = create_temp_folder(args.tmp_dir, "lc_gram");
 
         if(args.output_file.empty()){
             args.output_file = std::filesystem::path(args.input_file).filename();
             args.output_file += ".gram";
         }
         build_gram(args.input_file, args.output_file, tmp_folder, args.n_threads, args.hbuff_frac);
-    }else{
+    }else if(app.got_subcommand("decomp")){
 
+        std::cout << "Decompressing the locally consistent grammar" << std::endl;
+        std::string tmp_folder = create_temp_folder(args.tmp_dir, "lc_gram");
+
+        if(args.output_file.empty()){
+            args.output_file = std::filesystem::path(args.input_file).filename();
+            args.output_file.resize(args.output_file.size()-5); //remove the ".gram" suffix
+        }
+
+        grammar gram;
+        sdsl::load_from_file(gram, args.input_file);
+
+        args.h_buff = 1024*4;
+        args.b_buff = std::min<size_t>(1024, gram.t_size()/args.n_threads);
+
+        gram.se_decomp_str(0, gram.strings()-1,
+                           args.output_file,
+                           tmp_folder, args.n_threads, args.h_buff, args.b_buff);
     }
     return 0;
 }

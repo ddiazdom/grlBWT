@@ -21,7 +21,7 @@ grammar::size_type grammar::serialize(std::ostream& out, sdsl::structure_tree_no
     return written_bytes;
 }
 
-void grammar::load(std::ifstream& in){
+void grammar::load(std::istream& in){
     sdsl::read_member(text_size, in);
     sdsl::read_member(n_strings, in);
     sdsl::read_member(grammar_size, in);
@@ -47,7 +47,7 @@ void grammar::mark_str_boundaries() {
     seq_pointers.width(sdsl::bits::hi(comp_string_size)+1);
     seq_pointers.resize(n_strings);
     state[0] = 1;
-    size_t c_start = nter_ptr[nter_ptr.size()-1];
+    size_t c_start = pos;
 
     while(pos<rules.size()){
         sym =  rules[pos];
@@ -80,14 +80,54 @@ void grammar::mark_str_boundaries() {
 std::string grammar::decomp_str(size_t idx) {
     assert(idx<seq_pointers.size());
     std::string exp;
-    size_t c_start = nter_ptr[nter_ptr.size()-1];
+    size_t c_start = nter_ptr[gram_alph-1];
     size_t str_start, str_end;
-    str_start = seq_pointers[idx]+c_start;
-    str_end = seq_pointers[idx+1]+c_start;
-    for(size_t j=str_start;j<str_end;j++){
+
+    str_start = idx == 0 ? c_start : c_start+seq_pointers[idx-1]+1;
+    str_end = seq_pointers[idx]+c_start;
+
+    for(size_t j=str_start;j<=str_end;j++){
         buff_decomp_nt(rules[j], exp);
     }
     return exp;
+}
+
+template<>
+bool grammar::copy_substring<std::string>(std::string& stream, size_t src, size_t dst, size_t len, size_t freq){
+
+    size_t n_syms, rem_syms=len*freq;
+    stream.resize(dst+(len*freq));
+    char * data = stream.data();
+    rem_syms-=len;
+
+    memcpy(&data[dst], &data[src], len);
+    for(size_t i=1;rem_syms>0;i*=2){
+        n_syms=std::min<size_t>(len*i, rem_syms);
+        memcpy(&data[dst+(len*i)], &data[dst], n_syms);
+        rem_syms-=n_syms;
+    }
+    return true;
+}
+
+template<>
+bool grammar::copy_substring<o_file_stream<char>>(o_file_stream<char>& stream, size_t src, size_t dst, size_t len, size_t freq){
+    return stream.copy_to_front((buff_s_type) src, (buff_s_type) len, (buff_s_type) freq);
+}
+
+template<class vector_t>
+bool grammar::copy_substring(vector_t &stream, size_t src, size_t dst, size_t len, size_t freq) {
+    size_t n_syms, rem_syms=len*freq;
+    stream.resize(dst+(len*freq));
+    char * data = stream.data();
+    rem_syms-=len;
+
+    memcpy(&data[dst], &data[src], len);
+    for(size_t i=1;rem_syms>0;i*=2){
+        n_syms=std::min<size_t>(len*i, rem_syms);
+        memcpy(&data[dst+(len*i)], &data[dst], n_syms);
+        rem_syms-=n_syms;
+    }
+    return true;
 }
 
 //buffered decompression
@@ -101,13 +141,27 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
         pos1 = exp.size();
         auto res = ht.find(&sym, 64);
         if(res.second){
+
             ht.get_value_from(*res.first, val);
             pos2 = val >>32UL;
             len = val & ((1UL<<32UL)-1UL);
-            //TODO use memcpy
-            for(size_t j=pos2;j<pos2+len;j++){
-                exp.push_back(exp[j]);
+
+            //if the string couldn't be copied, then we do it the hard way
+            if(!copy_substring(exp, pos2, exp.size(), len, 1)){
+                start = nter_ptr[sym];
+                end = nter_ptr[sym+1]-1;
+                if(is_rl(sym)){
+                    sym = rules[start];
+                    freq = rules[end];
+                    buff_decomp_nt_int<vector_t>(sym, exp, ht);
+                    copy_substring(exp, pos1, exp.size(), exp.size()-pos1, freq-1);
+                }else{
+                    for(size_t i=start;i<=end;i++){
+                        buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
+                    }
+                }
             }
+
             val = (pos1<<32UL) |  len;
             ht.insert_value_at(*res.first, val);
         }else{
@@ -119,18 +173,14 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
                 freq = rules[end];
                 buff_decomp_nt_int<vector_t>(sym, exp, ht);
                 len = exp.size()-pos1;
-                for(size_t i=1;i<freq;i++){
-                    //TODO use memcpy
-                    for(size_t j=pos1;j<(pos1+len);j++){
-                        exp.push_back(exp[j]);
-                    }
-                }
+                copy_substring(exp, pos1, exp.size(), len, freq-1);
             }else{
                 for(size_t i=start;i<=end;i++){
                     buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
                 }
             }
-            len = exp.length() - pos1;
+
+            len = exp.size() - pos1;
             val = (pos1<<32UL) |  len;
             ht.insert_value_at(*res2.first, val);
         }
@@ -178,6 +228,41 @@ std::string grammar::decomp_nt(size_t nt) {
     }
     return exp;
 }
+
+void grammar::se_decomp_str(size_t start, size_t end, std::string& output_file,
+                            std::string& tmp_folder, size_t n_threads,
+                            size_t ht_buff_size, size_t file_buff_size) {
+
+    o_file_stream<char> ofs(output_file, file_buff_size, std::ios::out);
+
+    size_t c_start = nter_ptr[gram_alph-1];
+    size_t str_start, str_end;
+
+    void * ht_buff = malloc(ht_buff_size);
+    hash_table_t ht(ht_buff_size, "", 0.8, ht_buff);
+
+    for(size_t i=start;i<=end;i++){
+
+        str_start = i == 0 ? c_start : c_start+seq_pointers[i-1]+1;
+        str_end = seq_pointers[i]+c_start;
+
+        size_t prev_size, acc=0;
+        if(i==121){
+            prev_size=ofs.size();
+        }
+        for(size_t j=str_start;j<=str_end;j++){
+            if(i==38277 && j==11729574){
+                acc+=(ofs.size()-prev_size);
+                std::cout<<i<<" "<<j<<" "<<ofs.size()-prev_size<<" "<<acc<<std::endl;
+                prev_size=ofs.size();
+            }
+            std::cout<<i<<" "<<j<<std::endl;
+            buff_decomp_nt_int(rules[j], ofs, ht);
+        }
+    }
+    free(ht_buff);
+}
+
 
 void gram_info_t::save_to_file(std::string& output_file){
 

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sdsl/int_vector.hpp>
 #include "cdt/hash_table.hpp"
+#include "cdt/file_streams.hpp"
 
 struct gram_info_t{
     uint8_t                            sigma{}; // terminal's alphabet
@@ -29,6 +30,7 @@ struct gram_info_t{
     void save_to_file(std::string& output_file);
     void load_from_file(std::string &g_file);
 
+
     [[nodiscard]] bool is_terminal(const size_t& id) const {
         return sym_map.find(id) != sym_map.end();
     }
@@ -38,13 +40,15 @@ class grammar {
 private:
 
     typedef bit_hash_table<size_t, 64, size_t, 7> hash_table_t;
-    size_t text_size; //original size of the text
-    size_t n_strings; //original size of the text
-    size_t grammar_size; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the rules)
-    size_t text_alph; //alphabet size of the text
-    size_t gram_alph; //alphabet size of the grammar (ter + nters)
-    size_t comp_string_size; //size of the compressed string
-    size_t n_p_rounds; //number of parsing rounds
+    typedef typename o_file_stream<char>::size_type buff_s_type;
+
+    size_t text_size{}; //original size of the text
+    size_t n_strings{}; //original size of the text
+    size_t grammar_size{}; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the rules)
+    size_t text_alph{}; //alphabet size of the text
+    size_t gram_alph{}; //alphabet size of the grammar (ter + nters)
+    size_t comp_string_size{}; //size of the compressed string
+    size_t n_p_rounds{}; //number of parsing rounds
     sdsl::int_vector<> rules_breaks; //mark the first rule of every parsing round
     sdsl::int_vector<8> symbols_map; //map a terminal to its original byte symbol
     sdsl::int_vector<> rules; //list of rules
@@ -54,9 +58,11 @@ private:
     void mark_str_boundaries();
     template<class vector_t>
     void buff_decomp_nt_int(size_t nt, vector_t& exp, hash_table_t& ht);
-
+    template<class vector_t>
+    bool copy_substring(vector_t& stream, size_t src, size_t dst, size_t len, size_t freq);
 public:
     typedef size_t size_type;
+    grammar()=default;
     explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): text_size(_orig_size),
                                                                                  n_strings(_n_seqs),
                                                                                  grammar_size(gram_info.g),
@@ -80,9 +86,7 @@ public:
         rules.width(sdsl::bits::hi(gram_alph) + 1);
         rules.resize(rules_buff.size());
         size_t i=0;
-        for(auto const& sym : rules_buff){
-            rules[i++] = sym;
-        }
+        for(auto const& sym : rules_buff) rules[i++] = sym;
         rules_buff.close();
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
@@ -100,7 +104,7 @@ public:
         mark_str_boundaries();
 
         //TODO testing
-        for(size_t j=text_alph;j<(gram_alph-1);j++){
+        /*for(size_t j=text_alph;j<(gram_alph-1);j++){
             std::string str1,str2;
             str1 = decomp_nt(j);
             buff_decomp_nt(j, str2);
@@ -108,7 +112,7 @@ public:
         }
         for(size_t j=0;j<seq_pointers.size();j++){
             std::cout<<decomp_str(j)<<std::endl;
-        }
+        }*/
         //
     }
 
@@ -126,14 +130,27 @@ public:
         return -1;
     }
 
-    std::string im_decomp_str(size_t idx);
     std::string decomp_str(size_t idx);
+    [[nodiscard]] inline size_t strings() const {
+        return seq_pointers.size();
+    }
+
+    [[nodiscard]] inline size_t t_size() const {
+        return text_size;
+    }
+
+    void se_decomp_str(size_t start, size_t end,
+                       std::string& output,
+                       std::string& tmp_folder,
+                       size_t n_threads,
+                       size_t ht_buff_size=1024*1024,
+                       size_t file_buff_size=16*1024*1024);
 
     template<class vector_t>
     void buff_decomp_nt(size_t nt, vector_t& exp, size_t ht_buff_size=1024*1024);
     std::string decomp_nt(size_t idx);
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const;
-    void load(std::ifstream& in);
+    void load(std::istream& in);
 };
 
 #endif //LPG_COMPRESSOR_GRAMMAR_HPP
