@@ -720,7 +720,7 @@ public:
         m_load_factor = 0;
 
         // a buffer size of (1<<64)-1 bytes indicates
-        // that there is not limit for the size
+        // that there is no limit for the size
         // of the buffer
         if(max_buffer_bytes!=std::numeric_limits<buffer_t>::max() && !static_buffer){
             //half of the buffer for the hash table

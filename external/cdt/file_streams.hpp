@@ -212,7 +212,7 @@ struct o_file_stream{
         return file;
     }
 
-    inline bool copy_to_front(size_type src, size_type len, size_type freq){
+    inline bool copy_to_front(size_type src, size_type len, size_type freq=1){
 
         assert(src>=0);
 
@@ -227,9 +227,9 @@ struct o_file_stream{
         if((len*freq)>(size_type)buff_size()) return false; // the number of elements to be copied are more than the buffer size
         if(buff_src<=buff_dst && block_src<block_dst) return false; // the source is not in the buffer anymore
         if(src+len>(size_type)size()) return false; // we are copying a segment that doesn't exist
-        if(block_dst-block_src>1) return false;
+        if(block_dst-block_src>1) return false; // the source is not in the buffer anymore
 
-        size_type n_syms, rem_syms=len*freq, glob_pos=last_pos+1, left, right;
+        size_type n_syms, rem_syms=len*freq, glob_pos=last_pos+1, left;
 
         assert(block_src==block_dst || block_src==(block_dst-1));
 
@@ -239,76 +239,19 @@ struct o_file_stream{
             lm_pos=0;
         }
 
-        //copy once from the source
-        /*if(buff_src+len-1>=buff_size()){//the source is in the boundary
-
-            assert(buff_dst<buff_src);
-            left = buff_size()-buff_src;
-            memcpy(&buffer.stream[buff_dst], &buffer.stream[buff_src], left);
-
-            if((buff_dst+len-1)>=buff_size()){//the destination is also a boundary
-                size_type d_left = buff_size()-(buff_dst+left);
-                memcpy(&buffer.stream[buff_dst+left], &buffer.stream[0], d_left);
-                modified = true;
-                rm_pos = buff_size()-1;
-                write_block();
-                block_bg = ((glob_pos+left+d_left)/buffer.stream_size)*buffer.stream_size;
-                lm_pos = 0;
-                memcpy(&buffer.stream[0], &buffer.stream[d_left], len - (left+d_left));
-            }else{
-                memcpy(&buffer.stream[buff_dst+left], &buffer.stream[0], len-left);
-            }
-            buff_src = buff_dst;
-            buff_dst = buff_src + len;
-            rem_syms-= len;
-            glob_pos+= len;
-        }else if(buff_dst+len-1>=buff_size()){//the destination is in the boundary
-
-            assert(buff_dst>buff_src);
-            left = buff_size()-buff_dst;
-            memcpy(&buffer.stream[buff_dst], &buffer.stream[buff_src], left);
-            modified = true;
-            rm_pos = buff_size()-1;
-            write_block();
-            block_bg = ((glob_pos+left)/buffer.stream_size)*buffer.stream_size;
-            lm_pos = 0;
-
-            right = len-left;
-            memcpy(&buffer.stream[0], &buffer.stream[buff_src+left], right);
-            glob_pos+=len;
-            rem_syms-=len;
-
-            if(freq>1){
-                //memcpy(&buffer.stream[0], &buffer.stream[buff_src+left], right);
-                assert(right<buff_src);//make sure we are not overwriting the source
-                memcpy(&buffer.stream[right], &buffer.stream[buff_src], len);
-                buff_src = right;
-                buff_dst = buff_src + len;
-                rem_syms-=len;
-                glob_pos+=right+len;
-            }
-        }else{ //nor the source nor the destination cross the buffer boundary
-            memcpy(&buffer.stream[buff_dst], &buffer.stream[buff_src], len);
-            buff_src = buff_dst;
-            buff_dst = buff_src + len;
-            rem_syms-=len;
-            glob_pos+=len;
-        }*/
-
-        size_type i=1;
-        bool first_to_front=false;
-
+        bool first_in_front=false;
+        size_type i=1, tmp_src = buff_dst;
         while(rem_syms>0){
 
             n_syms=std::min<size_type>(len*i, rem_syms);
 
-            if((buff_src+n_syms-1)>=buff_size()){
+            if((buff_src+n_syms-1)>=buff_size()){//the source is in the buffer boundary
 
                 assert(buff_dst<buff_src);
                 left = buff_size()-buff_src;
                 memcpy(&buffer.stream[buff_dst], &buffer.stream[buff_src], left);
 
-                if((buff_dst+len-1)>=buff_size()){//the destination is also a boundary
+                if((buff_dst+n_syms-1)>=buff_size()){//the destination is also in the buffer boundary
                     size_type d_left = buff_size()-(buff_dst+left);
                     memcpy(&buffer.stream[buff_dst+left], &buffer.stream[0], d_left);
                     modified = true;
@@ -316,13 +259,14 @@ struct o_file_stream{
                     write_block();
                     block_bg = ((glob_pos+left+d_left)/buffer.stream_size)*buffer.stream_size;
                     lm_pos = 0;
-                    memcpy(&buffer.stream[0], &buffer.stream[d_left], len - (left+d_left));
+                    memcpy(&buffer.stream[0], &buffer.stream[d_left], n_syms - (left+d_left));
+                    buff_dst = n_syms - (left+d_left);
                 }else{
-                    memcpy(&buffer.stream[buff_dst+left], &buffer.stream[0], len-left);
+                    //the source is in the boundary, but the destination is not
+                    memcpy(&buffer.stream[buff_dst+left], &buffer.stream[0], n_syms-left);
+                    buff_dst +=n_syms;
                 }
-                rem_syms-= len;
-                glob_pos+= len;
-            } else if((buff_dst+n_syms-1)>=buff_size()){// the dest. crosses the buffer boundary
+            } else if((buff_dst+n_syms-1)>=buff_size()){// the source is not in the boundary, but the destination is
 
                 //complete the buffer and write a copy on disk
                 left = buff_size()-buff_dst;
@@ -330,40 +274,30 @@ struct o_file_stream{
                 modified=true;
                 rm_pos = buff_size()-1;
                 write_block();
-                glob_pos+=n_syms;
-                block_bg = (glob_pos/buffer.stream_size)*buffer.stream_size;
+                block_bg = ((glob_pos+left)/buffer.stream_size)*buffer.stream_size;
                 lm_pos = 0;
 
                 //write the rest of the string at the beginning of the buffer
-                right = n_syms-left;
-                memcpy(&buffer.stream[0], &buffer.stream[buff_src+left], right);
-                rem_syms-= n_syms;
+                memcpy(&buffer.stream[0], &buffer.stream[buff_src+left], n_syms-left);
+                buff_dst = n_syms-left;
+            }else{
+                //nor the source or the destination are in the buffer boundary
+                memcpy(&buffer.stream[buff_dst], &buffer.stream[buff_src], n_syms);
+                buff_dst +=n_syms;
+            }
 
-                /*if(rem_syms>=len){
-                    assert(right<buff_src);
-                    memcpy(&buffer.stream[right], &buffer.stream[buff_src], len);
-                    buff_src = right;
-                    buff_dst = buff_src + len;
-                    glob_pos+=len;
-                    rem_syms-=len;
-                }
-                assert(rem_syms>=len || (rem_syms<len && rem_syms==0));*/
+            if(!first_in_front){
+                buff_src = tmp_src;
+                first_in_front = true;
                 i=1;
             }else{
-                memcpy(&buffer.stream[buff_dst], &buffer.stream[buff_src], n_syms);
-                glob_pos+=n_syms;
-                rem_syms-=n_syms;
-                buff_dst+=n_syms;
                 i*=2;
             }
-        }
-
-        if(block_bg!=(((glob_pos-1)/buffer.stream_size)*buffer.stream_size)){
-            std::cout<<"holaa"<<std::endl;
+            glob_pos+=n_syms;
+            rem_syms-=n_syms;
         }
 
         assert(block_bg==(((glob_pos-1)/buffer.stream_size)*buffer.stream_size));
-
         assert(lm_pos<=rm_pos);
         last_pos = glob_pos-1;
         rm_pos = last_pos & (buff_size()-1);
@@ -391,11 +325,6 @@ struct o_file_stream{
     }
 
     void write_block(){
-
-        if(lm_pos>rm_pos){
-            std::cout<<"whut?"<<std::endl;
-        }
-
         assert(lm_pos<=rm_pos);
         ofs.seekp((block_bg+lm_pos)*w_bytes);
         ofs.write((char*) &buffer.stream[lm_pos], (rm_pos-lm_pos+1)*w_bytes);

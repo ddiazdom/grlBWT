@@ -114,12 +114,17 @@ int main(int argc, char** argv) {
         grammar gram;
         sdsl::load_from_file(gram, args.input_file);
 
-        args.h_buff = 1024*4;
-        args.b_buff = std::min<size_t>(1024, gram.t_size()/args.n_threads);
+        //args.h_buff = 1024*4;
+        //args.b_buff = std::min<size_t>(1024, gram.t_size()/args.n_threads);
+        args.h_buff *= 4*1024*1024;
+        args.b_buff = std::min<size_t>(args.b_buff*1024*1024, gram.t_size()/args.n_threads);
 
+        auto start = std::chrono::high_resolution_clock::now();
         gram.se_decomp_str(0, gram.strings()-1,
                            args.output_file,
                            tmp_folder, args.n_threads, args.h_buff, args.b_buff);
+        auto end = std::chrono::high_resolution_clock::now();
+        report_time(start, end);
     }
     return 0;
 }

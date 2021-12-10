@@ -72,7 +72,7 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
         size_t cont=0;
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            //std::cout<<(int)buff_symbol<<" "<<(int)p_gram.sym_map[tmp_sym]<<" "<<pos-1<<" "<<cont<<std::endl;
+            //std::cout<<(int)buff_symbol<<" "<<(int)p_gram.sym_map[tmp_sym]<<" "<<src-1<<" "<<cont<<std::endl;
             assert(p_gram.sym_map[tmp_sym] == buff_symbol);
             cont++;
         }

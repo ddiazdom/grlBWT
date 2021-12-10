@@ -93,9 +93,9 @@ std::string grammar::decomp_str(size_t idx) {
 }
 
 template<>
-bool grammar::copy_substring<std::string>(std::string& stream, size_t src, size_t dst, size_t len, size_t freq){
+bool grammar::copy_to_front<std::string>(std::string& stream, size_t src, size_t len, size_t freq){
 
-    size_t n_syms, rem_syms=len*freq;
+    size_t n_syms, rem_syms=len*freq, dst=stream.size();
     stream.resize(dst+(len*freq));
     char * data = stream.data();
     rem_syms-=len;
@@ -110,13 +110,13 @@ bool grammar::copy_substring<std::string>(std::string& stream, size_t src, size_
 }
 
 template<>
-bool grammar::copy_substring<o_file_stream<char>>(o_file_stream<char>& stream, size_t src, size_t dst, size_t len, size_t freq){
+bool grammar::copy_to_front<o_file_stream<char>>(o_file_stream<char>& stream, size_t src, size_t len, size_t freq){
     return stream.copy_to_front((buff_s_type) src, (buff_s_type) len, (buff_s_type) freq);
 }
 
 template<class vector_t>
-bool grammar::copy_substring(vector_t &stream, size_t src, size_t dst, size_t len, size_t freq) {
-    size_t n_syms, rem_syms=len*freq;
+bool grammar::copy_to_front(vector_t &stream, size_t src, size_t len, size_t freq) {
+    size_t n_syms, rem_syms=len*freq, dst=stream.size();
     stream.resize(dst+(len*freq));
     char * data = stream.data();
     rem_syms-=len;
@@ -134,55 +134,50 @@ bool grammar::copy_substring(vector_t &stream, size_t src, size_t dst, size_t le
 template<class vector_t>
 void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
 
-    size_t pos1, pos2, len, val, freq, start, end;
+    size_t pos1, start, end;
     if(sym<text_alph){
         exp.push_back((char)symbols_map[sym]);
     }else{
         pos1 = exp.size();
-        auto res = ht.find(&sym, 64);
+        auto res = ht.find(&sym, sdsl::bits::hi(sym)+1);
         if(res.second){
-
-            ht.get_value_from(*res.first, val);
-            pos2 = val >>32UL;
-            len = val & ((1UL<<32UL)-1UL);
+            locus_t locus = {0,0};
+            ht.get_value_from(*res.first, locus);
 
             //if the string couldn't be copied, then we do it the hard way
-            if(!copy_substring(exp, pos2, exp.size(), len, 1)){
+            if(!copy_to_front(exp, locus.src, locus.exp_len, 1)){
                 start = nter_ptr[sym];
                 end = nter_ptr[sym+1]-1;
                 if(is_rl(sym)){
-                    sym = rules[start];
-                    freq = rules[end];
-                    buff_decomp_nt_int<vector_t>(sym, exp, ht);
-                    copy_substring(exp, pos1, exp.size(), exp.size()-pos1, freq-1);
+                    buff_decomp_nt_int<vector_t>(rules[start], exp, ht);
+                    copy_to_front(exp, pos1, exp.size() - pos1, rules[end] - 1);
                 }else{
                     for(size_t i=start;i<=end;i++){
                         buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
                     }
                 }
+                locus.src = pos1;
+                auto res2 =  ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
+                if(!res2.second) ht.insert_value_at(*res2.first, locus);
+            }else{
+                locus.src = pos1;
+                ht.insert_value_at(*res.first, locus);
             }
-
-            val = (pos1<<32UL) |  len;
-            ht.insert_value_at(*res.first, val);
         }else{
-            auto res2 = ht.insert(&sym, 64, 0);
             start = nter_ptr[sym];
             end = nter_ptr[sym+1]-1;
             if(is_rl(sym)){
-                sym = rules[start];
-                freq = rules[end];
-                buff_decomp_nt_int<vector_t>(sym, exp, ht);
-                len = exp.size()-pos1;
-                copy_substring(exp, pos1, exp.size(), len, freq-1);
+                buff_decomp_nt_int<vector_t>(rules[start], exp, ht);
+                copy_to_front(exp, pos1, exp.size() - pos1, rules[end] - 1);
             }else{
                 for(size_t i=start;i<=end;i++){
                     buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
                 }
             }
 
-            len = exp.size() - pos1;
-            val = (pos1<<32UL) |  len;
-            ht.insert_value_at(*res2.first, val);
+            uint32_t len = exp.size() - pos1;
+            locus_t locus = {pos1, len};
+            ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
         }
     }
 }
@@ -246,17 +241,8 @@ void grammar::se_decomp_str(size_t start, size_t end, std::string& output_file,
         str_start = i == 0 ? c_start : c_start+seq_pointers[i-1]+1;
         str_end = seq_pointers[i]+c_start;
 
-        size_t prev_size, acc=0;
-        if(i==121){
-            prev_size=ofs.size();
-        }
+        //std::cout<<i<<std::endl;
         for(size_t j=str_start;j<=str_end;j++){
-            if(i==38277 && j==11729574){
-                acc+=(ofs.size()-prev_size);
-                std::cout<<i<<" "<<j<<" "<<ofs.size()-prev_size<<" "<<acc<<std::endl;
-                prev_size=ofs.size();
-            }
-            std::cout<<i<<" "<<j<<std::endl;
             buff_decomp_nt_int(rules[j], ofs, ht);
         }
     }

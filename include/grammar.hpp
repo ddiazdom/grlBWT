@@ -37,9 +37,15 @@ struct gram_info_t{
 };
 
 class grammar {
+
 private:
 
-    typedef bit_hash_table<size_t, 64, size_t, 7> hash_table_t;
+    struct locus_t{
+        size_t src;
+        uint32_t exp_len;
+    };
+
+    typedef bit_hash_table<locus_t, 96, size_t, 6> hash_table_t;
     typedef typename o_file_stream<char>::size_type buff_s_type;
 
     size_t text_size{}; //original size of the text
@@ -59,7 +65,7 @@ private:
     template<class vector_t>
     void buff_decomp_nt_int(size_t nt, vector_t& exp, hash_table_t& ht);
     template<class vector_t>
-    bool copy_substring(vector_t& stream, size_t src, size_t dst, size_t len, size_t freq);
+    bool copy_to_front(vector_t& stream, size_t src, size_t len, size_t freq);
 public:
     typedef size_t size_type;
     grammar()=default;
