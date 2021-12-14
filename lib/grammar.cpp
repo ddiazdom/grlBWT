@@ -132,6 +132,83 @@ bool grammar::copy_to_front(vector_t &stream, size_t src, size_t len, size_t fre
 
 //buffered decompression
 template<class vector_t>
+void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht) {
+
+    std::stack<node_t> st;
+    size_t pos = 0, len=0, freq, exp_size;
+    bool is_rm_child = false;
+    locus_t locus={0,0};
+
+    do {
+        while(true) {
+
+            st.emplace(root, pos, is_rm_child, len);
+
+            if(root<text_alph){
+                break;
+            } else {
+                //check if the nonterminal was already decompressed
+                auto res = ht.find(&root, sdsl::bits::hi(root)+1);
+                if(res.second){
+                    locus = {0,0};
+                    ht.get_value_from(*res.first, locus);
+                    if(copy_to_front(exp, locus.src, locus.exp_len, 1)){
+                        len +=locus.exp_len;
+                        break;
+                    }
+                }
+                pos = nter_ptr[root];
+                is_rm_child = (is_rl(root) || pos==(nter_ptr[root+1]-1));
+                root = rules[pos];
+            }
+        }
+
+        auto temp = st.top();
+        st.pop();
+        assert(temp.sym==root);
+
+        if(temp.sym<text_alph){
+            exp.push_back((char)symbols_map[temp.sym]);
+            len++;
+        } else {
+
+            locus.exp_len = len - temp.l_exp;
+            locus.src = exp.size()-locus.exp_len;
+
+            auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
+            if(!res.second) ht.insert_value_at(*res.first, locus);
+        }
+
+        while(!st.empty() && temp.is_rm_child) {
+
+            temp = st.top();
+            st.pop();
+
+            if(is_rl(temp.sym)){
+                exp_size = len - temp.l_exp;
+                freq = rules[nter_ptr[temp.sym+1]-1];
+                copy_to_front(exp, exp.size()-exp_size, exp_size, freq-1);
+                len+=exp_size*(freq-1);
+            }
+
+            locus.exp_len = len - temp.l_exp;
+            locus.src = exp.size() - locus.exp_len;
+
+            auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
+            if(!res.second) ht.insert_value_at(*res.first, locus);
+        }
+
+        if (!st.empty()) {
+            assert(!temp.is_rm_child);
+            pos = temp.g_pos+1;
+            is_rm_child = pos == (nter_ptr[st.top().sym+1]-1);
+            root = rules[pos];
+        }
+    }while(!st.empty());
+}
+
+//buffered decompression
+template<class vector_t>
 void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
 
     size_t pos1, start, end;
@@ -241,9 +318,8 @@ void grammar::se_decomp_str(size_t start, size_t end, std::string& output_file,
         str_start = i == 0 ? c_start : c_start+seq_pointers[i-1]+1;
         str_end = seq_pointers[i]+c_start;
 
-        //std::cout<<i<<std::endl;
         for(size_t j=str_start;j<=str_end;j++){
-            buff_decomp_nt_int(rules[j], ofs, ht);
+            buff_it_decomp_nt_int(rules[j], ofs,ht);
         }
     }
     free(ht_buff);

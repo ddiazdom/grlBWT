@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
 
         //args.h_buff = 1024*4;
         //args.b_buff = std::min<size_t>(1024, gram.t_size()/args.n_threads);
-        args.h_buff *= 4*1024*1024;
+        args.h_buff *= 1024*1024;
         args.b_buff = std::min<size_t>(args.b_buff*1024*1024, gram.t_size()/args.n_threads);
 
         auto start = std::chrono::high_resolution_clock::now();

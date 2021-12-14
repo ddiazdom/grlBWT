@@ -40,6 +40,18 @@ class grammar {
 
 private:
 
+    struct node_t{
+        size_t sym;
+        size_t g_pos;
+        size_t l_exp;
+        bool is_rm_child;
+        node_t(const size_t _sym, const size_t _g_pos,
+               const bool _is_rm_child, size_t _l_exp): sym(_sym),
+                                                        g_pos(_g_pos),
+                                                        l_exp(_l_exp),
+                                                        is_rm_child(_is_rm_child){};
+    };
+
     struct locus_t{
         size_t src;
         uint32_t exp_len;
@@ -152,6 +164,8 @@ public:
                        size_t ht_buff_size=1024*1024,
                        size_t file_buff_size=16*1024*1024);
 
+    template<class vector_t>
+    void buff_it_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht);
     template<class vector_t>
     void buff_decomp_nt(size_t nt, vector_t& exp, size_t ht_buff_size=1024*1024);
     std::string decomp_nt(size_t idx);

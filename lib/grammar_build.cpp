@@ -30,7 +30,7 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
     size_t l = r_lim_ss(p_gram.r);
 
     for(size_t i=f; i <= l; i++){
-        std::cout<<i<<" "<<l<<std::endl;
+        //std::cout<<i<<" "<<l<<std::endl;
         tmp_decomp.clear();
         stack.push(r[i]);
         assert(stack.size()<=if_stream.size());
