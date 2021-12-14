@@ -60,7 +60,9 @@ struct parse_functor{
             if(!is_full_str){
                 auto res = data.m_map.find(phrase.data(), phrase.n_bits());
                 assert(res.second);
-                data.ofs.push_back(res.first.value()>>1UL);
+                size_t id = 0;
+                data.m_map.get_value_from(res.first, id);
+                data.ofs.push_back(id>>1UL);
             }else{
                 data.ofs.push_back(phrase[0]);
             }

@@ -94,13 +94,13 @@ public:
         return locus.first != other.locus.first;
     }
 
-    /*bit_hash_table_iterator<ht_type>& operator=(const value_t &val) { //update the value associated with the current key
+    bit_hash_table_iterator<ht_type>& operator=(const value_t &val) { //update the value associated with the current key
         if(locus.first<ht.next_av_bit){
             const void * tmp_ptr = &val;
             ht.data.write_chunk(tmp_ptr, locus.second, locus.second+ht.value_bits()-1);
         }
         return *this;
-    }*/
+    }
 
     const bit_hash_table_iterator<ht_type>& operator++() {
         if(locus.first<ht.next_av_bit){
@@ -123,7 +123,8 @@ public:
 template<class value_t,
          size_t val_bits=sizeof(value_t)*8,
          class buffer_t=size_t,
-         size_t desc_bits=32>
+         size_t desc_bits=32,
+         bool short_key=false>
 class bit_hash_table{
 
 private:
@@ -248,7 +249,12 @@ private:
 
             data.read_chunk(tmp_key, data_offset + d_bits, data_offset + d_bits + key_bits - 1);
 
-            hash = XXH3_64bits(tmp_key, key_bytes);
+            if constexpr(short_key){
+                hash = (*(reinterpret_cast<const size_t*>(tmp_key)));
+            }else{
+                hash = XXH3_64bits(tmp_key, key_bytes);
+            }
+
             idx = hash & (n_buckets - 1);
             tmp_offset = data_offset + 1;
 
@@ -470,15 +476,15 @@ public:
         return d_bits;
     }
 
-    std::pair<iterator, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
+    std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
 
         assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
         size_t hash;
-        if(key_bits>64){
-            hash =  XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        if constexpr(short_key){
+            hash = (*(reinterpret_cast<const size_t*>(key))) & ((1UL<<key_bits)-1UL);
         }else{
-            hash = *(reinterpret_cast<const size_t *>(key));
+            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));;
         }
 
         size_t idx = hash & (n_buckets - 1);
@@ -500,7 +506,7 @@ public:
                 bck_dist = table[idx] >> 44UL;
 
                 if(!inserted && equal(key, key_bits , bck_offset-1)){
-                    return {iterator{*this, bck_offset-1}, false};
+                    return {bck_offset-1, false};
                 }else if(bck_dist<dist){ //steal to the rich
 
                     if(!inserted){//swap the keys
@@ -585,7 +591,7 @@ public:
         }
 
         assert(in_offset>0);
-        return {iterator{*this, in_offset-1}, true};
+        return {in_offset-1, true};
     }
 
     inline float load_factor() const{
@@ -629,30 +635,30 @@ public:
         return max_bck_dist;
     }
 
-    inline std::pair<iterator, bool> find(const void* key, size_t key_bits) const {
+    inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
 
         size_t hash;
-        if(key_bits>64){
+        if constexpr(short_key){
             hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
         }else{
-            hash = *(reinterpret_cast<const size_t *>(key));
+            hash = (*(reinterpret_cast<const size_t*>(key))) & ((1UL<<key_bits)-1UL);
         }
 
         size_t idx = hash & (n_buckets - 1);
 
         if(table[idx]==0){
-            return {end(), false};
+            return {0, false};
         }else{
             size_t offset, i=0;
             while(i<=max_bck_dist && table[idx]!=0){
                 offset = (table[idx] & 0xFFFFFFFFFFFul);
                 if(equal(key, key_bits, offset-1)){
-                    return {iterator(*this, offset - 1), true};
+                    return {offset - 1, true};
                 }
                 idx = (idx+1) & (n_buckets - 1);
                 i++;
             }
-            return {end(), false};
+            return {0, false};
         }
     }
 

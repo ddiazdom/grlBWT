@@ -156,11 +156,11 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
                 copied = false;
                 if(res.second){
                     locus = {0,0};
-                    ht.get_value_from(*res.first, locus);
+                    ht.get_value_from(res.first, locus);
                     if(copy_to_front(exp, locus.src, locus.exp_len, 1)){
                         len += locus.exp_len;
                         copied = true;
-                        ht_addr = *res.first;
+                        ht_addr = res.first;
                         break;
                     }
                 }
@@ -185,7 +185,7 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
                 ht.insert_value_at(ht_addr, locus);
             }else{
                 auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
-                if(!res.second) ht.insert_value_at(*res.first, locus);
+                if(!res.second) ht.insert_value_at(res.first, locus);
             }
         }
 
@@ -205,7 +205,7 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
             locus.src = exp.size() - locus.exp_len;
 
             auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
-            if(!res.second) ht.insert_value_at(*res.first, locus);
+            if(!res.second) ht.insert_value_at(res.first, locus);
         }
 
         if (!st.empty()) {
@@ -230,7 +230,7 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
         auto res = ht.find(&sym, sdsl::bits::hi(sym)+1);
         if(res.second){
             locus_t locus = {0,0};
-            ht.get_value_from(*res.first, locus);
+            ht.get_value_from(res.first, locus);
 
             //if the string couldn't be copied, then we do it the hard way
             if(!copy_to_front(exp, locus.src, locus.exp_len, 1)){
@@ -246,10 +246,10 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
                 }
                 locus.src = pos1;
                 auto res2 =  ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
-                if(!res2.second) ht.insert_value_at(*res2.first, locus);
+                if(!res2.second) ht.insert_value_at(res2.first, locus);
             }else{
                 locus.src = pos1;
-                ht.insert_value_at(*res.first, locus);
+                ht.insert_value_at(res.first, locus);
             }
         }else{
             start = nter_ptr[sym];

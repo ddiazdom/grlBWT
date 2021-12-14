@@ -152,7 +152,7 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
 
             auto res = map.insert(key, key_bits, rep);
             if(!res.second){
-                map.insert_value_at(*res.first, 1UL);
+                map.insert_value_at(res.first, 1UL);
             }
         }
         text_i.close();

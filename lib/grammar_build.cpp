@@ -112,9 +112,11 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
                 auto res = ht.insert(pair.data(), pair.n_bits(), 0);
                 if(res.second){
                     tmp_sym = new_id++;
-                    ht.insert_value_at(*res.first, tmp_sym);
+                    ht.insert_value_at(res.first, tmp_sym);
                 }else{
-                    tmp_sym = res.first.value();
+                    tmp_sym = 0;
+                    ht.get_value_from(res.first, tmp_sym);
+                    //tmp_sym = res.first.value();
                 }
             }else{
                 tmp_sym = rules[i-1];

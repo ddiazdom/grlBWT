@@ -45,11 +45,6 @@ private:
         size_t g_pos=0;
         size_t l_exp=0;
         bool is_rm_child=false;
-        /*node_t(const size_t _sym, const size_t _g_pos,
-               const bool _is_rm_child, size_t _l_exp): sym(_sym),
-                                                        g_pos(_g_pos),
-                                                        l_exp(_l_exp),
-                                                        is_rm_child(_is_rm_child){};*/
     };
 
     struct locus_t{
@@ -57,7 +52,7 @@ private:
         uint32_t exp_len;
     };
 
-    typedef bit_hash_table<locus_t, 96, size_t, 6> hash_table_t;
+    typedef bit_hash_table<locus_t, 96, size_t, 6, true> hash_table_t;
     typedef typename o_file_stream<char>::size_type buff_s_type;
 
     size_t text_size{}; //original size of the text

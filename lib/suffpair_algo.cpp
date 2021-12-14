@@ -138,9 +138,11 @@ void collect_pairs(thread_data* d, i_file_stream<size_t>& p_list, o_file_stream<
 
         auto res = ht.insert(tmp_pair.data(), tmp_pair.n_bits(), id);
         if(!res.second){//the pair already exists
-            val = res.first.value();
+            val = 0;
+            ht.get_value_from(res.first, val);
+            //val = res.first.value();
             val |= (id | 1UL);
-            ht.insert_value_at(*res.first, val);
+            ht.insert_value_at(res.first, val);
         }
     }
     ht.flush();
@@ -168,7 +170,8 @@ void replace_pairs(const phrase_map_t& ht, const pairing_data& p_data, std::stri
             tmp_pair.write(1, r.read(pos+1));
 
             auto res = ht.find(tmp_pair.data(), tmp_pair.n_bits());
-            val = res.first.value();
+            ht.get_value_from(res.first, val);
+            //val = res.first.value();
 
             if(val & 1UL){
                 r.write(pos, val>>1UL);
@@ -234,9 +237,11 @@ void * suffpair_thread(void * data) {
                 auto res = ht.insert(tmp_pair.data(), tmp_pair.n_bits(), id);
 
                 if (!res.second) {
-                    val = res.first.value();
+                    val = 0;
+                    ht.get_value_from(res.first, val);
+                    //val = res.first.value();
                     val |= (id | 1UL);
-                    ht.insert_value_at(*res.first, val);
+                    ht.insert_value_at(res.first, val);
                 }
                 p_list.push_back(i);
             }
@@ -365,9 +370,11 @@ void merge_ht_data(std::vector<thread_data>& t_data){
             auto res = data.ht.insert(key, key_bits, id);
 
             if(!res.second){
-                size_t val = res.first.value();
+                size_t val = 0;
+                data.ht.get_value_from(res.first, val);
+                //size_t val = res.first.value();
                 val |= (id | 1UL);
-                data.ht.insert_value_at(*res.first, val);
+                data.ht.insert_value_at(res.first, val);
             }
         }
         text_i.close();
