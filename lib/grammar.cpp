@@ -137,7 +137,7 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
     std::stack<node_t> st;
 
     size_t len=0, freq, exp_size;
-    locus_t locus = {0,0};
+    size_t locus = 0, src, exp_len;
     node_t node = {root, 0, 0, false};
 
     bool copied;
@@ -155,10 +155,15 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
 
                 copied = false;
                 if(res.second){
-                    locus = {0,0};
+
+                    locus = 0;
                     ht.get_value_from(res.first, locus);
-                    if(copy_to_front(exp, locus.src, locus.exp_len, 1)){
-                        len += locus.exp_len;
+
+                    src = locus & ((1UL<<40)-1UL);
+                    exp_len = locus >> 40;
+
+                    if(copy_to_front(exp, src, exp_len, 1)){
+                        len += exp_len;
                         copied = true;
                         ht_addr = res.first;
                         break;
@@ -178,8 +183,9 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
             exp.push_back((char)symbols_map[temp.sym]);
             len++;
         } else {
-            locus.exp_len = len - temp.l_exp;
-            locus.src = exp.size()-locus.exp_len;
+            exp_len = len - temp.l_exp;
+            src = exp.size()-exp_len;
+            locus = (exp_len<<40) | src;
 
             if(copied){
                 ht.insert_value_at(ht_addr, locus);
@@ -201,8 +207,9 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
                 len+=exp_size*(freq-1);
             }
 
-            locus.exp_len = len - temp.l_exp;
-            locus.src = exp.size() - locus.exp_len;
+            exp_len = len - temp.l_exp;
+            src = exp.size() - exp_len;
+            locus = (exp_len<<40) | src;
 
             auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
             if(!res.second) ht.insert_value_at(res.first, locus);
@@ -222,18 +229,21 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
 template<class vector_t>
 void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
 
-    size_t pos1, start, end;
+    size_t pos1, start, end, src, exp_len, locus;
     if(sym<text_alph){
         exp.push_back((char)symbols_map[sym]);
     }else{
         pos1 = exp.size();
         auto res = ht.find(&sym, sdsl::bits::hi(sym)+1);
         if(res.second){
-            locus_t locus = {0,0};
+            locus = 0;
             ht.get_value_from(res.first, locus);
 
+            src = locus & ((1UL<<40)-1UL);
+            exp_len = locus >> 40;
+
             //if the string couldn't be copied, then we do it the hard way
-            if(!copy_to_front(exp, locus.src, locus.exp_len, 1)){
+            if(!copy_to_front(exp, src, exp_len, 1)){
                 start = nter_ptr[sym];
                 end = nter_ptr[sym+1]-1;
                 if(is_rl(sym)){
@@ -244,11 +254,15 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
                         buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
                     }
                 }
-                locus.src = pos1;
+
+                src = pos1;
+                locus = (exp_len<<40) | src;
+
                 auto res2 =  ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
                 if(!res2.second) ht.insert_value_at(res2.first, locus);
             }else{
-                locus.src = pos1;
+                src = pos1;
+                locus = (exp_len<<40) | src;
                 ht.insert_value_at(res.first, locus);
             }
         }else{
@@ -263,8 +277,8 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
                 }
             }
 
-            uint32_t len = exp.size() - pos1;
-            locus_t locus = {pos1, len};
+            size_t len = exp.size() - pos1;
+            locus = (len<<40) | pos1;
             ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
         }
     }

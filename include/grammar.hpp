@@ -47,12 +47,12 @@ private:
         bool is_rm_child=false;
     };
 
-    struct locus_t{
+    /*struct locus_t{
         size_t src;
         uint32_t exp_len;
-    };
+    };*/
 
-    typedef bit_hash_table<locus_t, 96, size_t, 6, true> hash_table_t;
+    typedef bit_hash_table<size_t, 64, size_t, 6, true> hash_table_t;
     typedef typename o_file_stream<char>::size_type buff_s_type;
 
     size_t text_size{}; //original size of the text
