@@ -145,14 +145,14 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
 
     do {
         while(true) {
-
             st.push(node);
-
             if(node.sym<text_alph){
                 break;
             } else {
+
                 //check if the nonterminal was already decompressed
                 auto res = ht.find(&node.sym, sdsl::bits::hi(node.sym)+1);
+
                 copied = false;
                 if(res.second){
                     locus = {0,0};
@@ -330,7 +330,8 @@ void grammar::se_decomp_str(size_t start, size_t end, std::string& output_file,
         str_end = seq_pointers[i]+c_start;
 
         for(size_t j=str_start;j<=str_end;j++){
-            buff_it_decomp_nt_int(rules[j], ofs,ht);
+            //buff_it_decomp_nt_int(rules[j], ofs,ht);
+            buff_decomp_nt_int(rules[j], ofs,ht);
         }
     }
     free(ht_buff);

@@ -516,9 +516,8 @@ public:
                             offset = res.first;
                             inserted = true;
                         }else{
-                            //data was dumped, it is not necessary
-                            idx = hash & (n_buckets-1);
-                            table[idx] =  res.first;
+                            //data was dumped, it is not necessary to do the swap
+                            table[hash & (n_buckets-1)] =  res.first;
                             goto finish;
                         }
                     }
@@ -639,9 +638,9 @@ public:
 
         size_t hash;
         if constexpr(short_key){
-            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
-        }else{
             hash = (*(reinterpret_cast<const size_t*>(key))) & ((1UL<<key_bits)-1UL);
+        }else{
+            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
         }
 
         size_t idx = hash & (n_buckets - 1);
