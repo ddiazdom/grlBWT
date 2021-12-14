@@ -41,15 +41,15 @@ class grammar {
 private:
 
     struct node_t{
-        size_t sym;
-        size_t g_pos;
-        size_t l_exp;
-        bool is_rm_child;
-        node_t(const size_t _sym, const size_t _g_pos,
+        size_t sym=0;
+        size_t g_pos=0;
+        size_t l_exp=0;
+        bool is_rm_child=false;
+        /*node_t(const size_t _sym, const size_t _g_pos,
                const bool _is_rm_child, size_t _l_exp): sym(_sym),
                                                         g_pos(_g_pos),
                                                         l_exp(_l_exp),
-                                                        is_rm_child(_is_rm_child){};
+                                                        is_rm_child(_is_rm_child){};*/
     };
 
     struct locus_t{

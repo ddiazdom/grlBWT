@@ -135,48 +135,58 @@ template<class vector_t>
 void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht) {
 
     std::stack<node_t> st;
-    size_t pos = 0, len=0, freq, exp_size;
-    bool is_rm_child = false;
-    locus_t locus={0,0};
+
+    size_t len=0, freq, exp_size;
+    locus_t locus = {0,0};
+    node_t node = {root, 0, 0, false};
+
+    bool copied;
+    size_t ht_addr;
 
     do {
         while(true) {
 
-            st.emplace(root, pos, is_rm_child, len);
+            st.push(node);
 
-            if(root<text_alph){
+            if(node.sym<text_alph){
                 break;
             } else {
                 //check if the nonterminal was already decompressed
-                auto res = ht.find(&root, sdsl::bits::hi(root)+1);
+                auto res = ht.find(&node.sym, sdsl::bits::hi(node.sym)+1);
+                copied = false;
                 if(res.second){
                     locus = {0,0};
                     ht.get_value_from(*res.first, locus);
                     if(copy_to_front(exp, locus.src, locus.exp_len, 1)){
-                        len +=locus.exp_len;
+                        len += locus.exp_len;
+                        copied = true;
+                        ht_addr = *res.first;
                         break;
                     }
                 }
-                pos = nter_ptr[root];
-                is_rm_child = (is_rl(root) || pos==(nter_ptr[root+1]-1));
-                root = rules[pos];
+
+                node.g_pos = nter_ptr[node.sym];
+                node.is_rm_child = (is_rl(node.sym) || node.g_pos==(nter_ptr[node.sym+1]-1));
+                node.sym = rules[node.g_pos];
             }
         }
 
         auto temp = st.top();
         st.pop();
-        assert(temp.sym==root);
 
         if(temp.sym<text_alph){
             exp.push_back((char)symbols_map[temp.sym]);
             len++;
         } else {
-
             locus.exp_len = len - temp.l_exp;
             locus.src = exp.size()-locus.exp_len;
 
-            auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
-            if(!res.second) ht.insert_value_at(*res.first, locus);
+            if(copied){
+                ht.insert_value_at(ht_addr, locus);
+            }else{
+                auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
+                if(!res.second) ht.insert_value_at(*res.first, locus);
+            }
         }
 
         while(!st.empty() && temp.is_rm_child) {
@@ -200,9 +210,10 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
 
         if (!st.empty()) {
             assert(!temp.is_rm_child);
-            pos = temp.g_pos+1;
-            is_rm_child = pos == (nter_ptr[st.top().sym+1]-1);
-            root = rules[pos];
+            node.g_pos = temp.g_pos+1;
+            node.is_rm_child = node.g_pos == (nter_ptr[st.top().sym+1]-1);
+            node.sym = rules[node.g_pos];
+            node.l_exp = len;
         }
     }while(!st.empty());
 }
