@@ -474,7 +474,13 @@ public:
 
         assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
-        XXH64_hash_t hash =  XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        size_t hash;
+        if(key_bits>64){
+            hash =  XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        }else{
+            hash = *(reinterpret_cast<const size_t *>(key));
+        }
+
         size_t idx = hash & (n_buckets - 1);
         size_t in_offset=0;//locus where the key is inserted
 
@@ -624,7 +630,14 @@ public:
     }
 
     inline std::pair<iterator, bool> find(const void* key, size_t key_bits) const {
-        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+
+        size_t hash;
+        if(key_bits>64){
+            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        }else{
+            hash = *(reinterpret_cast<const size_t *>(key));
+        }
+
         size_t idx = hash & (n_buckets - 1);
 
         if(table[idx]==0){
