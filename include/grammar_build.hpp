@@ -26,7 +26,8 @@ void run_length_compress(gram_info_t& p_gram, sdsl::cache_config& config);
  * @param config : temporal files handler
  * @param hbuff_size : buffer size for the hashing step
  */
-void build_gram(std::string &i_file, std::string &p_gram_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac);
+void build_gram(std::string &i_file, std::string &p_gram_file, uint8_t comp_lvl,
+                std::string& tmp_folder, size_t n_threads, float hbuff_frac);
 
 /***
  * check if the grammar is correct

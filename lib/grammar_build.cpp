@@ -226,7 +226,7 @@ bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
 
 alpha_t get_alphabet(std::string &i_file) {
 
-    std::cout << "Reading input file" << std::endl;
+    std::cout << "  Reading input file:" << std::endl;
 
     //TODO this can be done in parallel if the input is too big
     size_t alph_frq[256] = {0};
@@ -241,11 +241,11 @@ alpha_t get_alphabet(std::string &i_file) {
         if (alph_frq[i] > 0) alphabet.emplace_back(i, alph_frq[i]);
     }
 
-    std::cout<<"  Number of characters: "<< if_stream.size() << std::endl;
-    std::cout<<"  Number of strings:    "<< alphabet[0].second << std::endl;
-    std::cout<<"  Alphabet:             "<< alphabet.size() << std::endl;
-    std::cout<<"  Smallest symbol:      "<< (int) alphabet[0].first << std::endl;
-    std::cout<<"  Greatest symbol:      "<< (int) alphabet.back().first << std::endl;
+    std::cout<<"    Number of characters: "<< if_stream.size() << std::endl;
+    std::cout<<"    Number of strings:    "<< alphabet[0].second << std::endl;
+    std::cout<<"    Alphabet:             "<< alphabet.size() << std::endl;
+    std::cout<<"    Smallest symbol:      "<< (int) alphabet[0].first << std::endl;
+    std::cout<<"    Greatest symbol:      "<< (int) alphabet.back().first << std::endl;
 
     if (if_stream.read(if_stream.size() - 1) != alphabet[0].first) {
         std::cout << "Error: sep. symbol " << alphabet[0].first << " differs from last symbol in file "
@@ -361,11 +361,9 @@ void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_rs_t &rem_nts_rs) {
     new_r_lim.close();
 }
 
-void build_gram(std::string &i_file,
-                std::string &p_gram_file,
-                std::string& tmp_folder,
-                size_t n_threads,
-                float hbuff_frac) {
+void build_gram(std::string &i_file, std::string &p_gram_file,
+                uint8_t comp_lvl, std::string& tmp_folder,
+                size_t n_threads, float hbuff_frac) {
 
     auto alphabet = get_alphabet(i_file);
     size_t n_chars = 0;
@@ -396,7 +394,7 @@ void build_gram(std::string &i_file,
 
     assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
 
-    check_plain_grammar(p_gram, i_file);
+    //check_plain_grammar(p_gram, i_file);
 
     sdsl::util::clear(rem_nts_rs);
     sdsl::util::clear(rem_nts);
@@ -420,9 +418,16 @@ void build_gram(std::string &i_file,
     std::cout<<"    Grammar size in MB:     " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(1000000)<< std::endl;
     std::cout<<"    Compression ratio:      " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(n_chars) << std::endl;
 
-    std::cout<<"  Storing the final grammar" << std::endl;
-    grammar final_gram(p_gram, n_chars, alphabet[0].second);
-    sdsl::store_to_file(final_gram, p_gram_file);
+    std::cout<<"  Storing the final grammar in " << p_gram_file <<std::endl;
 
+    if(comp_lvl==1){
+        grammar<sdsl::int_vector<>> final_gram(p_gram, n_chars, alphabet[0].second);
+        sdsl::store_to_file(final_gram, p_gram_file);
+        final_gram.space_breakdown();
+    }else if(comp_lvl==2){
+        grammar<huff_vector<>> final_gram(p_gram, n_chars, alphabet[0].second);
+        sdsl::store_to_file(final_gram, p_gram_file);
+        final_gram.space_breakdown();
+    }
 }
 

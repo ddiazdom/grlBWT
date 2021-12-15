@@ -4,9 +4,12 @@
 
 #include "grammar.hpp"
 
-grammar::size_type grammar::serialize(std::ostream& out, sdsl::structure_tree_node * v, std::string name) const {
+template<class vector_type>
+typename grammar<vector_type>::size_type
+grammar<vector_type>::serialize(std::ostream& out, sdsl::structure_tree_node * v, std::string name) const {
     sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
-    size_type written_bytes= sdsl::write_member(text_size, out, child, "text_size");
+    size_type written_bytes= sdsl::write_member(comp_level, out, child, "comp_level");
+    written_bytes+= sdsl::write_member(text_size, out, child, "text_size");
     written_bytes+= sdsl::write_member(n_strings, out, child, "n_strings");
     written_bytes+= sdsl::write_member(grammar_size, out, child, "grammar_size");
     written_bytes+= sdsl::write_member(text_alph, out, child, "n_ter");
@@ -21,7 +24,9 @@ grammar::size_type grammar::serialize(std::ostream& out, sdsl::structure_tree_no
     return written_bytes;
 }
 
-void grammar::load(std::istream& in){
+template<class vector_type>
+void grammar<vector_type>::load(std::istream& in){
+    sdsl::read_member(comp_level, in);
     sdsl::read_member(text_size, in);
     sdsl::read_member(n_strings, in);
     sdsl::read_member(grammar_size, in);
@@ -36,7 +41,8 @@ void grammar::load(std::istream& in){
     seq_pointers.load(in);
 }
 
-void grammar::mark_str_boundaries() {
+template<class vector_type>
+void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
 
     std::stack<size_t> stack;
     size_t pos = nter_ptr[gram_alph - 1], sym, suff_sym, sym_state, seq=0;
@@ -49,16 +55,19 @@ void grammar::mark_str_boundaries() {
     state[0] = 1;
     size_t c_start = pos;
 
-    while(pos<rules.size()){
-        sym =  rules[pos];
+    sdsl::int_vector<> rules_arr;
+    sdsl::load_from_file(rules_arr, rules_file);
+
+    while(pos<rules_arr.size()){
+        sym =  rules_arr[pos];
         if(sym >= text_alph && state[sym] == 0){
 
-            suff_sym = is_rl(sym) ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
+            suff_sym = is_rl(sym) ? rules_arr[nter_ptr[sym]] : rules_arr[nter_ptr[sym+1]-1];
 
             while(suff_sym!=sym && state[suff_sym]==0){
                 stack.push(suff_sym);
                 sym = suff_sym;
-                suff_sym = is_rl(sym) ? rules[nter_ptr[sym]] : rules[nter_ptr[sym+1]-1];
+                suff_sym = is_rl(sym) ? rules_arr[nter_ptr[sym]] : rules_arr[nter_ptr[sym+1]-1];
             }
 
             sym_state = state[suff_sym]==1 ? 1: 2;
@@ -68,7 +77,7 @@ void grammar::mark_str_boundaries() {
                 state[suff_sym] = sym_state;
                 stack.pop();
             }
-            state[rules[pos]] = sym_state;
+            state[rules_arr[pos]] = sym_state;
             if(sym_state==1) seq_pointers[seq++] = pos-c_start;
         }else if(state[sym]==1){
             seq_pointers[seq++] = pos-c_start;
@@ -77,7 +86,8 @@ void grammar::mark_str_boundaries() {
     }
 }
 
-std::string grammar::decomp_str(size_t idx) {
+template<class vector_type>
+std::string grammar<vector_type>::decomp_str(size_t idx) const {
     assert(idx<seq_pointers.size());
     std::string exp;
     size_t c_start = nter_ptr[gram_alph-1];
@@ -87,14 +97,14 @@ std::string grammar::decomp_str(size_t idx) {
     str_end = seq_pointers[idx]+c_start;
 
     for(size_t j=str_start;j<=str_end;j++){
-        buff_decomp_nt(rules[j], exp);
+        decomp_nt(rules[j], exp);
     }
     return exp;
 }
 
+/*
 template<>
 bool grammar::copy_to_front<std::string>(std::string& stream, size_t src, size_t len, size_t freq){
-
     size_t n_syms, rem_syms=len*freq, dst=stream.size();
     stream.resize(dst+(len*freq));
     char * data = stream.data();
@@ -107,15 +117,23 @@ bool grammar::copy_to_front<std::string>(std::string& stream, size_t src, size_t
         rem_syms-=n_syms;
     }
     return true;
-}
+}*/
 
 template<>
-bool grammar::copy_to_front<o_file_stream<char>>(o_file_stream<char>& stream, size_t src, size_t len, size_t freq){
+template<>
+bool grammar<sdsl::int_vector<>>::copy_to_front<o_file_stream<char>>(o_file_stream<char>& stream, size_t src, size_t len, size_t freq) const {
     return stream.copy_to_front((buff_s_type) src, (buff_s_type) len, (buff_s_type) freq);
 }
 
+template<>
+template<>
+bool grammar<huff_vector<>>::copy_to_front<o_file_stream<char>>(o_file_stream<char>& stream, size_t src, size_t len, size_t freq) const {
+    return stream.copy_to_front((buff_s_type) src, (buff_s_type) len, (buff_s_type) freq);
+}
+
+template<class vector_type>
 template<class vector_t>
-bool grammar::copy_to_front(vector_t &stream, size_t src, size_t len, size_t freq) {
+bool grammar<vector_type>::copy_to_front(vector_t &stream, size_t src, size_t len, size_t freq) const {
     size_t n_syms, rem_syms=len*freq, dst=stream.size();
     stream.resize(dst+(len*freq));
     char * data = stream.data();
@@ -131,17 +149,15 @@ bool grammar::copy_to_front(vector_t &stream, size_t src, size_t len, size_t fre
 }
 
 //buffered decompression
+template<class vector_type>
 template<class vector_t>
-void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht) {
+void grammar<vector_type>::buff_it_decomp_nt_int(size_t root, vector_t& exp, std::vector<size_t>& dc_info) {
 
     std::stack<node_t> st;
 
     size_t len=0, freq, exp_size;
-    size_t locus = 0, src, exp_len;
+    size_t locus, src, exp_len;
     node_t node = {root, 0, 0, false};
-
-    bool copied;
-    size_t ht_addr;
 
     do {
         while(true) {
@@ -151,25 +167,15 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
             } else {
 
                 //check if the nonterminal was already decompressed
-                auto res = ht.find(&node.sym, sdsl::bits::hi(node.sym)+1);
-
-                copied = false;
-                if(res.second){
-
-                    locus = 0;
-                    ht.get_value_from(res.first, locus);
-
+                locus = dc_info[node.sym];
+                if(locus!=0){
                     src = locus & ((1UL<<40)-1UL);
                     exp_len = locus >> 40;
-
                     if(copy_to_front(exp, src, exp_len, 1)){
                         len += exp_len;
-                        copied = true;
-                        ht_addr = res.first;
                         break;
                     }
                 }
-
                 node.g_pos = nter_ptr[node.sym];
                 node.is_rm_child = (is_rl(node.sym) || node.g_pos==(nter_ptr[node.sym+1]-1));
                 node.sym = rules[node.g_pos];
@@ -185,14 +191,7 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
         } else {
             exp_len = len - temp.l_exp;
             src = exp.size()-exp_len;
-            locus = (exp_len<<40) | src;
-
-            if(copied){
-                ht.insert_value_at(ht_addr, locus);
-            }else{
-                auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
-                if(!res.second) ht.insert_value_at(res.first, locus);
-            }
+            dc_info[temp.sym] = (exp_len<<40) | src;
         }
 
         while(!st.empty() && temp.is_rm_child) {
@@ -209,10 +208,7 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
 
             exp_len = len - temp.l_exp;
             src = exp.size() - exp_len;
-            locus = (exp_len<<40) | src;
-
-            auto res = ht.insert(&temp.sym, sdsl::bits::hi(temp.sym)+1, locus);
-            if(!res.second) ht.insert_value_at(res.first, locus);
+            dc_info[temp.sym] = (exp_len<<40) | src;
         }
 
         if (!st.empty()) {
@@ -226,18 +222,17 @@ void grammar::buff_it_decomp_nt_int(size_t root, vector_t& exp, hash_table_t& ht
 }
 
 //buffered decompression
+template<class vector_type>
 template<class vector_t>
-void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
+void grammar<vector_type>::buff_decomp_nt(size_t sym, vector_t& exp, std::vector<size_t>& dc_info) const {
 
     size_t pos1, start, end, src, exp_len, locus;
     if(sym<text_alph){
         exp.push_back((char)symbols_map[sym]);
     }else{
         pos1 = exp.size();
-        auto res = ht.find(&sym, sdsl::bits::hi(sym)+1);
-        if(res.second){
-            locus = 0;
-            ht.get_value_from(res.first, locus);
+        locus = dc_info[sym];
+        if(locus!=0){
 
             src = locus & ((1UL<<40)-1UL);
             exp_len = locus >> 40;
@@ -247,109 +242,98 @@ void grammar::buff_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht) {
                 start = nter_ptr[sym];
                 end = nter_ptr[sym+1]-1;
                 if(is_rl(sym)){
-                    buff_decomp_nt_int<vector_t>(rules[start], exp, ht);
+                    buff_decomp_nt<vector_t>(rules[start], exp, dc_info);
                     copy_to_front(exp, pos1, exp.size() - pos1, rules[end] - 1);
                 }else{
                     for(size_t i=start;i<=end;i++){
-                        buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
+                        buff_decomp_nt<vector_t>(rules[i], exp, dc_info);
                     }
                 }
-
-                src = pos1;
-                locus = (exp_len<<40) | src;
-
-                auto res2 =  ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
-                if(!res2.second) ht.insert_value_at(res2.first, locus);
-            }else{
-                src = pos1;
-                locus = (exp_len<<40) | src;
-                ht.insert_value_at(res.first, locus);
             }
+            dc_info[sym] = (exp_len<<40) | pos1;
         }else{
             start = nter_ptr[sym];
             end = nter_ptr[sym+1]-1;
             if(is_rl(sym)){
-                buff_decomp_nt_int<vector_t>(rules[start], exp, ht);
+                buff_decomp_nt<vector_t>(rules[start], exp, dc_info);
                 copy_to_front(exp, pos1, exp.size() - pos1, rules[end] - 1);
             }else{
                 for(size_t i=start;i<=end;i++){
-                    buff_decomp_nt_int<vector_t>(rules[i], exp, ht);
+                    buff_decomp_nt<vector_t>(rules[i], exp, dc_info);
                 }
             }
-
-            size_t len = exp.size() - pos1;
-            locus = (len<<40) | pos1;
-            ht.insert(&sym, sdsl::bits::hi(sym)+1, locus);
+            dc_info[sym] = ((exp.size() - pos1)<<40) | pos1;
         }
     }
 }
 
-template<class vector_t>
-void grammar::buff_decomp_nt(size_t nt, vector_t& exp, size_t ht_buff_size){
-    void * buff = malloc(ht_buff_size);
-    hash_table_t ht(ht_buff_size, "", 0.8, buff);
-    buff_decomp_nt_int<vector_t>(nt, exp, ht);
-    free(buff);
-}
-
-std::string grammar::decomp_nt(size_t nt) {
-    std::string exp;
-    assert(nt<gram_alph);
-    size_t start, end, sym, rl_sym, freq;
-    std::stack<size_t> stack;
-    stack.push(nt);
-
-    while(!stack.empty()){
-        sym = stack.top();
-        stack.pop();
-
-        if(sym<text_alph){
-            exp.push_back((char)symbols_map[sym]);
+template<class vector_type>
+void grammar<vector_type>::decomp_nt(size_t sym, std::string& exp) const {
+    assert(sym<gram_alph);
+    size_t start, end;
+    if(sym<text_alph){
+        exp.push_back((char)symbols_map[sym]);
+    }else{
+        start = nter_ptr[sym];
+        end = nter_ptr[sym+1]-1;
+        if(is_rl(sym)){
+            size_t prev_size = exp.size();
+            decomp_nt(rules[start], exp);
+            copy_to_front(exp, prev_size, exp.size()-prev_size, rules[end]-1);
         }else{
-            start = nter_ptr[sym];
-            if(is_rl(sym)){
-                rl_sym = rules[start];
-                freq = rules[start+1];
-                assert(freq>1);
-                std::string res = decomp_nt(rl_sym);
-                for(size_t i=0;i<freq;i++){
-                    exp+=res;
-                }
-            }else{
-                end = nter_ptr[sym+1];
-                for(size_t j=end;j-->start;){
-                    stack.push(rules[j]);
-                }
+            for(size_t j=start;j<=end;j++){
+                decomp_nt(rules[j], exp);
             }
         }
     }
-    return exp;
 }
 
-void grammar::se_decomp_str(size_t start, size_t end, std::string& output_file,
-                            std::string& tmp_folder, size_t n_threads,
-                            size_t ht_buff_size, size_t file_buff_size) {
+template<class vector_type>
+void grammar<vector_type>::se_decomp_str(size_t start, size_t end, std::string& output_file,
+                            std::string& tmp_folder, size_t n_threads, size_t buff_size) const {
 
-    o_file_stream<char> ofs(output_file, file_buff_size, std::ios::out);
+    /*
+    //the buffer size cannot be greater than the text size
+    buff_size = std::min<size_t>(buff_size, text_size);
 
+    //each thread should cover at least 200 MiB
+    size_t syms_per_threads = std::max<size_t>(1024*1024*200, INT_CEIL(text_size, n_threads));
+    size_t t_start=0, t_end, i=1;
+    while(t_start<text_size){
+        t_end = std::min<size_t>((i*syms_per_threads), text_size)-1;
+        std::cout<<t_start<<" "<<t_end<<std::endl;
+        t_start=t_end+1;
+        i++;
+    }*/
+
+    o_file_stream<char> ofs(output_file, buff_size, std::ios::out);
     size_t c_start = nter_ptr[gram_alph-1];
     size_t str_start, str_end;
 
-    void * ht_buff = malloc(ht_buff_size);
-    hash_table_t ht(ht_buff_size, "", 0.8, ht_buff);
-
+    std::vector<size_t> dc_info(gram_alph, 0);
     for(size_t i=start;i<=end;i++){
-
         str_start = i == 0 ? c_start : c_start+seq_pointers[i-1]+1;
         str_end = seq_pointers[i]+c_start;
-
         for(size_t j=str_start;j<=str_end;j++){
-            //buff_it_decomp_nt_int(rules[j], ofs,ht);
-            buff_decomp_nt_int(rules[j], ofs,ht);
+            buff_decomp_nt(rules[j], ofs, dc_info);
         }
     }
-    free(ht_buff);
+
+    /*auto worker = [&](const grammar& gram, size_t start, size_t end){
+        std::vector<size_t> dc_info(gram.gram_alph, 0);
+        size_t str_start, str_end;
+        size_t c_start = gram.nter_ptr[gram.gram_alph-1];
+        for(size_t i=start;i<=end;i++){
+            str_start = i == 0 ? c_start : c_start+gram.seq_pointers[i-1]+1;
+            str_end = gram.seq_pointers[i]+c_start;
+            for(size_t j=str_start;j<=str_end;j++){
+                gram.buff_decomp_nt(gram.rules[j], ofs, dc_info);
+            }
+        }
+    };
+    worker(*this, 0,1);*/
 }
+
 
 
 void gram_info_t::save_to_file(std::string& output_file){
@@ -435,5 +419,13 @@ void gram_info_t::load_from_file(std::string &g_file){
     free(tmp_file);
 }
 
-template void grammar::buff_decomp_nt_int<std::string>(size_t nt, std::string& exp, grammar::hash_table_t& ht);
-template void grammar::buff_decomp_nt<std::string>(size_t nt, std::string& exp, size_t ht_buff_size);
+template typename grammar<sdsl::int_vector<>>::size_type grammar<sdsl::int_vector<>>::serialize(std::ostream& out, sdsl::structure_tree_node * v, std::string name) const;
+template typename grammar<huff_vector<>>::size_type grammar<huff_vector<>>::serialize(std::ostream& out, sdsl::structure_tree_node * v, std::string name) const;
+template void grammar<huff_vector<>>::se_decomp_str(size_t start, size_t end, std::string& output_file, std::string& tmp_folder, size_t n_threads, size_t buff_size) const;
+template void grammar<huff_vector<>>::load(std::istream& in);
+template void grammar<sdsl::int_vector<>>::load(std::istream& in);
+template void grammar<sdsl::int_vector<>>::se_decomp_str(size_t start, size_t end, std::string& output_file, std::string& tmp_folder, size_t n_threads, size_t buff_size) const;
+template void grammar<sdsl::int_vector<>>::mark_str_boundaries(std::string& rules_file);
+template void grammar<huff_vector<>>::mark_str_boundaries(std::string& rules_file);
+template void grammar<sdsl::int_vector<>>::buff_decomp_nt<std::string>(size_t nt, std::string& exp, std::vector<size_t>& dc_info) const;
+template void grammar<sdsl::int_vector<>>::buff_decomp_nt<o_file_stream<char>>(size_t nt, o_file_stream<char>& exp, std::vector<size_t>& dc_info) const;

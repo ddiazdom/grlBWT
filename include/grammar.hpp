@@ -6,6 +6,7 @@
 #define LPG_COMPRESSOR_GRAMMAR_HPP
 
 #include <iostream>
+#include <cdt/huff_vector.hpp>
 #include <sdsl/int_vector.hpp>
 #include "cdt/hash_table.hpp"
 #include "cdt/file_streams.hpp"
@@ -30,12 +31,12 @@ struct gram_info_t{
     void save_to_file(std::string& output_file);
     void load_from_file(std::string &g_file);
 
-
     [[nodiscard]] bool is_terminal(const size_t& id) const {
         return sym_map.find(id) != sym_map.end();
     }
 };
 
+template<class vector_type=sdsl::int_vector<>>
 class grammar {
 
 private:
@@ -47,12 +48,7 @@ private:
         bool is_rm_child=false;
     };
 
-    /*struct locus_t{
-        size_t src;
-        uint32_t exp_len;
-    };*/
-
-    typedef bit_hash_table<size_t, 64, size_t, 6, true> hash_table_t;
+    //typedef bit_hash_table<size_t, 64, size_t, 6, true> hash_table_t;
     typedef typename o_file_stream<char>::size_type buff_s_type;
 
     size_t text_size{}; //original size of the text
@@ -62,17 +58,20 @@ private:
     size_t gram_alph{}; //alphabet size of the grammar (ter + nters)
     size_t comp_string_size{}; //size of the compressed string
     size_t n_p_rounds{}; //number of parsing rounds
+    uint8_t comp_level; //compression level
     sdsl::int_vector<> rules_breaks; //mark the first rule of every parsing round
     sdsl::int_vector<8> symbols_map; //map a terminal to its original byte symbol
-    sdsl::int_vector<> rules; //list of rules
+    vector_type rules; //list of rules
     sdsl::int_vector<> nter_ptr; //pointers of the rules in the rules' array
     sdsl::int_vector<> seq_pointers; //pointers to the boundaries of the strings in the text
 
-    void mark_str_boundaries();
+    void mark_str_boundaries(std::string& rules_file);
     template<class vector_t>
-    void buff_decomp_nt_int(size_t nt, vector_t& exp, hash_table_t& ht);
+    void buff_decomp_nt(size_t nt, vector_t& exp, std::vector<size_t>& dc_info) const;
     template<class vector_t>
-    bool copy_to_front(vector_t& stream, size_t src, size_t len, size_t freq);
+    void buff_it_decomp_nt_int(size_t sym, vector_t& exp, std::vector<size_t>& dc_info);
+    template<class vector_t>
+    bool copy_to_front(vector_t& stream, size_t src, size_t len, size_t freq) const;
 public:
     typedef size_t size_type;
     grammar()=default;
@@ -95,38 +94,32 @@ public:
             rules_breaks[i] = gram_info.rules_breaks[i];
         }
 
-        sdsl::int_vector_buffer<> rules_buff(gram_info.rules_file, std::ios::in);
-        rules.width(sdsl::bits::hi(gram_alph) + 1);
-        rules.resize(rules_buff.size());
-        size_t i=0;
-        for(auto const& sym : rules_buff) rules[i++] = sym;
-        rules_buff.close();
-
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
         nter_ptr.width(sdsl::bits::hi(grammar_size)+1);
         nter_ptr.resize(gram_alph);
         nter_ptr[0] = 0;
 
-        i=1;
+        size_t i=1;
         for(size_t j=1;j<rules_lim_buff.size();j++){
             if(rules_lim_buff[j-1]){
                 nter_ptr[i++] = j;
             }
         }
         rules_lim_buff.close();
-        mark_str_boundaries();
+        mark_str_boundaries(gram_info.rules_file);
 
-        //TODO testing
-        /*for(size_t j=text_alph;j<(gram_alph-1);j++){
-            std::string str1,str2;
-            str1 = decomp_nt(j);
-            buff_decomp_nt(j, str2);
-            assert(str1==str2);
+        sdsl::int_vector_buffer<> rules_buff(gram_info.rules_file, std::ios::in);
+        if constexpr(std::is_same<vector_type, sdsl::int_vector<>>::value) {
+            rules.width(sdsl::bits::hi(gram_alph) + 1);
+            rules.resize(rules_buff.size());
+            i = 0;
+            for (auto const &sym: rules_buff) rules[i++] = sym;
+            rules_buff.close();
+            comp_level = 1;
+        } else {
+            rules = huff_vector<>(rules_buff);
+            comp_level = 2;
         }
-        for(size_t j=0;j<seq_pointers.size();j++){
-            std::cout<<decomp_str(j)<<std::endl;
-        }*/
-        //
     }
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{
@@ -143,7 +136,38 @@ public:
         return -1;
     }
 
-    std::string decomp_str(size_t idx);
+    void space_breakdown() const {
+        std::cout<<"Space breakdown for the grammar representation:"<<std::endl;
+        std::cout<<"  Total size:         "<<sdsl::size_in_bytes(*this)/1000000.0<<" MB"<<std::endl;
+        std::cout<<"    Grammar rules:    "<<sdsl::size_in_bytes(rules)/1000000.0<<" MB"<<std::endl;
+        std::cout<<"    Grammar pointers: "<<sdsl::size_in_bytes(nter_ptr)/1000000.0<<" MB"<<std::endl;
+        std::cout<<"    String pointers:  "<<sdsl::size_in_bytes(seq_pointers)/1000000.0<<" MB"<<std::endl;
+        std::cout<<"    Symbols map:      "<<sdsl::size_in_bytes(symbols_map)/1000000.0<<" MB"<<std::endl;
+        std::cout<<"    Rules breaks:     "<<sdsl::size_in_bytes(rules_breaks)/1000000.0<<" MB"<<std::endl;
+    }
+
+    [[nodiscard]] inline size_t rl_rules() const{
+        return rules_breaks[n_p_rounds+1] - rules_breaks[n_p_rounds];
+    }
+
+    [[nodiscard]] inline size_t sp_rules() const{
+        return rules_breaks[n_p_rounds+2] - rules_breaks[n_p_rounds+1];
+    }
+
+    [[nodiscard]] inline size_t gram_size() const{
+        return grammar_size;
+    }
+
+    [[nodiscard]] inline size_t nter() const{
+        return gram_alph-text_alph;
+    }
+
+    [[nodiscard]] inline size_t ter() const{
+        return text_alph;
+    }
+
+    [[nodiscard]] std::string decomp_str(size_t idx) const;
+
     [[nodiscard]] inline size_t strings() const {
         return seq_pointers.size();
     }
@@ -153,17 +177,9 @@ public:
     }
 
     void se_decomp_str(size_t start, size_t end,
-                       std::string& output,
-                       std::string& tmp_folder,
-                       size_t n_threads,
-                       size_t ht_buff_size=1024*1024,
-                       size_t file_buff_size=16*1024*1024);
-
-    template<class vector_t>
-    void buff_it_decomp_nt_int(size_t sym, vector_t& exp, hash_table_t& ht);
-    template<class vector_t>
-    void buff_decomp_nt(size_t nt, vector_t& exp, size_t ht_buff_size=1024*1024);
-    std::string decomp_nt(size_t idx);
+                       std::string& output,std::string& tmp_folder,
+                       size_t n_threads, size_t buff_size) const;
+    void decomp_nt(size_t idx, std::string& exp) const;
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const;
     void load(std::istream& in);
 };

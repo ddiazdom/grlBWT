@@ -12,7 +12,7 @@
 #include "macros.h"
 #define BUFFER_SIZE 8388608
 
-template<class arr_t=sdsl::int_vector_buffer<64>,
+template<class arr_t=sdsl::int_vector_buffer<>,
          size_t smp_per=5> //sample the sample_per% of elements in the array
 class huff_vector {
 
@@ -148,7 +148,7 @@ private:
         }
     }
 
-    inline size_t binary_search(size_t value, size_t left, size_t right) const {
+    [[nodiscard]] inline size_t binary_search(size_t value, size_t left, size_t right) const {
         size_t mid, left_bound, right_bound;
         while(true){
             mid = left + ((right-left)>>1UL);
@@ -174,7 +174,7 @@ private:
         return symbols[heights[len] + block - first[len]];
     };
 
-    void compute_sampled_pos(){
+    /*void compute_sampled_pos(){
         sdsl::int_vector<> samp_p_tmp(1 + ((m_size - 1) / m_samp_window));
         size_t pos=0,smp_pos=0;
         for(size_t i=0;i<m_size;i++){
@@ -187,14 +187,16 @@ private:
         }
         sdsl::util::bit_compress(samp_p_tmp);
         sampled_pointers.swap(samp_p_tmp);
-    }
+    }*/
 
 public:
 
     huff_vector(): max_depth(0), m_size(0), m_samp_window(0), m_written_bits(0){};
 
-    explicit huff_vector(arr_t &input_array, sdsl::cache_config& config): max_depth(0), m_size(0), m_written_bits(0){
+    explicit huff_vector(arr_t &input_array): max_depth(0), m_size(0), m_written_bits(0){
 
+        std::filesystem::path path(input_array.filename());
+        sdsl::cache_config config(false, path.parent_path());
         size_t max_symbol=0;
 
         //represent the alphabet as a bit vector
@@ -233,8 +235,9 @@ public:
             double ns = huff_leaves[i].freq;
             h0+=(ns/n)*log2(n/ns);
         }
-        std::cout<<std::fixed<<"    Emp. entropy: "<<h0<< " ("<<(((h0*n)/8)/1000000)<<" megabytes)"<<std::endl;
-        std::cout<<std::fixed<<"    Worst case entropy: "<<log2(max_symbol)<< " ("<<(((log2(max_symbol)*n)/8)/1000000)<<" megabytes)"<<std::endl;*/
+        std::cout<<std::fixed<<"    Emp. entropy: "<<h0<< " ("<<(((h0*n)/8)/1000000)<<" megabytes) "<<input_array.size()<<std::endl;
+        std::cout<<std::fixed<<"    Worst case entropy: "<<log2(max_symbol)<< " ("<<(((log2(max_symbol)*n)/8)/1000000)<<" megabytes) "<<input_array.size()<<std::endl;
+         */
         //
 
         //build the huffman codes
@@ -250,27 +253,6 @@ public:
         }
         code_data.close(true);
         get_prefix_free_codes(syms, eff_alph);
-        //
-
-        //TODO this is also for debugging purposes
-        /*sdsl::bit_vector alph_bv;
-        sdsl::load_from_file(alph_bv, "alph_bv");
-        sdsl::bit_vector::rank_1_type alph_bv_rs(&alph_bv);
-        std::ifstream ifs("huffman_inf", std::ios::in | std::ios::binary);
-        size_t eff_alph;
-        ifs.read((char*)&eff_alph, sizeof(size_t));
-        auto syms = reinterpret_cast<symbol_data *>(malloc(eff_alph*sizeof(symbol_data)));
-        ifs.read((char *)syms, eff_alph*sizeof(symbol_data));*/
-        //
-
-        //TODO for debugging purposes
-        /*{
-            sdsl::store_to_file(alph_bv, "alph_bv");
-            std::ofstream ofs("huffman_inf", std::ios::out | std::ios::binary);
-            ofs.write((char *)&eff_alph, sizeof(size_t));
-            ofs.write((char*)syms, eff_alph*sizeof(symbol_data));
-            ofs.close();
-        }*/
         //
 
         //build the succinct representation of the canonical huffman codes
@@ -353,12 +335,11 @@ public:
         }
         //
         m_size = input_array.size();
-        /*for(size_t k=0;k<input_array.size();k++){
-            assert(input_array[k]==(*this)[k]);
-        }
-        std::cout<<"symbols map: "<<sdsl::size_in_mega_bytes(symbols)<<std::endl;
-        std::cout<<"bitstream : "<<sdsl::size_in_mega_bytes(bit_str)<<std::endl;
-        std::cout<<"max_depth: "<<max_depth<<std::endl;*/
+
+        /*std::cout<<sdsl::size_in_bytes(symbols)/1000000.0<<std::endl;
+        std::cout<<sdsl::size_in_bytes(bit_str)/1000000.0<<std::endl;
+        std::cout<<sdsl::size_in_bytes(sampled_pointers)/1000000.0<<std::endl;
+        std::cout<<sdsl::size_in_bytes(*this)/1000000.0<<std::endl;*/
     }
 
     huff_vector(huff_vector<arr_t, smp_per> && other) noexcept {
@@ -412,7 +393,7 @@ public:
         }
     }
 
-    inline size_t size() const{
+    [[nodiscard]] inline size_t size() const{
         return m_size;
     }
 
@@ -426,7 +407,7 @@ public:
         return decode_symbol(pos);
     }
 
-    inline size_t get_bit_pos(size_t index) const {
+    [[nodiscard]] inline size_t get_bit_pos(size_t index) const {
         size_t pos;
         if(index<size()){
             pos = sampled_pointers[index / m_samp_window];
@@ -462,6 +443,7 @@ public:
     void load(std::istream &in){
         symbols.load(in);
         bit_str.load(in);
+        sampled_pointers.load(in);
         sdsl::read_member(max_depth, in);
         sdsl::read_member(m_size, in);
         sdsl::read_member(m_samp_window, in);
@@ -475,7 +457,6 @@ public:
         for(size_t i=0;i<max_depth+1;i++){
             sdsl::read_member(heights[i], in);
         }
-        compute_sampled_pos();
     }
 
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
@@ -483,6 +464,7 @@ public:
         size_t written_bytes = 0;
         written_bytes += symbols.serialize(out, child, "symbols");
         written_bytes += bit_str.serialize(out, child, "bit_stream");
+        written_bytes += sampled_pointers.serialize(out, child, "sampled_pointers");
         written_bytes += sdsl::write_member(max_depth, out, child, "max_depth");
         written_bytes += sdsl::write_member(m_size, out, child, "m_size");
         written_bytes += sdsl::write_member(m_samp_window, out, child, "m_samp_window");
@@ -493,10 +475,8 @@ public:
         for(size_t i=0;i<max_depth+1;i++){
             written_bytes += sdsl::write_member(heights[i], out, child, "max_depth_"+std::to_string(i));
         }
-
-
         return written_bytes;
     }
 };
 
-#endif //CDT_C_HUFF_INT_VECTOR_HPP
+#endif //CDT_HUFF_VECTOR_HPP

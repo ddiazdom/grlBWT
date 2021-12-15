@@ -297,7 +297,7 @@ struct o_file_stream{
             rem_syms-=n_syms;
         }
 
-        assert(block_bg==(((glob_pos-1)/buffer.stream_size)*buffer.stream_size));
+        //assert(block_bg==(((glob_pos-1)/buffer.stream_size)*buffer.stream_size));
         assert(lm_pos<=rm_pos);
         last_pos = glob_pos-1;
         rm_pos = last_pos & (b_size-1);
