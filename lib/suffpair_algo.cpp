@@ -12,7 +12,7 @@ size_t processed;
 size_t rem_threads;
 //
 
-//create a set of new rules from the hash table
+//create a set of new m_rules from the hash table
 void create_new_rules(phrase_map_t& ht, pairing_data& p_data){
     key_wrapper key_w{p_data.s_width, ht.description_bits(), ht.get_data()};
     phrase_map_t::val_type val=0;
@@ -29,7 +29,7 @@ void create_new_rules(phrase_map_t& ht, pairing_data& p_data){
     }
 }
 
-//insert the suffix pair rules into the grammar
+//insert the suffix pair m_rules into the grammar
 void update_grammar(pairing_data& p_data, gram_info_t& gram){
 
     i_file_stream<size_t> rules(p_data.r_file, BUFFER_SIZE);
@@ -65,7 +65,7 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
         p_data.r_lim[n_av++] = (i & 1UL);
     }
 
-    //put array C at the end of the new rules
+    //put array C at the end of the new m_rules
     for(size_t i=p_data.gsyms; i < rules.size(); i++){
         col_rules.push_back(rules.read(i));
         p_data.r_lim[n_av++] = false;

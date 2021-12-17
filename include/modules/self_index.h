@@ -1,0 +1,8 @@
+//
+// Created by Diaz, Diego on 15.12.2021.
+//
+
+#ifndef LPG_COMPRESSOR_SELF_INDEX_H
+#define LPG_COMPRESSOR_SELF_INDEX_H
+
+#endif //LPG_COMPRESSOR_SELF_INDEX_H

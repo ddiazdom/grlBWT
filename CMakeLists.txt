@@ -13,12 +13,12 @@ add_executable(lpg
         lib/grammar_build.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
-        lib/suffpair_algo.cpp)
+        lib/suffpair_algo.cpp include/modules/compute_bwt.h include/modules/self_index.h include/modules/update_grammar.h lib/modules/compute_bwt.cpp)
 
 target_compile_options(lpg
         PRIVATE
         #-Werror
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-vla-extension -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-vla-extension #-msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 

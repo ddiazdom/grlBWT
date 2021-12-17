@@ -15,12 +15,12 @@ struct gram_info_t{
     uint8_t                            sigma{}; // terminal's alphabet
     size_t                             r{}; //r: number of grammar symbols (nter + ter)
     size_t                             c{}; //c: length of the right-hand of the start symbol
-    size_t                             g{}; //g: sum of the rules' right-hand sides
+    size_t                             g{}; //g: sum of the m_rules' right-hand sides
     size_t                             max_tsym{}; //highest terminal symbol
     std::unordered_map<size_t,uint8_t> sym_map; //map terminal symbols to their original byte symbols
-    std::string                        rules_file; // rules are concatenated in this array
+    std::string                        rules_file; // m_rules are concatenated in this array
     std::string                        rules_lim_file; // bit vector marking the last symbol of every right-hand
-    std::vector<size_t>                rules_breaks; // number of rules generated in every LMS parsing round
+    std::vector<size_t>                rules_breaks; // number of m_rules generated in every LMS parsing round
     size_t                             n_p_rounds{}; // number of parsing rounds
 
     gram_info_t() = default;
@@ -53,16 +53,16 @@ private:
 
     size_t text_size{}; //original size of the text
     size_t n_strings{}; //original size of the text
-    size_t grammar_size{}; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the rules)
+    size_t grammar_size{}; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the m_rules)
     size_t text_alph{}; //alphabet size of the text
     size_t gram_alph{}; //alphabet size of the grammar (ter + nters)
     size_t comp_string_size{}; //size of the compressed string
     size_t n_p_rounds{}; //number of parsing rounds
-    uint8_t comp_level; //compression level
+    uint8_t comp_level{}; //compression level
     sdsl::int_vector<> rules_breaks; //mark the first rule of every parsing round
     sdsl::int_vector<8> symbols_map; //map a terminal to its original byte symbol
-    vector_type rules; //list of rules
-    sdsl::int_vector<> nter_ptr; //pointers of the rules in the rules' array
+    vector_type m_rules; //list of m_rules
+    sdsl::int_vector<> m_nter_ptr; //pointers of the m_rules in the m_rules' array
     sdsl::int_vector<> seq_pointers; //pointers to the boundaries of the strings in the text
 
     void mark_str_boundaries(std::string& rules_file);
@@ -75,6 +75,9 @@ private:
 public:
     typedef size_t size_type;
     grammar()=default;
+    const vector_type& rules = m_rules;
+    const sdsl::int_vector<>& nter_ptr = m_nter_ptr;
+
     explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): text_size(_orig_size),
                                                                                  n_strings(_n_seqs),
                                                                                  grammar_size(gram_info.g),
@@ -95,14 +98,14 @@ public:
         }
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
-        nter_ptr.width(sdsl::bits::hi(grammar_size)+1);
-        nter_ptr.resize(gram_alph);
-        nter_ptr[0] = 0;
+        m_nter_ptr.width(sdsl::bits::hi(grammar_size) + 1);
+        m_nter_ptr.resize(gram_alph);
+        m_nter_ptr[0] = 0;
 
         size_t i=1;
         for(size_t j=1;j<rules_lim_buff.size();j++){
             if(rules_lim_buff[j-1]){
-                nter_ptr[i++] = j;
+                m_nter_ptr[i++] = j;
             }
         }
         rules_lim_buff.close();
@@ -110,16 +113,20 @@ public:
 
         sdsl::int_vector_buffer<> rules_buff(gram_info.rules_file, std::ios::in);
         if constexpr(std::is_same<vector_type, sdsl::int_vector<>>::value) {
-            rules.width(sdsl::bits::hi(gram_alph) + 1);
-            rules.resize(rules_buff.size());
+            m_rules.width(sdsl::bits::hi(gram_alph) + 1);
+            m_rules.resize(rules_buff.size());
             i = 0;
-            for (auto const &sym: rules_buff) rules[i++] = sym;
+            for (auto const &sym: rules_buff) m_rules[i++] = sym;
             rules_buff.close();
             comp_level = 1;
         } else {
-            rules = huff_vector<>(rules_buff);
+            m_rules = huff_vector<>(rules_buff);
             comp_level = 2;
         }
+    }
+
+    [[nodiscard]] inline bool is_lc(size_t symbol) const{
+        return symbol>=text_alph && symbol<rules_breaks[n_p_rounds];
     }
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{
@@ -139,8 +146,8 @@ public:
     void space_breakdown() const {
         std::cout<<"Space breakdown for the grammar representation:"<<std::endl;
         std::cout<<"  Total size:         "<<sdsl::size_in_bytes(*this)/1000000.0<<" MB"<<std::endl;
-        std::cout<<"    Grammar rules:    "<<sdsl::size_in_bytes(rules)/1000000.0<<" MB"<<std::endl;
-        std::cout<<"    Grammar pointers: "<<sdsl::size_in_bytes(nter_ptr)/1000000.0<<" MB"<<std::endl;
+        std::cout << "    Grammar m_rules:    " << sdsl::size_in_bytes(m_rules) / 1000000.0 << " MB" << std::endl;
+        std::cout << "    Grammar pointers: " << sdsl::size_in_bytes(m_nter_ptr) / 1000000.0 << " MB" << std::endl;
         std::cout<<"    String pointers:  "<<sdsl::size_in_bytes(seq_pointers)/1000000.0<<" MB"<<std::endl;
         std::cout<<"    Symbols map:      "<<sdsl::size_in_bytes(symbols_map)/1000000.0<<" MB"<<std::endl;
         std::cout<<"    Rules breaks:     "<<sdsl::size_in_bytes(rules_breaks)/1000000.0<<" MB"<<std::endl;
@@ -164,6 +171,10 @@ public:
 
     [[nodiscard]] inline size_t ter() const{
         return text_alph;
+    }
+
+    [[nodiscard]] inline size_t symbols() const{
+        return gram_alph;
     }
 
     [[nodiscard]] std::string decomp_str(size_t idx) const;

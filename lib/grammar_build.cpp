@@ -166,7 +166,7 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
 bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
 
-    std::cout<<"  Marking the rules to remove from the grammar"<<std::endl;
+    std::cout<<"  Marking the m_rules to remove from the grammar"<<std::endl;
     size_t max_tsym = p_gram.max_tsym;
 
     bv_t r_lim;
@@ -185,7 +185,7 @@ bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
     size_t r_len=1, curr_rule=max_tsym+1,k=max_tsym+1;
     while(k<rules.size()){
         if(curr_rule>=p_gram.rules_breaks[p_gram.n_p_rounds] &&
-           curr_rule< p_gram.rules_breaks[p_gram.n_p_rounds+1]){//run-length compressed rules
+           curr_rule< p_gram.rules_breaks[p_gram.n_p_rounds+1]){//run-length compressed m_rules
             rep_nts[rules[k++]] = 2;
             assert(r_lim[k] && r_len==1);
             r_len=0;
@@ -204,19 +204,19 @@ bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
         k++;
     }
 
-    //mark the rules to remove
-    //1) rules whose left-hand side has length one
+    //mark the m_rules to remove
+    //1) m_rules whose left-hand side has length one
     //2) terminal symbols between [min_sym..max_sym] with
     // frequency zero: to compress the alphabet
     for(size_t i=0;i<p_gram.rules_breaks[p_gram.n_p_rounds];i++){
-        //mark the rules with frequency one
+        //mark the m_rules with frequency one
         if(!rem_nts[i]){
             rem_nts[i] = rep_nts[i]==0 || (rep_nts[i]==1 && i > max_tsym);
         }
     }
 
     for(size_t i=p_gram.rules_breaks[p_gram.n_p_rounds+1];i<p_gram.r-1;i++){
-        //mark the rules with frequency one
+        //mark the m_rules with frequency one
         if(!rem_nts[i]){
             rem_nts[i] = rep_nts[i]==0 || (rep_nts[i]==1 && i > max_tsym);
         }
@@ -373,7 +373,7 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     sdsl::cache_config config(false, tmp_folder);
     std::string g_info_file = sdsl::cache_file_name("g_info_file", config);
 
-    std::string rules_file = sdsl::cache_file_name("rules", config);
+    std::string rules_file = sdsl::cache_file_name("m_rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
 
     gram_info_t p_gram(rules_file, rules_len_file);
@@ -410,8 +410,8 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
         if(i<9) std::cout<<" ";
         std::cout<<":    "<<p_gram.rules_breaks[i+1]-p_gram.rules_breaks[i]<<std::endl;
     }
-    std::cout<<"      Run-length rules:             "<<p_gram.rules_breaks[p_gram.n_p_rounds+1]-p_gram.rules_breaks[p_gram.n_p_rounds]<<std::endl;
-    std::cout<<"      SuffPair rules:               "<<p_gram.rules_breaks[p_gram.n_p_rounds+2]-p_gram.rules_breaks[p_gram.n_p_rounds+1]<<std::endl;
+    std::cout<<"      Run-length m_rules:             "<<p_gram.rules_breaks[p_gram.n_p_rounds+1]-p_gram.rules_breaks[p_gram.n_p_rounds]<<std::endl;
+    std::cout<<"      SuffPair m_rules:               "<<p_gram.rules_breaks[p_gram.n_p_rounds+2]-p_gram.rules_breaks[p_gram.n_p_rounds+1]<<std::endl;
 
     std::cout<<"  Compression stats: " << std::endl;
     std::cout<<"    Text size in MB:        " << double(n_chars)/1000000<<std::endl;
