@@ -134,15 +134,40 @@ public:
         return symbol>=rules_breaks[n_p_rounds] && symbol < rules_breaks[n_p_rounds + 1];
     }
 
+    [[nodiscard]] inline bool is_sp(size_t symbol) const{
+        return symbol>=rules_breaks[n_p_rounds+1] && symbol < rules_breaks[n_p_rounds + 2];
+    }
+
+    [[nodiscard]] inline bool is_sp_pos(size_t idx) const{
+        if(is_sp(m_rules[idx])){
+            return true;
+        }else if(is_rl(m_rules[idx])){
+            return false;
+        }else{
+            size_t p_lev = parsing_level(m_rules[idx]);
+            //size_t pp_lev =;
+            //return p_lev == pp_lev;
+        }
+    }
+
     [[nodiscard]] inline bool in_rl_zone(size_t idx) const{
         size_t start = m_nter_ptr[rules_breaks[n_p_rounds]];
         size_t end = m_nter_ptr[rules_breaks[n_p_rounds+1]]-1;
         return start<=idx && idx<=end;
     }
 
+    [[nodiscard]] inline std::pair<size_t, size_t> rl_zone() const{
+        size_t start = m_nter_ptr[rules_breaks[n_p_rounds]];
+        size_t end = m_nter_ptr[rules_breaks[n_p_rounds+1]]-1;
+        return {start, end};
+    }
+
     [[nodiscard]] inline long long int parsing_level(size_t symbol) const{
         if(symbol < text_alph) return 0;
-        if(symbol>=rules_breaks[n_p_rounds]) return -1;
+        if(symbol>=rules_breaks[n_p_rounds]){
+            assert(is_sp(symbol) || is_rl(symbol));
+            return -1;
+        }
 
         for(long long int i=0;i<int(n_p_rounds);i++){
             if(rules_breaks[i]<=symbol && symbol<rules_breaks[i+1]) return i+1;
@@ -187,7 +212,7 @@ public:
     [[nodiscard]] std::string decomp_str(size_t idx) const;
 
     [[nodiscard]] inline size_t strings() const {
-        return m_seq_pointers.size();
+        return m_seq_pointers.size()-1;
     }
 
     [[nodiscard]] inline size_t t_size() const {

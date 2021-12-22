@@ -10,6 +10,7 @@ void print_suffix(size_t start, size_t end, grammar_t& gram){
     std::string decomp;
     for(size_t i=start;i<=end;i++){
         gram.decomp_nt(gram.rules[i], decomp);
+        if(decomp.back()=='\n') decomp.back() = '$';
         if(i<end){
             decomp.push_back(' ');
             decomp.push_back('|');
@@ -24,12 +25,33 @@ void gram2bwt(grammar_t& gram){
 
     gramm_extra_feat gram_ef(gram);
 
-    sdsl::int_vector<> gram_sa(gram.gram_size(), 0, sdsl::bits::hi(gram.gram_size())+1);
     sdsl::int_vector<> buckets(gram.symbols()+1, 0, sdsl::bits::hi(gram.gram_size())+1);
 
     //count the frequency of every symbol
-    for(size_t i=0;i<gram.rules.size(); i++){
-        buckets[gram.rules[i]]++;
+    {
+        size_t curr_pos = gram.ter(), last_pos = gram_ef.rb(curr_pos);
+        std::pair<size_t, size_t> rl_zone = gram.rl_zone();
+        size_t limit = rl_zone.first, c_start = gram.nter_ptr[gram.symbols()-1];
+        while(true){
+            while (curr_pos < limit) {
+                if (curr_pos == gram_ef.rb(curr_pos) ) {
+                    last_pos = gram_ef.rb(last_pos + 1);
+                } else if(!gram.is_sp(gram.rules[curr_pos])){
+                    buckets[gram.rules[curr_pos]]++;
+                }
+                curr_pos++;
+            }
+            if(curr_pos==c_start){
+                while(curr_pos<gram.gram_size()){
+                    buckets[gram.rules[curr_pos]]++;
+                    curr_pos++;
+                }
+                break;
+            }
+            curr_pos = rl_zone.second + 1;
+            last_pos = gram_ef.rb(curr_pos);
+            limit = c_start;
+        }
     }
 
     //create the buckets
@@ -40,9 +62,34 @@ void gram2bwt(grammar_t& gram){
         acc +=tmp;
     }
 
+    //create the empty SA
+    sdsl::int_vector<> gram_sa(acc, 0, sdsl::bits::hi(gram.gram_size())+1);
+
     //put the symbols symbol occurrences in their positions
-    for(size_t i=0;i<gram.gram_size();i++){
-        gram_sa[buckets[gram.rules[i]]++] = i;
+    {
+        size_t curr_pos = gram.ter(), last_pos = gram_ef.rb(curr_pos);
+        std::pair<size_t, size_t> rl_zone = gram.rl_zone();
+        size_t limit = rl_zone.first, c_start = gram.nter_ptr[gram.symbols()-1];
+        while(true){
+            while (curr_pos < limit) {
+                if (curr_pos == gram_ef.rb(curr_pos)) {
+                    last_pos = gram_ef.rb(last_pos + 1);
+                } else if(!gram.is_sp(gram.rules[curr_pos])) {
+                    gram_sa[buckets[gram.rules[curr_pos]]++] = curr_pos;
+                }
+                curr_pos++;
+            }
+            if(curr_pos==c_start){
+                while(curr_pos<gram.gram_size()){
+                    gram_sa[buckets[gram.rules[curr_pos]]++] = curr_pos;
+                    curr_pos++;
+                }
+                break;
+            }
+            curr_pos = rl_zone.second + 1;
+            last_pos = gram_ef.rb(curr_pos);
+            limit = c_start;
+        }
     }
 
     //TODO testing
@@ -55,22 +102,23 @@ void gram2bwt(grammar_t& gram){
     }
     size_t c_start = gram.nter_ptr[gram.symbols()-1];
     for(size_t i=0;i<gram.strings();i++){
-        size_t start = c_start + (i==0? 0 : gram.seq_ptr[i-1]+1);
-        size_t end = c_start+gram.seq_ptr[i];
+        size_t start = c_start + gram.seq_ptr[i];
+        size_t end = c_start + gram.seq_ptr[i+1]-1;
         for(size_t j=start;j<=end;j++){
-            std::cout<<start<<":"<<end<<" -> "<<j<<" "<<gram_ef.rb(j)<<std::endl;
             assert(gram_ef.rb(j)==end);
         }
     }
     //
 
     for(auto const& pos : gram_sa){
-        if(gram.in_rl_zone(pos)){
-            std::cout<<pos<<" "<<gram_ef.rb(pos)<<std::endl;
-            std::cout<<"blablabla"<<std::endl;
-        }else{
-            //std::cout<<pos<<" "<<gram_ef.rb(pos)<<std::endl;
-            //print_suffix(pos, gram_ef.rb(pos), gram);
+        assert(!gram.in_rl_zone(pos));
+        if(pos>gram.nter_ptr[gram.symbols()-1]){
+            std::cout<<pos<<":"<<gram_ef.rb(pos)<<" -> ";
+            for(size_t j=pos;j<=gram_ef.rb(pos);j++){
+                std::cout<<gram.rules[j]<<","<<gram.parsing_level(gram.rules[j])<<","<<gram.is_sp(gram.rules[j])<<" ";
+            }
+            std::cout<<" "<<std::endl;
+            print_suffix(pos, gram_ef.rb(pos), gram);
         }
     }
 

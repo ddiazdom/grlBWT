@@ -62,13 +62,13 @@ struct rank_support{
         size_t sb = idx/w;
         size_t l_bound = big_block[bb] + small_block[sb];
         if(vector[l_bound]==idx){
-            return l_bound==(vector.size()-1) ? vector[l_bound]+1 : vector[l_bound+1];
+            return l_bound==(vector.size()-1) ? vector[l_bound] : vector[l_bound+1];
         } if(vector[l_bound]>idx) {
             return vector[l_bound];
         } else{
             size_t r_bound = ((sb+1) & (w-1)) ==0 ? big_block[bb+1] : big_block[bb] + small_block[sb+1];
             size_t res = binary_search(idx, l_bound, r_bound);
-            return res==(vector.size()-1) ? vector[res]+1 : vector[res+1];
+            return res==(vector.size()-1) ? vector[res] : vector[res+1];
         }
     }
 };
@@ -84,7 +84,7 @@ struct gramm_extra_feat{
 
     [[nodiscard]] inline size_t rb(size_t idx) const {
         if(idx>=c_start){
-            return c_start+rs_sp.successor(idx-c_start);
+            return c_start+(rs_sp.successor(idx-c_start)-1);
         }else{
             return rs_rp.successor(idx)-1;
         }

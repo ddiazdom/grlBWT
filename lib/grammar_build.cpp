@@ -166,7 +166,7 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
 bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
 
-    std::cout<<"  Marking the m_rules to remove from the grammar"<<std::endl;
+    std::cout<<"  Marking the rules to remove from the grammar"<<std::endl;
     size_t max_tsym = p_gram.max_tsym;
 
     bv_t r_lim;

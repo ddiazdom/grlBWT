@@ -51,7 +51,8 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
     //2 : the symbol does not recursively expand to a string suffix
     sdsl::int_vector<2> state(gram_alph, 0);
     m_seq_pointers.width(sdsl::bits::hi(comp_string_size) + 1);
-    m_seq_pointers.resize(n_strings);
+    m_seq_pointers.resize(n_strings+1);
+    m_seq_pointers[0] = 0;
     state[0] = 1;
     size_t c_start = pos;
 
@@ -78,9 +79,9 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
                 stack.pop();
             }
             state[rules_arr[pos]] = sym_state;
-            if(sym_state==1) m_seq_pointers[seq++] = pos - c_start;
+            if(sym_state==1) m_seq_pointers[++seq] = (pos-c_start)+1;
         }else if(state[sym]==1){
-            m_seq_pointers[seq++] = pos - c_start;
+            m_seq_pointers[++seq] = (pos-c_start)+1;
         }
         pos++;
     }
@@ -88,13 +89,13 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
 
 template<class vector_type>
 std::string grammar<vector_type>::decomp_str(size_t idx) const {
-    assert(idx < m_seq_pointers.size());
+    assert(idx < m_seq_pointers.size()-1);
     std::string exp;
     size_t c_start = m_nter_ptr[gram_alph - 1];
     size_t str_start, str_end;
 
-    str_start = idx == 0 ? c_start : c_start + m_seq_pointers[idx - 1] + 1;
-    str_end = m_seq_pointers[idx] + c_start;
+    str_start = c_start + m_seq_pointers[idx];
+    str_end = c_start + m_seq_pointers[idx+1]-1;
 
     for(size_t j=str_start;j<=str_end;j++){
         decomp_nt(m_rules[j], exp);
@@ -312,8 +313,8 @@ void grammar<vector_type>::se_decomp_str(size_t start, size_t end, std::string& 
 
     std::vector<size_t> dc_info(gram_alph, 0);
     for(size_t i=start;i<=end;i++){
-        str_start = i == 0 ? c_start : c_start + m_seq_pointers[i - 1] + 1;
-        str_end = m_seq_pointers[i] + c_start;
+        str_start = c_start + m_seq_pointers[i];
+        str_end = c_start + m_seq_pointers[i+1] - 1;
         for(size_t j=str_start;j<=str_end;j++){
             buff_decomp_nt(m_rules[j], ofs, dc_info);
         }
