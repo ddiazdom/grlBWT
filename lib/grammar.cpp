@@ -20,7 +20,7 @@ grammar<vector_type>::serialize(std::ostream& out, sdsl::structure_tree_node * v
     written_bytes+= symbols_map.serialize(out, child, "symbols_map");
     written_bytes+= m_rules.serialize(out, child, "m_rules");
     written_bytes+= m_nter_ptr.serialize(out, child, "nter_pointers");
-    written_bytes+= seq_pointers.serialize(out, child, "seq_pointers");
+    written_bytes+= m_seq_pointers.serialize(out, child, "m_seq_pointers");
     return written_bytes;
 }
 
@@ -38,7 +38,7 @@ void grammar<vector_type>::load(std::istream& in){
     symbols_map.load(in);
     m_rules.load(in);
     m_nter_ptr.load(in);
-    seq_pointers.load(in);
+    m_seq_pointers.load(in);
 }
 
 template<class vector_type>
@@ -50,8 +50,8 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
     //1 : the symbol recursively expands to a string suffix
     //2 : the symbol does not recursively expand to a string suffix
     sdsl::int_vector<2> state(gram_alph, 0);
-    seq_pointers.width(sdsl::bits::hi(comp_string_size)+1);
-    seq_pointers.resize(n_strings);
+    m_seq_pointers.width(sdsl::bits::hi(comp_string_size) + 1);
+    m_seq_pointers.resize(n_strings);
     state[0] = 1;
     size_t c_start = pos;
 
@@ -78,9 +78,9 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
                 stack.pop();
             }
             state[rules_arr[pos]] = sym_state;
-            if(sym_state==1) seq_pointers[seq++] = pos-c_start;
+            if(sym_state==1) m_seq_pointers[seq++] = pos - c_start;
         }else if(state[sym]==1){
-            seq_pointers[seq++] = pos-c_start;
+            m_seq_pointers[seq++] = pos - c_start;
         }
         pos++;
     }
@@ -88,13 +88,13 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
 
 template<class vector_type>
 std::string grammar<vector_type>::decomp_str(size_t idx) const {
-    assert(idx<seq_pointers.size());
+    assert(idx < m_seq_pointers.size());
     std::string exp;
     size_t c_start = m_nter_ptr[gram_alph - 1];
     size_t str_start, str_end;
 
-    str_start = idx == 0 ? c_start : c_start+seq_pointers[idx-1]+1;
-    str_end = seq_pointers[idx]+c_start;
+    str_start = idx == 0 ? c_start : c_start + m_seq_pointers[idx - 1] + 1;
+    str_end = m_seq_pointers[idx] + c_start;
 
     for(size_t j=str_start;j<=str_end;j++){
         decomp_nt(m_rules[j], exp);
@@ -312,8 +312,8 @@ void grammar<vector_type>::se_decomp_str(size_t start, size_t end, std::string& 
 
     std::vector<size_t> dc_info(gram_alph, 0);
     for(size_t i=start;i<=end;i++){
-        str_start = i == 0 ? c_start : c_start+seq_pointers[i-1]+1;
-        str_end = seq_pointers[i]+c_start;
+        str_start = i == 0 ? c_start : c_start + m_seq_pointers[i - 1] + 1;
+        str_end = m_seq_pointers[i] + c_start;
         for(size_t j=str_start;j<=str_end;j++){
             buff_decomp_nt(m_rules[j], ofs, dc_info);
         }
@@ -324,8 +324,8 @@ void grammar<vector_type>::se_decomp_str(size_t start, size_t end, std::string& 
         size_t str_start, str_end;
         size_t c_start = gram.m_nter_ptr[gram.gram_alph-1];
         for(size_t i=start;i<=end;i++){
-            str_start = i == 0 ? c_start : c_start+gram.seq_pointers[i-1]+1;
-            str_end = gram.seq_pointers[i]+c_start;
+            str_start = i == 0 ? c_start : c_start+gram.m_seq_pointers[i-1]+1;
+            str_end = gram.m_seq_pointers[i]+c_start;
             for(size_t j=str_start;j<=str_end;j++){
                 gram.buff_decomp_nt(gram.m_rules[j], ofs, dc_info);
             }
@@ -424,6 +424,8 @@ template typename grammar<huff_vector<>>::size_type grammar<huff_vector<>>::seri
 template void grammar<huff_vector<>>::se_decomp_str(size_t start, size_t end, std::string& output_file, std::string& tmp_folder, size_t n_threads, size_t buff_size) const;
 template void grammar<huff_vector<>>::load(std::istream& in);
 template void grammar<sdsl::int_vector<>>::load(std::istream& in);
+template void grammar<sdsl::int_vector<>>::decomp_nt(size_t idx, std::string& exp) const;
+template void grammar<huff_vector<>>::decomp_nt(size_t idx, std::string& exp) const;
 template void grammar<sdsl::int_vector<>>::se_decomp_str(size_t start, size_t end, std::string& output_file, std::string& tmp_folder, size_t n_threads, size_t buff_size) const;
 template void grammar<sdsl::int_vector<>>::mark_str_boundaries(std::string& rules_file);
 template void grammar<huff_vector<>>::mark_str_boundaries(std::string& rules_file);

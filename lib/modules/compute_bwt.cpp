@@ -6,23 +6,23 @@
 #include "sdsl/int_vector.hpp"
 
 template<class grammar_t>
-void gram2bwt(grammar_t& gram){
-
-    rank_support rs(gram.nter_ptr);
-
-    size_t j=0, succ=gram.nter_ptr[j];
-    for(size_t i=0;i<gram.nter_ptr[gram.nter_ptr.size()-1];i++){
-
-        if(i==4097){
-            std::cout<<"holaa"<<std::endl;
-        }
-        std::cout<<i<<" -> "<<succ<<" "<<rs.successor(i)<<std::endl;
-        assert(succ==rs.successor(i));
-        if(i==succ){
-            succ = gram.nter_ptr[++j];
+void print_suffix(size_t start, size_t end, grammar_t& gram){
+    std::string decomp;
+    for(size_t i=start;i<=end;i++){
+        gram.decomp_nt(gram.rules[i], decomp);
+        if(i<end){
+            decomp.push_back(' ');
+            decomp.push_back('|');
+            decomp.push_back(' ');
         }
     }
+    std::cout<<decomp<<std::endl;
+}
 
+template<class grammar_t>
+void gram2bwt(grammar_t& gram){
+
+    gramm_extra_feat gram_ef(gram);
 
     sdsl::int_vector<> gram_sa(gram.gram_size(), 0, sdsl::bits::hi(gram.gram_size())+1);
     sdsl::int_vector<> buckets(gram.symbols()+1, 0, sdsl::bits::hi(gram.gram_size())+1);
@@ -45,6 +45,34 @@ void gram2bwt(grammar_t& gram){
         gram_sa[buckets[gram.rules[i]]++] = i;
     }
 
+    //TODO testing
+    for(size_t i=0;i<gram.symbols()-1;i++){
+        size_t start = gram.nter_ptr[i];
+        size_t end = gram.nter_ptr[i+1]-1;
+        for(size_t j=start;j<=end;j++){
+            assert(gram_ef.rb(j)==end);
+        }
+    }
+    size_t c_start = gram.nter_ptr[gram.symbols()-1];
+    for(size_t i=0;i<gram.strings();i++){
+        size_t start = c_start + (i==0? 0 : gram.seq_ptr[i-1]+1);
+        size_t end = c_start+gram.seq_ptr[i];
+        for(size_t j=start;j<=end;j++){
+            std::cout<<start<<":"<<end<<" -> "<<j<<" "<<gram_ef.rb(j)<<std::endl;
+            assert(gram_ef.rb(j)==end);
+        }
+    }
+    //
+
+    for(auto const& pos : gram_sa){
+        if(gram.in_rl_zone(pos)){
+            std::cout<<pos<<" "<<gram_ef.rb(pos)<<std::endl;
+            std::cout<<"blablabla"<<std::endl;
+        }else{
+            //std::cout<<pos<<" "<<gram_ef.rb(pos)<<std::endl;
+            //print_suffix(pos, gram_ef.rb(pos), gram);
+        }
+    }
 
     auto descend = [&](size_t& sym, size_t& freq, std::stack<size_t>& stack){
         if(sym<gram.ter()){
@@ -68,7 +96,7 @@ void gram2bwt(grammar_t& gram){
 
     auto comp_positions = [&](size_t idx_a, size_t idx_b) -> bool {
 
-        size_t sym_a, sym_b, bound_a=3, bound_b=3;
+        size_t sym_a, sym_b, bound_a=gram_ef.rb(idx_a), bound_b=gram_ef.rb(idx_b);
 
         //move to the right as long as they have the same sequence
         while(idx_a<=bound_a && idx_b<=bound_b &&
@@ -78,7 +106,7 @@ void gram2bwt(grammar_t& gram){
         }
 
         if(idx_a==bound_a || idx_b==bound_b){//one is a proper prefix of the other
-            return (bound_a-idx_a)<(bound_b-idx_b);
+            return (bound_a-idx_a+1)<(bound_b-idx_b+1);
         }else{
             size_t freq_a, freq_b, lvl_a, lvl_b;
 
@@ -121,7 +149,7 @@ void gram2bwt(grammar_t& gram){
         }
     };
 
-    comp_positions(10, 2);
+    //comp_positions(10, 2);
 }
 
 template void gram2bwt<grammar<sdsl::int_vector<>>>(grammar<sdsl::int_vector<>>& gram);

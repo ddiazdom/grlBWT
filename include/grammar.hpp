@@ -63,7 +63,7 @@ private:
     sdsl::int_vector<8> symbols_map; //map a terminal to its original byte symbol
     vector_type m_rules; //list of m_rules
     sdsl::int_vector<> m_nter_ptr; //pointers of the m_rules in the m_rules' array
-    sdsl::int_vector<> seq_pointers; //pointers to the boundaries of the strings in the text
+    sdsl::int_vector<> m_seq_pointers; //pointers to the boundaries of the strings in the text
 
     void mark_str_boundaries(std::string& rules_file);
     template<class vector_t>
@@ -77,6 +77,7 @@ public:
     grammar()=default;
     const vector_type& rules = m_rules;
     const sdsl::int_vector<>& nter_ptr = m_nter_ptr;
+    const sdsl::int_vector<>& seq_ptr = m_seq_pointers;
 
     explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): text_size(_orig_size),
                                                                                  n_strings(_n_seqs),
@@ -133,6 +134,12 @@ public:
         return symbol>=rules_breaks[n_p_rounds] && symbol < rules_breaks[n_p_rounds + 1];
     }
 
+    [[nodiscard]] inline bool in_rl_zone(size_t idx) const{
+        size_t start = m_nter_ptr[rules_breaks[n_p_rounds]];
+        size_t end = m_nter_ptr[rules_breaks[n_p_rounds+1]]-1;
+        return start<=idx && idx<=end;
+    }
+
     [[nodiscard]] inline long long int parsing_level(size_t symbol) const{
         if(symbol < text_alph) return 0;
         if(symbol>=rules_breaks[n_p_rounds]) return -1;
@@ -148,7 +155,7 @@ public:
         std::cout<<"  Total size:         "<<sdsl::size_in_bytes(*this)/1000000.0<<" MB"<<std::endl;
         std::cout << "    Grammar m_rules:    " << sdsl::size_in_bytes(m_rules) / 1000000.0 << " MB" << std::endl;
         std::cout << "    Grammar pointers: " << sdsl::size_in_bytes(m_nter_ptr) / 1000000.0 << " MB" << std::endl;
-        std::cout<<"    String pointers:  "<<sdsl::size_in_bytes(seq_pointers)/1000000.0<<" MB"<<std::endl;
+        std::cout << "    String pointers:  " << sdsl::size_in_bytes(m_seq_pointers) / 1000000.0 << " MB" << std::endl;
         std::cout<<"    Symbols map:      "<<sdsl::size_in_bytes(symbols_map)/1000000.0<<" MB"<<std::endl;
         std::cout<<"    Rules breaks:     "<<sdsl::size_in_bytes(rules_breaks)/1000000.0<<" MB"<<std::endl;
     }
@@ -180,7 +187,7 @@ public:
     [[nodiscard]] std::string decomp_str(size_t idx) const;
 
     [[nodiscard]] inline size_t strings() const {
-        return seq_pointers.size();
+        return m_seq_pointers.size();
     }
 
     [[nodiscard]] inline size_t t_size() const {

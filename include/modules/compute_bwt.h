@@ -38,22 +38,6 @@ struct rank_support{
             acc+=tmp;
             j++;
         }
-
-        /*j=0;
-        while(vector[j]<=3*s){
-            std::cout<<(j+1)<<"->"<<vector[j++]<<" , ";
-        }
-        std::cout<<""<<std::endl;
-
-        for(size_t i=0;i<3;i++){
-            std::cout<<big_block[i]<<" ";
-        }
-        std::cout<<""<<std::endl;
-
-        for(size_t i=0;i<3*w;i++){
-            std::cout<<small_block[i]<<" ";
-        }
-        std::cout<<""<<std::endl;*/
     };
 
     [[nodiscard]] inline size_t binary_search(size_t value, size_t left, size_t right) const {
@@ -62,7 +46,7 @@ struct rank_support{
             mid = left + ((right-left)>>1UL);
             val = vector[mid];
 
-            if(val<=value && value<vector[mid+1]) break;
+            if(val<=value && ((mid+1)==vector.size() || value<vector[mid+1])) break;
 
             if(value<val){
                 right = mid-1;
@@ -73,29 +57,37 @@ struct rank_support{
         return mid;
     }
 
-    [[nodiscard]] size_t rank(size_t idx) const {
-        size_t rank = big_block[idx/s] + small_block[idx/w];
-        while(vector[rank]<idx) rank++;
-        return rank;
-    }
-
     [[nodiscard]] size_t successor(size_t idx) const {
+        size_t bb = idx/s;
         size_t sb = idx/w;
-        size_t l_bound = big_block[idx/s] + small_block[sb];
-        std::cout<<idx<<" "<<idx/s<<" "<<big_block[idx/s]<<" "<<small_block[sb]<<std::endl;
-        if(vector[l_bound]>=idx){
+        size_t l_bound = big_block[bb] + small_block[sb];
+        if(vector[l_bound]==idx){
+            return l_bound==(vector.size()-1) ? vector[l_bound]+1 : vector[l_bound+1];
+        } if(vector[l_bound]>idx) {
             return vector[l_bound];
-        }else{
-            size_t r_bound = ((sb+1) & (w-1)) ==0 ? big_block[(idx/s)+1] : big_block[idx/s] + small_block[sb+1];
+        } else{
+            size_t r_bound = ((sb+1) & (w-1)) ==0 ? big_block[bb+1] : big_block[bb] + small_block[sb+1];
             size_t res = binary_search(idx, l_bound, r_bound);
-            return vector[res]==idx? vector[res] : vector[res+1];
+            return res==(vector.size()-1) ? vector[res]+1 : vector[res+1];
         }
     }
+};
 
-    [[nodiscard]] size_t predecessor(size_t idx) const {
-        size_t rank = big_block[idx/s] + small_block[idx/w];
-        while(vector[rank]<idx) rank++;
-        return vector[rank];
+template<class grammar_t>
+struct gramm_extra_feat{
+    rank_support<sdsl::int_vector<>> rs_rp;
+    rank_support<sdsl::int_vector<>> rs_sp;
+    size_t                           c_start;
+    explicit gramm_extra_feat(grammar_t& gram): rs_rp(gram.nter_ptr),
+                                                rs_sp(gram.seq_ptr),
+                                                c_start(gram.nter_ptr[gram.symbols() - 1]){};
+
+    [[nodiscard]] inline size_t rb(size_t idx) const {
+        if(idx>=c_start){
+            return c_start+rs_sp.successor(idx-c_start);
+        }else{
+            return rs_rp.successor(idx)-1;
+        }
     }
 };
 
