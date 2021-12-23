@@ -23,27 +23,49 @@ void print_suffix(size_t start, size_t end, grammar_t& gram){
 template<class grammar_t>
 void gram2bwt(grammar_t& gram){
 
-    gramm_extra_feat gram_ef(gram);
+    for(size_t i=0;i<gram.symbols();i++){
 
+        if(i==13774){
+            std::cout<<"holaaa"<<std::endl;
+        }
+
+        auto it = gram.node(i);
+        auto end = gram.end();
+
+        while(it!=end){
+            ++it;
+        }
+    }
+
+    exit(0);
+
+    gramm_extra_feat gram_ef(gram);
     sdsl::int_vector<> buckets(gram.symbols()+1, 0, sdsl::bits::hi(gram.gram_size())+1);
 
     //count the frequency of every symbol
     {
-        size_t curr_pos = gram.ter(), last_pos = gram_ef.rb(curr_pos);
+        size_t curr_pos = gram.ter(), last_pos = gram_ef.rb(curr_pos), sym;
         std::pair<size_t, size_t> rl_zone = gram.rl_zone();
         size_t limit = rl_zone.first, c_start = gram.nter_ptr[gram.symbols()-1];
         while(true){
             while (curr_pos < limit) {
-                if (curr_pos == gram_ef.rb(curr_pos) ) {
+                if (curr_pos == last_pos) {
                     last_pos = gram_ef.rb(last_pos + 1);
-                } else if(!gram.is_sp(gram.rules[curr_pos])){
-                    buckets[gram.rules[curr_pos]]++;
+                } else {
+                    sym = gram.rules[curr_pos];
+                    if(!gram.is_sp(sym)){
+                        if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
+                        buckets[sym]++;
+                    }
                 }
                 curr_pos++;
             }
+
             if(curr_pos==c_start){
                 while(curr_pos<gram.gram_size()){
-                    buckets[gram.rules[curr_pos]]++;
+                    sym = gram.rules[curr_pos];
+                    if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
+                    buckets[sym]++;
                     curr_pos++;
                 }
                 break;
@@ -67,21 +89,29 @@ void gram2bwt(grammar_t& gram){
 
     //put the symbols symbol occurrences in their positions
     {
-        size_t curr_pos = gram.ter(), last_pos = gram_ef.rb(curr_pos);
+        size_t curr_pos = gram.ter(), last_pos = gram_ef.rb(curr_pos), sym;
         std::pair<size_t, size_t> rl_zone = gram.rl_zone();
         size_t limit = rl_zone.first, c_start = gram.nter_ptr[gram.symbols()-1];
         while(true){
+
             while (curr_pos < limit) {
-                if (curr_pos == gram_ef.rb(curr_pos)) {
+                if (curr_pos == last_pos) {
                     last_pos = gram_ef.rb(last_pos + 1);
-                } else if(!gram.is_sp(gram.rules[curr_pos])) {
-                    gram_sa[buckets[gram.rules[curr_pos]]++] = curr_pos;
+                } else {
+                    sym = gram.rules[curr_pos];
+                    if(!gram.is_sp(sym)){
+                        if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
+                        gram_sa[buckets[sym]++] = curr_pos;
+                    }
                 }
                 curr_pos++;
             }
+
             if(curr_pos==c_start){
                 while(curr_pos<gram.gram_size()){
-                    gram_sa[buckets[gram.rules[curr_pos]]++] = curr_pos;
+                    sym = gram.rules[curr_pos];
+                    if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
+                    gram_sa[buckets[sym]++] = curr_pos;
                     curr_pos++;
                 }
                 break;
@@ -110,16 +140,19 @@ void gram2bwt(grammar_t& gram){
     }
     //
 
+
+    size_t k = 0;
     for(auto const& pos : gram_sa){
         assert(!gram.in_rl_zone(pos));
         if(pos>gram.nter_ptr[gram.symbols()-1]){
-            std::cout<<pos<<":"<<gram_ef.rb(pos)<<" -> ";
+            std::cout<<k<<"   "<<pos<<":"<<gram_ef.rb(pos)<<" -> ";
             for(size_t j=pos;j<=gram_ef.rb(pos);j++){
                 std::cout<<gram.rules[j]<<","<<gram.parsing_level(gram.rules[j])<<","<<gram.is_sp(gram.rules[j])<<" ";
             }
             std::cout<<" "<<std::endl;
             print_suffix(pos, gram_ef.rb(pos), gram);
         }
+        k++;
     }
 
     auto descend = [&](size_t& sym, size_t& freq, std::stack<size_t>& stack){

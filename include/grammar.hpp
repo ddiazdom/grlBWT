@@ -36,6 +36,87 @@ struct gram_info_t{
     }
 };
 
+template<class grammar_t>
+class grammar_iterator{
+
+    const grammar_t& grammar;
+    size_t sym;
+    bool skip_subtree;
+    std::stack<size_t> stack;
+
+public:
+    explicit grammar_iterator(const grammar_t& _grammar, size_t _sym) : grammar(_grammar),
+                                                                        sym(_sym),
+                                                                        skip_subtree(false){
+        if(sym>grammar.ter() && sym<grammar.symbols()){
+            size_t start = grammar.nter_ptr[sym];
+            if(grammar.is_rl(sym)){
+                size_t rl_sym = grammar.rules[start];
+                size_t freq = grammar.rules[start+1];
+                for(size_t i=0;i<freq;i++){
+                    stack.push(rl_sym);
+                }
+            }else{
+                size_t end = grammar.nter_ptr[sym+1]-1;
+                for(size_t i=end;i>=start;i--){
+                    stack.push(grammar.rules[i]);
+                }
+            }
+        }
+    }
+
+    explicit grammar_iterator(grammar_t&& other): grammar(other.grammar),
+                                                  stack(std::move(other.stack)),
+                                                  sym(other.sym),
+                                                  skip_subtree(other.skip_subtree){}
+
+    explicit grammar_iterator(const grammar_t& other): grammar(other.grammar),
+                                                       stack(other.stack),
+                                                       sym(other.sym),
+                                                       skip_subtree(other.skip_subtree){}
+
+    inline void operator++(){
+        if(!stack.empty()){
+            sym = stack.top();
+            stack.pop();
+            if(sym>grammar.ter() && !skip_subtree){
+                size_t start = grammar.nter_ptr[sym];
+                if(grammar.is_rl(sym)){
+                    size_t rl_sym = grammar.rules[start];
+                    size_t freq = grammar.rules[start+1];
+                    for(size_t i=0;i<freq;i++){
+                        stack.push(rl_sym);
+                    }
+                }else{
+                    size_t end = grammar.nter_ptr[sym+1]-1;
+                    for(size_t i=end;i>=start;i--){
+                        stack.push(grammar.rules[i]);
+                    }
+                }
+            }
+        }else{
+            sym = grammar.symbols();
+        }
+        skip_subtree=false;
+    }
+
+    inline void skip_substree(){
+        skip_subtree=true;
+    }
+
+    inline size_t operator*(){
+        return sym;
+    }
+
+    inline bool operator==(grammar_iterator& other){
+        return sym==other.sym;
+    }
+
+    inline bool operator!=(grammar_iterator& other){
+        return sym!=other.sym;
+    }
+};
+
 template<class vector_type=sdsl::int_vector<>>
 class grammar {
 
@@ -100,7 +181,7 @@ public:
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
         m_nter_ptr.width(sdsl::bits::hi(grammar_size) + 1);
-        m_nter_ptr.resize(gram_alph);
+        m_nter_ptr.resize(gram_alph+1);
         m_nter_ptr[0] = 0;
 
         size_t i=1;
@@ -109,6 +190,7 @@ public:
                 m_nter_ptr[i++] = j;
             }
         }
+        m_nter_ptr[gram_alph] = rules_lim_buff.size();
         rules_lim_buff.close();
         mark_str_boundaries(gram_info.rules_file);
 
@@ -136,18 +218,6 @@ public:
 
     [[nodiscard]] inline bool is_sp(size_t symbol) const{
         return symbol>=rules_breaks[n_p_rounds+1] && symbol < rules_breaks[n_p_rounds + 2];
-    }
-
-    [[nodiscard]] inline bool is_sp_pos(size_t idx) const{
-        if(is_sp(m_rules[idx])){
-            return true;
-        }else if(is_rl(m_rules[idx])){
-            return false;
-        }else{
-            size_t p_lev = parsing_level(m_rules[idx]);
-            //size_t pp_lev =;
-            //return p_lev == pp_lev;
-        }
     }
 
     [[nodiscard]] inline bool in_rl_zone(size_t idx) const{
@@ -183,6 +253,19 @@ public:
         std::cout << "    String pointers:  " << sdsl::size_in_bytes(m_seq_pointers) / 1000000.0 << " MB" << std::endl;
         std::cout<<"    Symbols map:      "<<sdsl::size_in_bytes(symbols_map)/1000000.0<<" MB"<<std::endl;
         std::cout<<"    Rules breaks:     "<<sdsl::size_in_bytes(rules_breaks)/1000000.0<<" MB"<<std::endl;
+    }
+
+    grammar_iterator<grammar<vector_type>> begin(){
+        return grammar_iterator<grammar<vector_type>>(*this, gram_alph-1);
+    }
+
+    grammar_iterator<grammar<vector_type>> node(size_t sym){
+        assert(sym<gram_alph);
+        return grammar_iterator<grammar<vector_type>>(*this, sym);
+    }
+
+    grammar_iterator<grammar<vector_type>> end(){
+        return grammar_iterator<grammar<vector_type>>(*this, gram_alph);
     }
 
     [[nodiscard]] inline size_t rl_rules() const{
