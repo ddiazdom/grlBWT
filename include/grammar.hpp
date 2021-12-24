@@ -40,15 +40,42 @@ template<class grammar_t>
 class grammar_iterator{
 
     const grammar_t& grammar;
-    size_t sym;
-    bool skip_subtree;
+    size_t sym{};
+    bool s_subtree;
     std::stack<size_t> stack;
 
 public:
+    explicit grammar_iterator(const grammar_t& _grammar, size_t start, size_t end) : grammar(_grammar),
+                                                                                     s_subtree(false){
+
+        if(end<grammar.rules.size()){
+            for(size_t j=end;j>start;j--){
+                stack.push(grammar.rules[j]);
+            }
+            sym = grammar.rules[start];
+
+            if(sym>=grammar.ter()){
+                start = grammar.nter_ptr[sym];
+                if(grammar.is_rl(sym)){
+                    size_t rl_sym = grammar.rules[start];
+                    size_t freq = grammar.rules[start+1];
+                    for(size_t i=0;i<freq;i++){
+                        stack.push(rl_sym);
+                    }
+                }else{
+                    end = grammar.nter_ptr[sym+1]-1;
+                    for(size_t i=end;i>=start;i--){
+                        stack.push(grammar.rules[i]);
+                    }
+                }
+            }
+        }
+    }
+
     explicit grammar_iterator(const grammar_t& _grammar, size_t _sym) : grammar(_grammar),
                                                                         sym(_sym),
-                                                                        skip_subtree(false){
-        if(sym>grammar.ter() && sym<grammar.symbols()){
+                                                                        s_subtree(false){
+        if(sym>=grammar.ter() && sym<grammar.symbols()){
             size_t start = grammar.nter_ptr[sym];
             if(grammar.is_rl(sym)){
                 size_t rl_sym = grammar.rules[start];
@@ -68,18 +95,18 @@ public:
     explicit grammar_iterator(grammar_t&& other): grammar(other.grammar),
                                                   stack(std::move(other.stack)),
                                                   sym(other.sym),
-                                                  skip_subtree(other.skip_subtree){}
+                                                  s_subtree(other.skip_subtree){}
 
     explicit grammar_iterator(const grammar_t& other): grammar(other.grammar),
                                                        stack(other.stack),
                                                        sym(other.sym),
-                                                       skip_subtree(other.skip_subtree){}
+                                                       s_subtree(other.skip_subtree){}
 
     inline void operator++(){
         if(!stack.empty()){
             sym = stack.top();
             stack.pop();
-            if(sym>grammar.ter() && !skip_subtree){
+            if(sym>=grammar.ter() && !s_subtree){
                 size_t start = grammar.nter_ptr[sym];
                 if(grammar.is_rl(sym)){
                     size_t rl_sym = grammar.rules[start];
@@ -97,11 +124,11 @@ public:
         }else{
             sym = grammar.symbols();
         }
-        skip_subtree=false;
+        s_subtree=false;
     }
 
-    inline void skip_substree(){
-        skip_subtree=true;
+    inline void skip_subtree(){
+        s_subtree=true;
     }
 
     inline size_t operator*(){
@@ -155,6 +182,7 @@ private:
     bool copy_to_front(vector_t& stream, size_t src, size_t len, size_t freq) const;
 public:
     typedef size_t size_type;
+    typedef grammar_iterator<grammar<vector_type>> iterator;
     grammar()=default;
     const vector_type& rules = m_rules;
     const sdsl::int_vector<>& nter_ptr = m_nter_ptr;
@@ -255,13 +283,18 @@ public:
         std::cout<<"    Rules breaks:     "<<sdsl::size_in_bytes(rules_breaks)/1000000.0<<" MB"<<std::endl;
     }
 
-    grammar_iterator<grammar<vector_type>> begin(){
+    inline grammar_iterator<grammar<vector_type>> begin() const {
         return grammar_iterator<grammar<vector_type>>(*this, gram_alph-1);
     }
 
-    grammar_iterator<grammar<vector_type>> node(size_t sym){
+    inline grammar_iterator<grammar<vector_type>> grammar_node(size_t sym) const {
         assert(sym<gram_alph);
         return grammar_iterator<grammar<vector_type>>(*this, sym);
+    }
+
+    inline grammar_iterator<grammar<vector_type>> range(size_t start, size_t end) const {
+        assert(start<=end && end < rules.size());
+        return grammar_iterator<grammar<vector_type>>(*this, start, end);
     }
 
     grammar_iterator<grammar<vector_type>> end(){
