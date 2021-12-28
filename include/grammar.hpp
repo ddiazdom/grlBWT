@@ -11,6 +11,39 @@
 #include "cdt/hash_table.hpp"
 #include "cdt/file_streams.hpp"
 
+struct simple_stack {
+
+    std::vector<size_t> container;
+    size_t last_pos;
+
+    simple_stack():container(100, 0), last_pos(0){}
+
+    simple_stack(simple_stack&& other) noexcept : container(std::move(other.container)),
+                                                  last_pos(other.last_pos){}
+
+    inline void push(size_t new_elm){
+        if(container.size()==last_pos) container.resize(container.size()*2);
+        container[last_pos++] = new_elm;
+    }
+
+    [[nodiscard]] inline size_t top() const {
+        assert(last_pos>0);
+        return container[last_pos-1];
+    }
+
+    inline void pop (){
+        if(last_pos>0) last_pos--;
+    }
+
+    [[nodiscard]] inline bool empty() const {
+        return last_pos==0;
+    }
+
+    inline void reset(){
+        last_pos=0;
+    }
+};
+
 struct gram_info_t{
     uint8_t                            sigma{}; // terminal's alphabet
     size_t                             r{}; //r: number of grammar symbols (nter + ter)
@@ -41,106 +74,149 @@ class grammar_iterator{
 
     const grammar_t& grammar;
     size_t sym{};
-    bool s_subtree;
-    std::stack<size_t> stack;
-
+    size_t dummy{};
+    simple_stack s_stack;
 public:
     explicit grammar_iterator(const grammar_t& _grammar, size_t start, size_t end) : grammar(_grammar),
-                                                                                     s_subtree(false){
+                                                                                     dummy(grammar.symbols()){
 
         if(end<grammar.rules.size()){
             for(size_t j=end;j>start;j--){
-                stack.push(grammar.rules[j]);
+                s_stack.push(grammar.rules[j]);
             }
             sym = grammar.rules[start];
-
-            if(sym>=grammar.ter()){
-                start = grammar.nter_ptr[sym];
-                if(grammar.is_rl(sym)){
-                    size_t rl_sym = grammar.rules[start];
-                    size_t freq = grammar.rules[start+1];
-                    for(size_t i=0;i<freq;i++){
-                        stack.push(rl_sym);
-                    }
-                }else{
-                    end = grammar.nter_ptr[sym+1]-1;
-                    for(size_t i=end;i>=start;i--){
-                        stack.push(grammar.rules[i]);
-                    }
-                }
-            }
         }
     }
 
     explicit grammar_iterator(const grammar_t& _grammar, size_t _sym) : grammar(_grammar),
                                                                         sym(_sym),
-                                                                        s_subtree(false){
-        if(sym>=grammar.ter() && sym<grammar.symbols()){
+                                                                        dummy(grammar.symbols()){
+        if(sym>=grammar.ter() && sym<dummy){
             size_t start = grammar.nter_ptr[sym];
             if(grammar.is_rl(sym)){
                 size_t rl_sym = grammar.rules[start];
                 size_t freq = grammar.rules[start+1];
                 for(size_t i=0;i<freq;i++){
-                    stack.push(rl_sym);
+                    s_stack.push(rl_sym);
                 }
             }else{
                 size_t end = grammar.nter_ptr[sym+1]-1;
                 for(size_t i=end;i>=start;i--){
-                    stack.push(grammar.rules[i]);
+                    s_stack.push(grammar.rules[i]);
                 }
             }
         }
     }
 
     explicit grammar_iterator(grammar_t&& other): grammar(other.grammar),
-                                                  stack(std::move(other.stack)),
+                                                  s_stack(std::move(other.stack)),
                                                   sym(other.sym),
-                                                  s_subtree(other.skip_subtree){}
+                                                  dummy(other.dummy){}
 
     explicit grammar_iterator(const grammar_t& other): grammar(other.grammar),
-                                                       stack(other.stack),
+                                                       s_stack(other.stack),
                                                        sym(other.sym),
-                                                       s_subtree(other.skip_subtree){}
-
+                                                       dummy(other.dummy){}
     inline void operator++(){
-        if(!stack.empty()){
-            sym = stack.top();
-            stack.pop();
-            if(sym>=grammar.ter() && !s_subtree){
-                size_t start = grammar.nter_ptr[sym];
-                if(grammar.is_rl(sym)){
-                    size_t rl_sym = grammar.rules[start];
-                    size_t freq = grammar.rules[start+1];
-                    for(size_t i=0;i<freq;i++){
-                        stack.push(rl_sym);
-                    }
-                }else{
-                    size_t end = grammar.nter_ptr[sym+1]-1;
-                    for(size_t i=end;i>=start;i--){
-                        stack.push(grammar.rules[i]);
-                    }
+        if(sym<grammar.ter()){
+            if(!s_stack.empty()){
+                sym = s_stack.top();
+                s_stack.pop();
+            }else{
+                sym = dummy;
+            }
+        }else if(sym<dummy) {
+            size_t start = grammar.nter_ptr[sym];
+            if(grammar.is_rl(sym)){
+                size_t rl_sym = grammar.rules[start];
+                size_t freq = grammar.rules[start+1];
+                for(size_t i=0;i<freq;i++){
+                    s_stack.push(rl_sym);
+                }
+            }else{
+                size_t end = grammar.nter_ptr[sym+1]-1;
+                for(size_t i=end;i>=start;i--){
+                    s_stack.push(grammar.rules[i]);
                 }
             }
-        }else{
-            sym = grammar.symbols();
+            sym = s_stack.top();
+            s_stack.pop();
         }
-        s_subtree=false;
     }
 
     inline void skip_subtree(){
-        s_subtree=true;
+        if(!s_stack.empty()){
+            sym = s_stack.top();
+            s_stack.pop();
+        }else{
+            sym = dummy;
+        }
     }
 
-    inline size_t operator*(){
+    inline void update_it(size_t start, size_t end){
+        s_stack.reset();
+        if(end<grammar.rules.size()){
+            for(size_t j=end;j>start;j--){
+                s_stack.push(grammar.rules[j]);
+            }
+            sym = grammar.rules[start];
+        }
+    }
+
+    inline size_t operator*() const{
         return sym;
     }
 
-    inline bool operator==(grammar_iterator& other){
+    inline bool operator==(grammar_iterator& other) const{
         return sym==other.sym;
     }
 
-    inline bool operator!=(grammar_iterator& other){
+    inline bool operator!=(grammar_iterator& other) const {
         return sym!=other.sym;
+    }
+
+    inline bool operator<(grammar_iterator& other) {
+
+        //move to the right as long as they have the same sequence
+        while (sym != dummy &&
+               other.sym != dummy &&
+               sym == other.sym) {
+            skip_subtree();
+            other.skip_subtree();
+        }
+
+        if (sym == dummy || other.sym == dummy) {//one is a proper prefix of the other
+            return sym == dummy && other.sym != dummy;
+        } else {
+            long long int lvl_a, lvl_b;
+            while (sym != dummy && other.sym != dummy) {
+
+                while (!grammar.is_lc(sym)) ++(*this);
+                while (!grammar.is_lc(other.sym)) ++other;
+                lvl_a = grammar.parsing_level(sym);
+                lvl_b = grammar.parsing_level(other.sym);
+
+                while (lvl_a != lvl_b) {
+                    if (lvl_b < lvl_a) {
+                        ++(*this);
+                        while (!grammar.is_lc(sym)) ++(*this);
+                        lvl_a = grammar.parsing_level(sym);
+                    } else if (lvl_a < lvl_b) {
+                        ++other;
+                        while (!grammar.is_lc(other.sym)) ++other;
+                        lvl_b = grammar.parsing_level(other.sym);
+                    }
+                }
+
+                if (sym != other.sym) {
+                    return sym < other.sym;
+                } else {
+                    skip_subtree();
+                    other.skip_subtree();
+                }
+            }
+            return !(sym == dummy && other.sym != dummy);
+        }
     }
 };
 
@@ -237,7 +313,7 @@ public:
     }
 
     [[nodiscard]] inline bool is_lc(size_t symbol) const{
-        return symbol>=text_alph && symbol<rules_breaks[n_p_rounds];
+        return symbol<rules_breaks[n_p_rounds];
     }
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{

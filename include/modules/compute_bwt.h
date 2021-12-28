@@ -71,6 +71,26 @@ struct rank_support{
             return res==(vector.size()-1) ? vector[res] : vector[res+1];
         }
     }
+
+    [[nodiscard]] size_t rank(size_t idx) const {
+
+    }
+
+    [[nodiscard]] bool is_set(size_t idx) const {
+        size_t bb = idx/s;
+        size_t sb = idx/w;
+        size_t l_bound = big_block[bb] + small_block[sb];
+        if(vector[l_bound]==idx){
+            return true;
+        } if(vector[l_bound]>idx) {
+            //assert(vector[l_bound-1]<idx);
+            return false;
+        } else{
+            size_t r_bound = ((sb+1) & (w-1)) ==0 ? big_block[bb+1] : big_block[bb] + small_block[sb+1];
+            size_t res = binary_search(idx, l_bound, r_bound);
+            return  vector[res] == idx;
+        }
+    }
 };
 
 template<class grammar_t>
@@ -78,9 +98,11 @@ struct gramm_extra_feat{
     rank_support<sdsl::int_vector<>> rs_rp;
     rank_support<sdsl::int_vector<>> rs_sp;
     size_t                           c_start;
+    size_t                           start_symbol;
     explicit gramm_extra_feat(grammar_t& gram): rs_rp(gram.nter_ptr),
                                                 rs_sp(gram.seq_ptr),
-                                                c_start(gram.nter_ptr[gram.symbols() - 1]){};
+                                                c_start(gram.nter_ptr[gram.symbols() - 1]),
+                                                start_symbol(gram.symbols()-1){};
 
     [[nodiscard]] inline size_t rb(size_t idx) const {
         if(idx>=c_start){
@@ -89,7 +111,29 @@ struct gramm_extra_feat{
             return rs_rp.successor(idx)-1;
         }
     }
+
+    [[nodiscard]] inline bool is_set(size_t idx) const {
+        if(idx>=c_start){
+            return rs_sp.is_set(idx-c_start);
+        }else{
+            return rs_rp.is_set(idx);
+        }
+    }
+
+    [[nodiscard]] inline size_t parent_nt(size_t idx) const {
+        if(idx>=c_start){
+            return start_symbol;
+        }else{
+            return rs_rp.rank(idx);
+        }
+    }
 };
+
+template<class grammar_t>
+void resort_sa(sdsl::int_vector<>& g_sa, size_t start, size_t end,
+               sdsl::int_vector_buffer<>& new_g_sa,
+               sdsl::int_vector<>& buckets,
+               gramm_extra_feat<grammar_t>& gram_ef);
 
 template<class grammar_t>
 void gram2bwt(grammar_t& gram);

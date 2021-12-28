@@ -21,11 +21,25 @@ void print_suffix(size_t start, size_t end, grammar_t& gram){
 }
 
 template<class grammar_t>
+void resort_sa(sdsl::int_vector<>& g_sa, size_t start, size_t end,
+               sdsl::int_vector_buffer<>& new_g_sa,
+               sdsl::int_vector<>& buckets,
+               gramm_extra_feat<grammar_t>& gram_ef){
+    for(size_t i=start;i<end;i++){
+        if(!gram_ef.is_set(g_sa[i])){
+            new_g_sa.push_back(g_sa[i]);
+        }else{
+            size_t sym= gram_ef.parent_nt(g_sa[i]);
+            resort_sa(g_sa, buckets[sym], buckets[sym+1], new_g_sa , buckets, gram_ef);
+        }
+    }
+}
+
+template<class grammar_t>
 void gram2bwt(grammar_t& gram){
 
     gramm_extra_feat gram_ef(gram);
     sdsl::int_vector<> buckets(gram.symbols()+1, 0, sdsl::bits::hi(gram.gram_size())+1);
-    using g_iterator = typename grammar_t::iterator;
 
     //count the frequency of every symbol
     {
@@ -47,30 +61,45 @@ void gram2bwt(grammar_t& gram){
             }
 
             if(curr_pos==c_start){
-                while(curr_pos<gram.gram_size()){
+                /*while(curr_pos<gram.gram_size()){
                     sym = gram.rules[curr_pos];
                     if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
                     buckets[sym]++;
                     curr_pos++;
-                }
+                }*/
                 break;
+            }else{
+                curr_pos = rl_zone.second + 1;
+                last_pos = gram_ef.rb(curr_pos);
+                limit = c_start;
             }
-            curr_pos = rl_zone.second + 1;
-            last_pos = gram_ef.rb(curr_pos);
-            limit = c_start;
         }
     }
 
     //create the buckets
-    size_t acc=0, tmp;
+    size_t acc=0, tmp, max_freq=0;
     for(auto && bucket : buckets){
         tmp = bucket;
         bucket = acc;
         acc +=tmp;
+        if(tmp>max_freq) max_freq = tmp;
     }
 
     //create the empty SA
     sdsl::int_vector<> gram_sa(acc, 0, sdsl::bits::hi(gram.gram_size())+1);
+    sdsl::int_vector<> freqs(gram.symbols()+1, 0, sdsl::bits::hi(max_freq)+1);
+
+    //TODO testing
+    /*size_t curr=0;
+    while(curr<gram.rules.size()){
+        size_t next = gram_ef.rb(curr);
+        std::cout<<curr<<" "<<next<<" "<<gram.rules.size()<<std::endl;
+        assert(gram_ef.is_set(curr++));
+        while(curr<=next){
+            assert(!gram_ef.is_set(curr++));
+        }
+    }*/
+    //
 
     //put the symbols symbol occurrences in their positions
     {
@@ -86,99 +115,63 @@ void gram2bwt(grammar_t& gram){
                     sym = gram.rules[curr_pos];
                     if(!gram.is_sp(sym)){
                         if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
-                        gram_sa[buckets[sym]++] = curr_pos;
+                        gram_sa[buckets[sym] + freqs[sym]++] = curr_pos;
                     }
                 }
                 curr_pos++;
             }
 
             if(curr_pos==c_start){
-                while(curr_pos<gram.gram_size()){
+                /*while(curr_pos<gram.gram_size()){
                     sym = gram.rules[curr_pos];
                     if(gram.is_rl(sym)) sym =  gram.rules[gram.nter_ptr[sym]];
                     gram_sa[buckets[sym]++] = curr_pos;
                     curr_pos++;
-                }
+                }*/
                 break;
+            }else{
+                curr_pos = rl_zone.second + 1;
+                last_pos = gram_ef.rb(curr_pos);
+                limit = c_start;
             }
-            curr_pos = rl_zone.second + 1;
-            last_pos = gram_ef.rb(curr_pos);
-            limit = c_start;
         }
     }
 
-    //TODO testing
-    /*for(size_t i=0;i<gram.symbols()-1;i++){
-        size_t start = gram.nter_ptr[i];
-        size_t end = gram.nter_ptr[i+1]-1;
-        for(size_t j=start;j<=end;j++){
-            assert(gram_ef.rb(j)==end);
+    auto it_a = gram.range(0,0);
+    auto it_b = gram.range(0,0);
+    auto it_sa_start = gram_sa.begin();
+    sdsl::int_vector<>::iterator it_sa_end;
+    size_t head;
+    do{
+        head = gram.rules[*it_sa_start];
+        it_sa_end = it_sa_start+1;
+        while(it_sa_end!=gram_sa.end() && gram.rules[*it_sa_end]==head){
+            ++it_sa_end;
         }
-    }
+        std::sort(it_sa_start, it_sa_end, [&](size_t a, size_t b){
+            it_a.update_it(a, gram_ef.rb(a));
+            it_b.update_it(b, gram_ef.rb(b));
+            return it_a < it_b;
+        });
+        it_sa_start = it_sa_end;
+    }while(it_sa_start!=gram_sa.end());
+
+    /*size_t k = 0;
     size_t c_start = gram.nter_ptr[gram.symbols()-1];
-    for(size_t i=0;i<gram.strings();i++){
-        size_t start = c_start + gram.seq_ptr[i];
-        size_t end = c_start + gram.seq_ptr[i+1]-1;
-        for(size_t j=start;j<=end;j++){
-            assert(gram_ef.rb(j)==end);
-        }
-    }*/
-    //
-
-    size_t k = 0;
     for(auto const& pos : gram_sa){
         assert(!gram.in_rl_zone(pos));
-        if(pos>gram.nter_ptr[gram.symbols()-1]){
-            std::cout<<k<<"   "<<pos<<":"<<gram_ef.rb(pos)<<" -> ";
-            for(size_t j=pos;j<=gram_ef.rb(pos);j++){
-                std::cout<<gram.rules[j]<<","<<gram.parsing_level(gram.rules[j])<<","<<gram.is_sp(gram.rules[j])<<" ";
-            }
-            std::cout<<" "<<std::endl;
-            print_suffix(pos, gram_ef.rb(pos), gram);
+        if(pos<c_start){
+                //std::cout<<pos<<":"<<c_start<<" "<<(pos>=c_start)<<" -> ";
+                //std::cout<<k<<"   "<<pos<<":"<<gram_ef.rb(pos)<<" -> ";
+                //for(size_t j=pos;j<=gram_ef.rb(pos);j++){
+                //    std::cout<<gram.rules[j]<<","<<gram.parsing_level(gram.rules[j])<<","<<gram.is_sp(gram.rules[j])<<" ";
+                //}
+                //std::cout<<" "<<std::endl;
+                std::cout<<gram.parsing_level(gram.rules[pos])<<" "<<pos<<"-"<<gram_ef.rb(pos)<<" ";
+                print_suffix(pos, gram_ef.rb(pos), gram);
         }
         k++;
-    }
-
-    auto end_it = gram.end();
-    auto comp_positions = [&](g_iterator a, g_iterator b) -> bool {
-
-        //move to the right as long as they have the same sequence
-        while(a!=end_it && b!= end_it && a==b){
-            a.skip_subtree();
-            b.skip_subtree();
-            ++a;
-            ++b;
-        }
-
-        if(a==end_it || b==end_it){//one is a proper prefix of the other
-            return a==end_it && b!=end_it;
-        }else{
-            while(a!=end_it && b!=end_it){
-                while(!gram.is_lc(*a)) ++a;
-                while(!gram.is_lc(*b)) ++b;
-                size_t lvl_a = gram.parsing_level(*a);
-                size_t lvl_b = gram.parsing_level(*b);
-                while(lvl_b!=lvl_a){
-                    if(lvl_b<lvl_a){
-                        ++a;
-                        lvl_a = gram.parsing_level(*a);
-                    }else {
-                        ++b;
-                        lvl_b = gram.parsing_level(*b);
-                    }
-                }
-                if(*a!=*b) return *a<*b;
-                ++a;
-                ++b;
-            }
-            return a==end_it && b!=end_it;
-        }
-    };
-
-    auto a = gram.range(80412, 80419);
-    auto b = gram.range(80540, 80543);
-
-    comp_positions(a, b);
+    }*/
 }
 
 template void gram2bwt<grammar<sdsl::int_vector<>>>(grammar<sdsl::int_vector<>>& gram);
