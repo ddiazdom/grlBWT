@@ -186,7 +186,7 @@ public:
         }
 
         if (sym == dummy || other.sym == dummy) {//one is a proper prefix of the other
-            return sym == dummy && other.sym != dummy;
+            return !(sym == dummy && other.sym != dummy);
         } else {
             long long int lvl_a, lvl_b;
             while (sym != dummy && other.sym != dummy) {

@@ -73,7 +73,18 @@ struct rank_support{
     }
 
     [[nodiscard]] size_t rank(size_t idx) const {
-
+        size_t bb = idx/s;
+        size_t sb = idx/w;
+        size_t l_bound = big_block[bb] + small_block[sb];
+        if(vector[l_bound]==idx){
+            return l_bound;
+        } if(vector[l_bound]>idx) {
+            return l_bound-1;
+        } else{
+            size_t r_bound = ((sb+1) & (w-1)) ==0 ? big_block[bb+1] : big_block[bb] + small_block[sb+1];
+            size_t res = binary_search(idx, l_bound, r_bound);
+            return res;
+        }
     }
 
     [[nodiscard]] bool is_set(size_t idx) const {
@@ -133,7 +144,8 @@ template<class grammar_t>
 void resort_sa(sdsl::int_vector<>& g_sa, size_t start, size_t end,
                sdsl::int_vector_buffer<>& new_g_sa,
                sdsl::int_vector<>& buckets,
-               gramm_extra_feat<grammar_t>& gram_ef);
+               gramm_extra_feat<grammar_t>& gram_ef,
+               size_t c_start);
 
 template<class grammar_t>
 void gram2bwt(grammar_t& gram);
