@@ -53,10 +53,7 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
                 assert(tmp_decomp.size()<=if_stream.size());
                 tmp_decomp.push_back(curr_sym);
             }else{
-                //this is a dummy way of handling rl nonterminals,
-                // but I don't have enough time
-                if(curr_sym>=p_gram.rules_breaks[p_gram.n_p_rounds] &&
-                   curr_sym < p_gram.rules_breaks[p_gram.n_p_rounds+1]){
+                if(p_gram.is_rl(curr_sym)){
                     assert(end-start+1==2);
                     for(size_t k=0;k<r[end];k++){
                         stack.push(r[start]);
@@ -72,7 +69,6 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
         size_t cont=0;
         for(auto const& tmp_sym : tmp_decomp){
             buff_symbol = if_stream.read(pos++);
-            //std::cout<<(int)buff_symbol<<" "<<(int)p_gram.sym_map[tmp_sym]<<" "<<src-1<<" "<<cont<<std::endl;
             assert(p_gram.sym_map[tmp_sym] == buff_symbol);
             cont++;
         }
@@ -148,6 +144,7 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
     p_gram.rules_breaks.push_back(p_gram.rules_breaks.back() + ht.size());
     p_gram.r+=ht.size();
     p_gram.g = rl_rules.size();
+    p_gram.rl_gram = true;
 
     std::cout<<"    Stats:"<<std::endl;
     std::cout<<"      Grammar size before:        "<<rules.size()<<std::endl;
@@ -164,10 +161,9 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
     rename(rl_r_lim_file.c_str(), p_gram.rules_lim_file.c_str());
 }
 
-bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
+bv_t mark_disposable_symbols(gram_info_t &p_gram) {
 
     std::cout<<"  Marking the rules to remove from the grammar"<<std::endl;
-    size_t max_tsym = p_gram.max_tsym;
 
     bv_t r_lim;
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
@@ -179,13 +175,13 @@ bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
     bv_t rem_nts(p_gram.r, false);
 
     //compute which nonterminals are repeated and
-    // which have a rule of length 1
+    // which have a replacement of length 1
     sdsl::int_vector<2> rep_nts(p_gram.r + 1, 0);
 
+    size_t max_tsym = p_gram.max_tsym;
     size_t r_len=1, curr_rule=max_tsym+1,k=max_tsym+1;
     while(k<rules.size()){
-        if(curr_rule>=p_gram.rules_breaks[p_gram.n_p_rounds] &&
-           curr_rule< p_gram.rules_breaks[p_gram.n_p_rounds+1]){//run-length compressed m_rules
+        if(p_gram.is_rl(curr_rule)){ //run-length compressed rules
             rep_nts[rules[k++]] = 2;
             assert(r_lim[k] && r_len==1);
             r_len=0;
@@ -204,7 +200,7 @@ bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
         k++;
     }
 
-    //mark the m_rules to remove
+    //mark the rules to remove
     //1) m_rules whose left-hand side has length one
     //2) terminal symbols between [min_sym..max_sym] with
     // frequency zero: to compress the alphabet
@@ -215,8 +211,8 @@ bv_t mark_unique_nonterminals(gram_info_t &p_gram) {
         }
     }
 
-    for(size_t i=p_gram.rules_breaks[p_gram.n_p_rounds+1];i<p_gram.r-1;i++){
-        //mark the m_rules with frequency one
+    for(size_t i=p_gram.rules_breaks[p_gram.n_p_rounds+p_gram.rl_gram];i<p_gram.r-1;i++){
+        //mark the rules with frequency one
         if(!rem_nts[i]){
             rem_nts[i] = rep_nts[i]==0 || (rep_nts[i]==1 && i > max_tsym);
         }
@@ -275,9 +271,12 @@ void decomp(size_t nt, sdsl::int_vector<> &rules, bv_ss_t &rlim_ss, bv_t &rem_nt
     }
 }
 
-void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_rs_t &rem_nts_rs) {
+void simplify_grammar(gram_info_t &p_gram) {
 
     std::cout<<"  Simplifying the grammar"<<std::endl;
+
+    bv_t rem_nts = mark_disposable_symbols(p_gram);
+    bv_rs_t rem_nts_rs(&rem_nts);
 
     bv_t r_lim;
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
@@ -320,8 +319,7 @@ void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_rs_t &rem_nts_rs) {
         if((i-pos)==p_gram.c) c_start = new_rules.size();
 
         if(!rem_nts[curr_rule]){
-            if(curr_rule<p_gram.rules_breaks[p_gram.n_p_rounds] ||
-               curr_rule>=p_gram.rules_breaks[p_gram.n_p_rounds+1]){//regular rule
+            if(!p_gram.is_rl(curr_rule)){//regular rule
                 for(size_t j=pos;j<i;j++){
                     if(rem_nts[rules[j]]){
                         decomp(rules[j], rules, r_lim_ss, rem_nts, rem_nts_rs, new_rules);
@@ -387,17 +385,9 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     run_length_compress(p_gram, config);
     suffpair(p_gram, config, n_threads, hbuff_size);
-
-    bv_t rem_nts = mark_unique_nonterminals(p_gram);
-    bv_rs_t rem_nts_rs(&rem_nts);
-    simplify_grammar(p_gram, rem_nts, rem_nts_rs);
-
-    assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
-
-    //check_plain_grammar(p_gram, i_file);
-
-    sdsl::util::clear(rem_nts_rs);
-    sdsl::util::clear(rem_nts);
+    simplify_grammar(p_gram);
+    //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
+    check_plain_grammar(p_gram, i_file);
 
     std::cout<<"  Final grammar: " << std::endl;
     std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;
