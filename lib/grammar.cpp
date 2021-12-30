@@ -349,8 +349,11 @@ void gram_info_t::save_to_file(std::string& output_file){
     buffer[2] = c;
     buffer[3] = g;
     buffer[4] = max_tsym;
-    buffer[5] = rl_gram;
-    of_stream.write((char *) buffer, sizeof(size_t)*6);
+    buffer[5] = rl_rules.first;
+    buffer[6] = rl_rules.second;
+    buffer[7] = sp_rules.first;
+    buffer[8] = sp_rules.second;
+    of_stream.write((char *) buffer, sizeof(size_t)*9);
 
     assert(sym_map.size()==sigma);
 
@@ -383,14 +386,17 @@ void gram_info_t::load_from_file(std::string &g_file){
     size_t buffer[255];
     std::ifstream fp(g_file, std::ifstream::binary);
 
-    fp.read((char *)buffer, sizeof(size_t)*6);
+    fp.read((char *)buffer, sizeof(size_t)*9);
 
     sigma = buffer[0];
     r = buffer[1];
     c = buffer[2];
     g = buffer[3];
     max_tsym = buffer[4];
-    rl_gram = buffer[5];
+    rl_rules.first = buffer[5];
+    rl_rules.second = buffer[6];
+    sp_rules.first = buffer[7];
+    sp_rules.second = buffer[8];
 
     for(size_t i=0;i<sigma;i++){
         fp.read((char *)&buffer[0], sizeof(size_t));

@@ -75,6 +75,9 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
 
     gram.r += p_data.new_rules.size()/2;
+
+    gram.sp_rules.first = gram.rules_breaks.back();
+    gram.sp_rules.second = p_data.new_rules.size() / 2;
     gram.rules_breaks.push_back(gram.rules_breaks.back() + p_data.new_rules.size() / 2);
 
     col_rules.close();

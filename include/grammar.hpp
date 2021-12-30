@@ -55,7 +55,8 @@ struct gram_info_t{
     std::string                        rules_lim_file; // bit vector marking the last symbol of every right-hand
     std::vector<size_t>                rules_breaks; // number of m_rules generated in every LMS parsing round
     size_t                             n_p_rounds{}; // number of parsing rounds
-    bool                               rl_gram = false;
+    std::pair<size_t, size_t>          rl_rules={0,0};
+    std::pair<size_t, size_t>          sp_rules={0,0};
 
     gram_info_t() = default;
     gram_info_t(std::string& r_file_,
@@ -70,8 +71,8 @@ struct gram_info_t{
     }
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{
-        if(!rl_gram) return false;
-        return symbol>=rules_breaks[n_p_rounds] && symbol < rules_breaks[n_p_rounds + 1];
+        if(rl_rules.second==0) return false;
+        return symbol>=rl_rules.first && symbol < rl_rules.first + rl_rules.second;
     }
 };
 

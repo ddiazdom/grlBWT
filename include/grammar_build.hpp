@@ -15,7 +15,7 @@ void decomp(size_t nt, sdsl::int_vector<> &rules,
 
 //mark the nonterminals that can be removed from the grammar
 bv_t mark_disposable_symbols(gram_info_t& p_gram);
-void simplify_grammar(gram_info_t &p_gram, bv_t &rem_nts, bv_rs_t &rem_nts_rs);
+void simplify_grammar(gram_info_t &p_gram, bool full_simplification=false);
 void run_length_compress(gram_info_t& p_gram, sdsl::cache_config& config);
 
 /***
