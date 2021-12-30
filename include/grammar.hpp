@@ -72,7 +72,7 @@ struct gram_info_t{
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{
         if(rl_rules.second==0) return false;
-        return symbol>=rl_rules.first && symbol < rl_rules.first + rl_rules.second;
+        return symbol>=rl_rules.first && symbol < (rl_rules.first + rl_rules.second);
     }
 };
 
@@ -359,7 +359,7 @@ public:
     void space_breakdown() const {
         std::cout<<"Space breakdown for the grammar representation:"<<std::endl;
         std::cout<<"  Total size:         "<<sdsl::size_in_bytes(*this)/1000000.0<<" MB"<<std::endl;
-        std::cout << "    Grammar m_rules:    " << sdsl::size_in_bytes(m_rules) / 1000000.0 << " MB" << std::endl;
+        std::cout << "    Grammar rules:    " << sdsl::size_in_bytes(m_rules) / 1000000.0 << " MB" << std::endl;
         std::cout << "    Grammar pointers: " << sdsl::size_in_bytes(m_nter_ptr) / 1000000.0 << " MB" << std::endl;
         std::cout << "    String pointers:  " << sdsl::size_in_bytes(m_seq_pointers) / 1000000.0 << " MB" << std::endl;
         std::cout<<"    Symbols map:      "<<sdsl::size_in_bytes(symbols_map)/1000000.0<<" MB"<<std::endl;

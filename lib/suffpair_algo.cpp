@@ -74,11 +74,11 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     p_data.r_lim.resize(n_av);
     sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
 
-    gram.r += p_data.new_rules.size()/2;
-
-    gram.sp_rules.first = gram.rules_breaks.back();
+    gram.sp_rules.first = gram.r-1;
     gram.sp_rules.second = p_data.new_rules.size() / 2;
-    gram.rules_breaks.push_back(gram.rules_breaks.back() + p_data.new_rules.size() / 2);
+
+    gram.r += p_data.new_rules.size()/2;
+    //gram.rules_breaks.push_back(gram.rules_breaks.back() + p_data.new_rules.size() / 2);
 
     col_rules.close();
     rules.close();
@@ -129,6 +129,7 @@ void collect_pairs(thread_data* d, i_file_stream<size_t>& p_list, o_file_stream<
     phrase_map_t ht(d->hb_size, d->ht_file, 0.8, d->hb_addr);
 
     for(size_t i=0;i<p_list.size();i++){
+
         size_t pos = p_list.read(i);
 
         assert(pos>=d->start && pos+1<=d->end);
@@ -143,7 +144,6 @@ void collect_pairs(thread_data* d, i_file_stream<size_t>& p_list, o_file_stream<
         if(!res.second){//the pair already exists
             val = 0;
             ht.get_value_from(res.first, val);
-            //val = res.first.value();
             val |= (id | 1UL);
             ht.insert_value_at(res.first, val);
         }

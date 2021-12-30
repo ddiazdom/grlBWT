@@ -141,11 +141,11 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
     }
     rl_r_lim[rl_rules.size()-1] = true;
 
-    p_gram.rl_rules.first = p_gram.rules_breaks.back();
+    p_gram.rl_rules.first = p_gram.r-1;
     p_gram.rl_rules.second = ht.size();
-    p_gram.rules_breaks.push_back(p_gram.rules_breaks.back() + ht.size());
+    //p_gram.rules_breaks.push_back(p_gram.rules_breaks.back() + ht.size());
 
-    p_gram.r+=ht.size();
+    p_gram.r+= ht.size();
     p_gram.g = rl_rules.size();
 
     std::cout<<"    Stats:"<<std::endl;
@@ -164,8 +164,6 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 }
 
 bv_t mark_disposable_symbols(gram_info_t &p_gram) {
-
-    std::cout<<"  Marking the rules to remove from the grammar"<<std::endl;
 
     bv_t r_lim;
     sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
@@ -214,7 +212,7 @@ bv_t mark_disposable_symbols(gram_info_t &p_gram) {
     }
 
     if(p_gram.sp_rules.second>0){
-        assert(p_gram.sp_rules.first+p_gram.sp_rules.second==p_gram.r-1);
+        //assert(p_gram.sp_rules.first+p_gram.sp_rules.second==p_gram.r-1);
         for(size_t i=p_gram.sp_rules.first;i<p_gram.sp_rules.first+p_gram.sp_rules.second;i++){
             //mark the rules with frequency one
             if(!rem_nts[i]){
@@ -222,7 +220,6 @@ bv_t mark_disposable_symbols(gram_info_t &p_gram) {
             }
         }
     }
-
     return rem_nts;
 }
 
@@ -279,9 +276,10 @@ void decomp(size_t nt, sdsl::int_vector<> &rules, bv_ss_t &rlim_ss, bv_t &rem_nt
 
 void simplify_grammar(gram_info_t &p_gram, bool full_simplification) {
 
-    std::cout<<"  Simplifying the grammar"<<std::endl;
 
     if(full_simplification) {
+
+        std::cout<<"  Simplifying the grammar"<<std::endl;
 
         bv_t rem_nts = mark_disposable_symbols(p_gram);
         bv_rs_t rem_nts_rs(&rem_nts);
@@ -324,7 +322,6 @@ void simplify_grammar(gram_info_t &p_gram, bool full_simplification) {
             i++;
 
             if((i-pos)==p_gram.c) c_start = new_rules.size();
-
             if(!rem_nts[curr_rule]){
                 if(!p_gram.is_rl(curr_rule)){//regular rule
                     for(size_t j=pos;j<i;j++){
@@ -363,33 +360,35 @@ void simplify_grammar(gram_info_t &p_gram, bool full_simplification) {
         }
 
         if(p_gram.rl_rules.second>0){
-            p_gram.rl_rules.first -= rem_nts_rs(p_gram.rl_rules.first);
             size_t last_rl = p_gram.rl_rules.first+p_gram.rl_rules.second-1;
+            p_gram.rl_rules.first -= rem_nts_rs(p_gram.rl_rules.first);
             last_rl -= rem_nts_rs(last_rl);
             p_gram.rl_rules.second = last_rl - p_gram.rl_rules.first + 1;
         }
 
         if(p_gram.sp_rules.second>0){
-            p_gram.sp_rules.first -= rem_nts_rs(p_gram.sp_rules.first);
             size_t last_sp = p_gram.sp_rules.first+p_gram.sp_rules.second-1;
+            p_gram.sp_rules.first -= rem_nts_rs(p_gram.sp_rules.first);
             last_sp -= rem_nts_rs(last_sp);
             p_gram.sp_rules.second = last_sp - p_gram.sp_rules.first + 1;
         }
-
         new_rules.close();
         new_r_lim.close();
     }else{
+
+        std::cout<<"  Compressing the alphabet of terminals"<<std::endl;
+
         //compress the alphabet
         size_t cont=0;
         uint8_t byte_sym;
         std::unordered_map<size_t, uint8_t> new_sym_map;
-        std::unordered_map<uint8_t, size_t> inv_sym_map;
+        uint8_t inv_sym_map[255]={0};
         for(size_t k=0;k<=p_gram.max_tsym;k++){
             auto res = p_gram.sym_map.find(k);
             if(res!=p_gram.sym_map.end()){
                 byte_sym = res->second;
                 new_sym_map.insert({cont, byte_sym});
-                inv_sym_map.insert({byte_sym, cont});
+                inv_sym_map[byte_sym] = cont;
                 cont++;
             }
         }
@@ -409,22 +408,45 @@ void simplify_grammar(gram_info_t &p_gram, bool full_simplification) {
             new_r_lim.push_back(true);
         }
 
-        size_t delta = (p_gram.max_tsym+1)-p_gram.sigma;
-        for(size_t i=p_gram.sigma,j=p_gram.max_tsym+1;j<rules.size();i++,j++){
+        size_t delta = (p_gram.max_tsym+1)-p_gram.sigma, nt=p_gram.max_tsym+1, i=p_gram.sigma, j=p_gram.max_tsym+1;
+        while(j<rules.size()){
             if(rules[j]<=p_gram.max_tsym){
                 new_rules[i] = inv_sym_map[rules[j]];
             } else {
                 new_rules[i] = rules[j]-delta;
             }
+            if(p_gram.is_rl(nt)){
+                new_r_lim[i] = r_lim[j];
+                new_rules[++i] = rules[++j];
+            }
             new_r_lim[i] = r_lim[j];
+            if(r_lim[j]) nt++;
+            i++;
+            j++;
         }
+
+        new_rules.close();
+        new_r_lim.close();
         p_gram.r -= delta;
         p_gram.g = new_rules.size();
+
         for(auto &sym : p_gram.rules_breaks){
             sym = sym - delta;
         }
-        new_rules.close();
-        new_r_lim.close();
+
+        if(p_gram.rl_rules.second>0){
+            size_t last_rl = p_gram.rl_rules.first+p_gram.rl_rules.second-1;
+            p_gram.rl_rules.first -= delta;
+            last_rl -= delta;
+            p_gram.rl_rules.second = last_rl - p_gram.rl_rules.first + 1;
+        }
+
+        if(p_gram.sp_rules.second>0){
+            size_t last_sp = p_gram.sp_rules.first+p_gram.sp_rules.second-1;
+            p_gram.sp_rules.first -= delta;
+            last_sp -= delta;
+            p_gram.sp_rules.second = last_sp - p_gram.sp_rules.first + 1;
+        }
     }
 }
 
@@ -453,10 +475,10 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     //run_length_compress(p_gram, config);
-    //suffpair(p_gram, config, n_threads, hbuff_size);
+    suffpair(p_gram, config, n_threads, hbuff_size);
     simplify_grammar(p_gram, false);
     //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
-    check_plain_grammar(p_gram, i_file);
+    //check_plain_grammar(p_gram, i_file);
 
     std::cout<<"  Final grammar: " << std::endl;
     std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;
@@ -469,8 +491,8 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
         if(i<9) std::cout<<" ";
         std::cout<<":    "<<p_gram.rules_breaks[i+1]-p_gram.rules_breaks[i]<<std::endl;
     }
-    std::cout<<"      Run-length m_rules:             "<<p_gram.rules_breaks[p_gram.n_p_rounds+1]-p_gram.rules_breaks[p_gram.n_p_rounds]<<std::endl;
-    std::cout<<"      SuffPair m_rules:               "<<p_gram.rules_breaks[p_gram.n_p_rounds+2]-p_gram.rules_breaks[p_gram.n_p_rounds+1]<<std::endl;
+    std::cout<<"      Run-length rules:             "<<p_gram.rl_rules.second<<std::endl;
+    std::cout<<"      SuffPair rules:               "<<p_gram.sp_rules.second<<std::endl;
 
     std::cout<<"  Compression stats: " << std::endl;
     std::cout<<"    Text size in MB:        " << double(n_chars)/1000000<<std::endl;
