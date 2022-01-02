@@ -21,13 +21,13 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
     std::vector<size_t> tmp_decomp;
 
     i_file_stream<uint8_t> if_stream(uncomp_file, BUFFER_SIZE);
-    uint8_t buff_symbol;
 
-    size_t pos=0, curr_sym, start, end;
+    size_t curr_sym, start, end;
     std::stack<size_t> stack;
 
     size_t f = r_lim_ss(p_gram.r - 1) + 1;
     size_t l = r_lim_ss(p_gram.r);
+    size_t idx = 0;
 
     for(size_t i=f; i <= l; i++){
         //std::cout<<i<<" "<<l<<std::endl;
@@ -49,9 +49,8 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
             end = r_lim_ss(curr_sym+1);
 
             if(r[start] == curr_sym){
-                assert((end-start+1)==1);
-                assert(tmp_decomp.size()<=if_stream.size());
-                tmp_decomp.push_back(curr_sym);
+                assert(p_gram.sym_map[curr_sym]==if_stream.read(idx));
+                idx++;
             }else{
                 if(p_gram.is_rl(curr_sym)){
                     assert(end-start+1==2);
@@ -64,13 +63,6 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
                     }
                 }
             }
-        }
-
-        size_t cont=0;
-        for(auto const& tmp_sym : tmp_decomp){
-            buff_symbol = if_stream.read(pos++);
-            assert(p_gram.sym_map[tmp_sym] == buff_symbol);
-            cont++;
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
@@ -476,9 +468,9 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     //run_length_compress(p_gram, config);
     suffpair(p_gram, config, n_threads, hbuff_size);
-    simplify_grammar(p_gram, false);
+    simplify_grammar(p_gram, true);
     //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
-    //check_plain_grammar(p_gram, i_file);
+    check_plain_grammar(p_gram, i_file);
 
     std::cout<<"  Final grammar: " << std::endl;
     std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;

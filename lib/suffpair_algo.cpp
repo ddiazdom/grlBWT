@@ -24,6 +24,7 @@ void create_new_rules(phrase_map_t& ht, pairing_data& p_data){
             ht.insert_value_at(elm, val);
             p_data.new_rules.push_back(key_w.read(elm, 0));
             p_data.new_rules.push_back(key_w.read(elm, 1));
+            p_data.new_rules.push_back(key_w.read(elm, 2));
             p_data.next_av_rule++;
         }
     }
@@ -58,11 +59,19 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     }
 
     //assert we actually compress the grammar
-    assert((n_av+p_data.new_rules.size()/2)<p_data.r_lim.size());
+    //assert((n_av+p_data.new_rules.size()/2)<p_data.r_lim.size());
 
-    for(size_t i=0;i<p_data.new_rules.size();i++){
-        col_rules.push_back(p_data.new_rules[i]);
-        p_data.r_lim[n_av++] = (i & 1UL);
+    size_t lsym, rsym, freq;
+    for(size_t i=0;i<p_data.new_rules.size();i+=3){
+        lsym = p_data.new_rules[i];
+        rsym = p_data.new_rules[i+1];
+        freq = p_data.new_rules[i+2];
+        for(size_t j=0;j<freq;j++){
+            col_rules.push_back(lsym);
+            p_data.r_lim[n_av++] = false;
+        }
+        col_rules.push_back(rsym);
+        p_data.r_lim[n_av++] = true;
     }
 
     //put array C at the end of the new m_rules
@@ -75,10 +84,9 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     sdsl::store_to_file(p_data.r_lim, gram.rules_lim_file);
 
     gram.sp_rules.first = gram.r-1;
-    gram.sp_rules.second = p_data.new_rules.size() / 2;
+    gram.sp_rules.second = p_data.new_rules.size() / 3;
 
-    gram.r += p_data.new_rules.size()/2;
-    //gram.rules_breaks.push_back(gram.rules_breaks.back() + p_data.new_rules.size() / 2);
+    gram.r += p_data.new_rules.size()/3;
 
     col_rules.close();
     rules.close();
@@ -87,7 +95,7 @@ void update_grammar(pairing_data& p_data, gram_info_t& gram){
     std::cout<<"    Stats:"<<std::endl;
     std::cout<<"      Grammar size before:        "<<gram.g<< std::endl;
     std::cout<<"      Grammar size after:         "<<n_av<<std::endl;
-    std::cout<<"      Number of new nonterminals: "<<p_data.new_rules.size()/2<<std::endl;
+    std::cout<<"      Number of new nonterminals: "<<p_data.new_rules.size()/3<<std::endl;
     std::cout<<"      Compression ratio:          "<<double(n_av)/double(gram.g) << std::endl;
     gram.g = n_av;
 }
@@ -107,7 +115,6 @@ void prepare_input(gram_info_t& gram_info, bv_t& rep_syms, sdsl::cache_config& c
     for (size_t i=gram_info.max_tsym+1;i<rules.size();i++){
         sym = rules[i];
         tmp_r.push_back(sym);
-
         if(rule_id<gram_info.rules_breaks[gram_info.n_p_rounds] && tmp_rep[sym]<2) tmp_rep[sym]++;
         if(rules_lim[i]) rule_id++;
     }
@@ -124,21 +131,32 @@ void prepare_input(gram_info_t& gram_info, bv_t& rep_syms, sdsl::cache_config& c
 
 void collect_pairs(thread_data* d, i_file_stream<size_t>& p_list, o_file_stream<size_t>& r){
 
-    size_t id, val;
-    string_t tmp_pair(2, d->p_data.s_width);
+    size_t id, val, pos, lsym, rsym, freq;
+    string_t tmp_pair(3, d->p_data.s_width);
     phrase_map_t ht(d->hb_size, d->ht_file, 0.8, d->hb_addr);
 
-    for(size_t i=0;i<p_list.size();i++){
+    for(size_t i=0;i<p_list.size();i++) {
 
-        size_t pos = p_list.read(i);
+        pos = p_list.read(i);
+        lsym = r.read(pos);
+        rsym = r.read(pos+1);
 
         assert(pos>=d->start && pos+1<=d->end);
 
-        tmp_pair.write(0, r.read(pos));
-        tmp_pair.write(1, r.read(pos+1));
+        pos--;
+        freq=1;
+        while(!d->p_data.r_lim[pos] && r.read(pos)==lsym){
+            pos--;
+            freq++;
+        }
+
+        tmp_pair.write(0, lsym);
+        tmp_pair.write(1, rsym);
+        tmp_pair.write(2, freq);
 
         //check if the pair covers an entire rule
-        id = d->p_data.r_lim[pos-1]? (d->p_data.r_lim_rs(pos)<<1UL) : 0;
+        id = d->p_data.r_lim[pos] ? (d->p_data.r_lim_rs(pos+1)<<1UL) : 0;
+        id |= freq>1;
 
         auto res = ht.insert(tmp_pair.data(), tmp_pair.n_bits(), id);
         if(!res.second){//the pair already exists
@@ -161,26 +179,42 @@ void replace_pairs(const phrase_map_t& ht, const pairing_data& p_data, std::stri
     o_file_stream<size_t> np_list(npl_file,  BUFFER_SIZE, std::ios::out);
 
     //temporal variables
-    string_t tmp_pair(2, p_data.s_width);
+    string_t tmp_pair(3, p_data.s_width);
     phrase_map_t::val_type  val=0;
 
     //update the suffixes with the new symbols
-    size_t pos;
-    for(size_t i=0; i<p_list.size();i++){
-        pos = p_list.read(i);
-        if(!p_data.r_lim[pos-1]){ //the suffix can't span a complete rule
-            tmp_pair.write(0, r.read(pos));
-            tmp_pair.write(1, r.read(pos+1));
+    size_t lsym, rsym;
+    long long pos, freq;
+    for(size_t i=0; i<p_list.size();i++) {
+
+        pos = (long long)p_list.read(i);
+        lsym = r.read(pos);
+        rsym = r.read(pos+1);
+
+        pos--;
+        freq=1;
+        while(!p_data.r_lim[pos] && r.read(pos)==lsym){
+            pos--;
+            freq++;
+        }
+
+        if(!p_data.r_lim[pos]){ //the suffix can't span a complete rule
+
+            tmp_pair.write(0, lsym);
+            tmp_pair.write(1, rsym);
+            tmp_pair.write(2, freq);
 
             auto res = ht.find(tmp_pair.data(), tmp_pair.n_bits());
             ht.get_value_from(res.first, val);
-            //val = res.first.value();
 
             if(val & 1UL){
-                r.write(pos, val>>1UL);
-                r.write(pos+1, p_data.lim_id); //<-mask
-                if(p_data.rep_sym[r.read(pos-1)]){
-                    np_list.push_back(pos-1);
+                r.write(pos+1, val>>1UL);
+                for(long long j=1;j<=freq;j++){
+                    r.write(pos+1+j, p_data.lim_id); //<-dummies indicating a replaced suffix
+                }
+
+                if(p_data.rep_sym[r.read(pos)]){
+                    np_list.push_back(pos);
                 }
             }
         }
@@ -205,51 +239,62 @@ void * suffpair_thread(void * data) {
     o_file_stream<size_t> r(d->p_data.r_file, BUFFER_SIZE, std::ios::in | std::ios::out);
     {
         phrase_map_t ht(d->hb_size, d->ht_file, 0.8, d->hb_addr);
-        string_t tmp_pair(2, d->p_data.s_width);
-        size_t val;
+        string_t tmp_pair(3, d->p_data.s_width);
+        size_t val, freq;
+
         //position in R of the suffixes of length two
         o_file_stream<size_t> p_list(d->pl_chunk_file, BUFFER_SIZE, std::ios::out);
 
         size_t start = d->start;
         size_t i = d->end;
-        size_t sym, psym, desc, id;
+        size_t lsym, rsym, id, tmp_pos;
+        bool valid_suffix, rep_suffix;
 
         //skip the terminal symbols
         if (start == 0) while (d->p_data.r_lim[start]) start++;
 
-        psym = 0;
-        desc = 0;
+        while (i > start) {
 
-        while (i >= start) {
+            assert(d->p_data.r_lim[i]);
 
-            sym = r.read(i);
-            desc = (desc << 1UL) | d->p_data.r_lim[i];
+            tmp_pos = i-1;
+            lsym = r.read(i-1);
+            rsym = r.read(i);
 
-            //new repeated suffix -> pattern 10 with both symbols appearing more than once in R
-            if ((desc & 3UL) == 2UL &&
-                d->p_data.rep_sym[sym] &&
-                d->p_data.rep_sym[psym]) {
+            //new repeated suffix -> pattern 01 with both symbols appearing more than once in R
+            valid_suffix = !d->p_data.r_lim[i-1] && d->p_data.r_lim[i];
+            rep_suffix = d->p_data.rep_sym[lsym] && d->p_data.rep_sym[rsym];
 
-                tmp_pair.write(0, sym);
-                tmp_pair.write(1, psym);
+            if(valid_suffix && rep_suffix) {
 
+                freq=1;
+                i-=2;
+                while(!d->p_data.r_lim[i] && r.read(i)==lsym){
+                    freq++;
+                    i--;
+                }
 
-                //pattern x101: pair covers an entire preexisting rule
-                id = (d->p_data.r_lim[i-1]) ? ( d->p_data.r_lim_rs(i)<< 1UL) : 0;
+                tmp_pair.write(0, lsym);
+                tmp_pair.write(1, rsym);
+                tmp_pair.write(2, freq);
+
+                //the pair covers an entire preexisting rule
+                id = d->p_data.r_lim[i] ? (d->p_data.r_lim_rs(i+1)<< 1UL) : 0;
+                id |= freq>1;
 
                 auto res = ht.insert(tmp_pair.data(), tmp_pair.n_bits(), id);
 
                 if (!res.second) {
                     val = 0;
                     ht.get_value_from(res.first, val);
-                    //val = res.first.value();
                     val |= (id | 1UL);
                     ht.insert_value_at(res.first, val);
                 }
-                p_list.push_back(i);
+                p_list.push_back(tmp_pos);
+            } else {
+                i--;
             }
-            psym = sym;
-            i--;
+            while(!d->p_data.r_lim[i]) i--;
         }
         ht.flush();
         p_list.close();
@@ -268,7 +313,6 @@ void * suffpair_thread(void * data) {
     }
 
     replace_pairs(d->ht, d->p_data, d->pl_chunk_file, r);
-    //std::cout<<r.modified<<" "<<r.size()<<std::endl;
     r.flush();
     i_file_stream<size_t> p_list(d->pl_chunk_file, BUFFER_SIZE);
 
@@ -329,7 +373,7 @@ void * suffpair_thread(void * data) {
     pthread_exit(nullptr);
 }
 
-void merge_ht_data(std::vector<thread_data>& t_data){
+void merge_ht_data(std::vector<thread_data>& t_data) {
 
     //collect the pairs
     size_t id;
@@ -375,7 +419,6 @@ void merge_ht_data(std::vector<thread_data>& t_data){
             if(!res.second){
                 size_t val = 0;
                 data.ht.get_value_from(res.first, val);
-                //size_t val = res.first.value();
                 val |= (id | 1UL);
                 data.ht.insert_value_at(res.first, val);
             }
