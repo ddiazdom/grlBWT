@@ -16,6 +16,10 @@ grammar<vector_type>::serialize(std::ostream& out, sdsl::structure_tree_node * v
     written_bytes+= sdsl::write_member(gram_alph, out, child, "gram_alph");
     written_bytes+= sdsl::write_member(comp_string_size, out, child, "comp_string_size");
     written_bytes+= sdsl::write_member(n_p_rounds, out, child, "n_p_rounds");
+    written_bytes+= sdsl::write_member(rl_rules.first, out, child, "rl_rules.first");
+    written_bytes+= sdsl::write_member(rl_rules.second, out, child, "rl_rules.second");
+    written_bytes+= sdsl::write_member(sp_rules.first, out, child, "sp_rules.first");
+    written_bytes+= sdsl::write_member(sp_rules.second, out, child, "sp_rules.second");
     written_bytes+= rules_breaks.serialize(out, child, "rules_breaks");
     written_bytes+= symbols_map.serialize(out, child, "symbols_map");
     written_bytes+= m_rules.serialize(out, child, "m_rules");
@@ -34,6 +38,10 @@ void grammar<vector_type>::load(std::istream& in){
     sdsl::read_member(gram_alph, in);
     sdsl::read_member(comp_string_size, in);
     sdsl::read_member(n_p_rounds, in);
+    sdsl::read_member(rl_rules.first, in);
+    sdsl::read_member(rl_rules.second, in);
+    sdsl::read_member(sp_rules.first, in);
+    sdsl::read_member(sp_rules.second, in);
     rules_breaks.load(in);
     symbols_map.load(in);
     m_rules.load(in);
@@ -61,6 +69,11 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
 
     while(pos<rules_arr.size()){
         sym =  rules_arr[pos];
+
+        /*if(sym==4687){
+            std::cout<<"holaa "<<is_rl(sym)<<" "<<is_rl(12750)<<" "<<m_nter_ptr[sym]<<" "<<rules_arr.size()<<" "<<m_nter_ptr[sym+1]<<std::endl;
+        }*/
+
         if(sym >= text_alph && state[sym] == 0){
 
             suff_sym = is_rl(sym) ? rules_arr[m_nter_ptr[sym]] : rules_arr[m_nter_ptr[sym + 1] - 1];
@@ -68,6 +81,8 @@ void grammar<vector_type>::mark_str_boundaries(std::string& rules_file) {
             while(suff_sym!=sym && state[suff_sym]==0){
                 stack.push(suff_sym);
                 sym = suff_sym;
+
+
                 suff_sym = is_rl(sym) ? rules_arr[m_nter_ptr[sym]] : rules_arr[m_nter_ptr[sym + 1] - 1];
             }
 

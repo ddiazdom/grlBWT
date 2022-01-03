@@ -242,19 +242,21 @@ private:
     //typedef bit_hash_table<size_t, 64, size_t, 6, true> hash_table_t;
     typedef typename o_file_stream<char>::size_type buff_s_type;
 
-    size_t text_size{}; //original size of the text
-    size_t n_strings{}; //original size of the text
-    size_t grammar_size{}; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the m_rules)
-    size_t text_alph{}; //alphabet size of the text
-    size_t gram_alph{}; //alphabet size of the grammar (ter + nters)
-    size_t comp_string_size{}; //size of the compressed string
-    size_t n_p_rounds{}; //number of parsing rounds
-    uint8_t comp_level{}; //compression level
-    sdsl::int_vector<> rules_breaks; //mark the first rule of every parsing round
-    sdsl::int_vector<8> symbols_map; //map a terminal to its original byte symbol
-    vector_type m_rules; //list of m_rules
-    sdsl::int_vector<> m_nter_ptr; //pointers of the m_rules in the m_rules' array
-    sdsl::int_vector<> m_seq_pointers; //pointers to the boundaries of the strings in the text
+    size_t                     text_size{}; //original size of the text
+    size_t                     n_strings{}; //original size of the text
+    size_t                     grammar_size{}; //size of the grammar (i.e., sum of the lengths of the right-hand sides of the m_rules)
+    size_t                     text_alph{}; //alphabet size of the text
+    size_t                     gram_alph{}; //alphabet size of the grammar (ter + nters)
+    size_t                     comp_string_size{}; //size of the compressed string
+    size_t                     n_p_rounds{}; //number of parsing rounds
+    uint8_t                    comp_level{}; //compression level
+    sdsl::int_vector<>         rules_breaks; //mark the first rule of every parsing round
+    std::pair<size_t, size_t>  rl_rules={0,0};
+    std::pair<size_t, size_t>  sp_rules={0,0};
+    sdsl::int_vector<8>        symbols_map; //map a terminal to its original byte symbol
+    vector_type                m_rules; //list of m_rules
+    sdsl::int_vector<>         m_nter_ptr; //pointers of the m_rules in the m_rules' array
+    sdsl::int_vector<>         m_seq_pointers; //pointers to the boundaries of the strings in the text
 
     void mark_str_boundaries(std::string& rules_file);
     template<class vector_t>
@@ -266,10 +268,11 @@ private:
 public:
     typedef size_t size_type;
     typedef grammar_iterator<grammar<vector_type>> iterator;
-    grammar()=default;
     const vector_type& rules = m_rules;
     const sdsl::int_vector<>& nter_ptr = m_nter_ptr;
     const sdsl::int_vector<>& seq_ptr = m_seq_pointers;
+
+    grammar()=default;
 
     explicit grammar(gram_info_t& gram_info, size_t _orig_size, size_t _n_seqs): text_size(_orig_size),
                                                                                  n_strings(_n_seqs),
@@ -289,6 +292,9 @@ public:
         for(size_t i=0;i<gram_info.rules_breaks.size();i++){
             rules_breaks[i] = gram_info.rules_breaks[i];
         }
+
+        rl_rules = gram_info.rl_rules;
+        sp_rules = gram_info.sp_rules;
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
         m_nter_ptr.width(sdsl::bits::hi(grammar_size) + 1);
@@ -324,22 +330,24 @@ public:
     }
 
     [[nodiscard]] inline bool is_rl(size_t symbol) const{
-        return symbol>=rules_breaks[n_p_rounds] && symbol < rules_breaks[n_p_rounds + 1];
+        if(rl_rules.second==0) return false;
+        return symbol>=rl_rules.first && symbol < (rl_rules.first + rl_rules.second);
     }
 
     [[nodiscard]] inline bool is_sp(size_t symbol) const{
-        return symbol>=rules_breaks[n_p_rounds+1] && symbol < rules_breaks[n_p_rounds + 2];
+        if(sp_rules.second==0) return false;
+        return symbol>=sp_rules.first && symbol < (sp_rules.first + sp_rules.second);
     }
 
     [[nodiscard]] inline bool in_rl_zone(size_t idx) const{
-        size_t start = m_nter_ptr[rules_breaks[n_p_rounds]];
-        size_t end = m_nter_ptr[rules_breaks[n_p_rounds+1]]-1;
+        size_t start = m_nter_ptr[rl_rules.first];
+        size_t end = m_nter_ptr[rl_rules.first+rl_rules.second]-1;
         return start<=idx && idx<=end;
     }
 
     [[nodiscard]] inline std::pair<size_t, size_t> rl_zone() const{
-        size_t start = m_nter_ptr[rules_breaks[n_p_rounds]];
-        size_t end = m_nter_ptr[rules_breaks[n_p_rounds+1]]-1;
+        size_t start = m_nter_ptr[rl_rules.first];
+        size_t end = m_nter_ptr[rl_rules.first+rl_rules.second]-1;
         return {start, end};
     }
 
@@ -384,12 +392,12 @@ public:
         return grammar_iterator<grammar<vector_type>>(*this, gram_alph);
     }
 
-    [[nodiscard]] inline size_t rl_rules() const{
-        return rules_breaks[n_p_rounds+1] - rules_breaks[n_p_rounds];
+    [[nodiscard]] inline size_t n_rl_rules() const{
+        return rl_rules.second;
     }
 
-    [[nodiscard]] inline size_t sp_rules() const{
-        return rules_breaks[n_p_rounds+2] - rules_breaks[n_p_rounds+1];
+    [[nodiscard]] inline size_t n_sp_rules() const{
+        return sp_rules.second;
     }
 
     [[nodiscard]] inline size_t gram_size() const{

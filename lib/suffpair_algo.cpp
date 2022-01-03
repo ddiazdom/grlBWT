@@ -16,9 +16,9 @@ size_t rem_threads;
 void create_new_rules(phrase_map_t& ht, pairing_data& p_data){
     key_wrapper key_w{p_data.s_width, ht.description_bits(), ht.get_data()};
     phrase_map_t::val_type val=0;
+    //size_t first_pos = p_data.new_rules.size();
     for(auto elm : ht){
         ht.get_value_from(elm, val);
-
         if(val==1){//repeated pair but new
             val |= p_data.next_av_rule<<1UL;
             ht.insert_value_at(elm, val);
@@ -191,14 +191,23 @@ void replace_pairs(const phrase_map_t& ht, const pairing_data& p_data, std::stri
         lsym = r.read(pos);
         rsym = r.read(pos+1);
 
-        pos--;
         freq=1;
-        while(!p_data.r_lim[pos] && r.read(pos)==lsym){
-            pos--;
+        size_t tmp_pos=i-1;
+        tmp_pair.write(0, lsym);
+        tmp_pair.write(1, rsym);
+        while(!p_data.r_lim[tmp_pos] && r.read(tmp_pos)==lsym){
+            tmp_pair.write(2, freq);
+            auto res = ht.find(tmp_pair.data(), tmp_pair.n_bits());
+            val = 0;
+            ht.get_value_from(res.first, val);
+            if(val & 1UL){
+            }
+
             freq++;
+            tmp_pos--;
         }
 
-        if(!p_data.r_lim[pos]){ //the suffix can't span a complete rule
+        /*if(!p_data.r_lim[tmp_pos]){ //the suffix can't span a complete rule
 
             tmp_pair.write(0, lsym);
             tmp_pair.write(1, rsym);
@@ -217,7 +226,7 @@ void replace_pairs(const phrase_map_t& ht, const pairing_data& p_data, std::stri
                     np_list.push_back(pos);
                 }
             }
-        }
+        }*/
     }
     //update the list with the suffixes
     p_list.close();
@@ -257,7 +266,6 @@ void * suffpair_thread(void * data) {
 
             assert(d->p_data.r_lim[i]);
 
-            tmp_pos = i-1;
             lsym = r.read(i-1);
             rsym = r.read(i);
 
@@ -268,29 +276,24 @@ void * suffpair_thread(void * data) {
             if(valid_suffix && rep_suffix) {
 
                 freq=1;
-                i-=2;
-                while(!d->p_data.r_lim[i] && r.read(i)==lsym){
-                    freq++;
-                    i--;
-                }
-
+                tmp_pos=i-1;
                 tmp_pair.write(0, lsym);
                 tmp_pair.write(1, rsym);
-                tmp_pair.write(2, freq);
 
-                //the pair covers an entire preexisting rule
-                id = d->p_data.r_lim[i] ? (d->p_data.r_lim_rs(i+1)<< 1UL) : 0;
-                id |= freq>1;
-
-                auto res = ht.insert(tmp_pair.data(), tmp_pair.n_bits(), id);
-
-                if (!res.second) {
-                    val = 0;
-                    ht.get_value_from(res.first, val);
-                    val |= (id | 1UL);
-                    ht.insert_value_at(res.first, val);
+                while(!d->p_data.r_lim[tmp_pos] && r.read(tmp_pos)==lsym){
+                    tmp_pair.write(2, freq);
+                    id = d->p_data.r_lim[tmp_pos-1] ? (d->p_data.r_lim_rs(tmp_pos)<< 1UL) : 0;
+                    auto res = ht.insert(tmp_pair.data(), tmp_pair.n_bits(), id);
+                    if (!res.second) {
+                        val = 0;
+                        ht.get_value_from(res.first, val);
+                        val |= (id | 1UL);
+                        ht.insert_value_at(res.first, val);
+                    }
+                    freq++;
+                    tmp_pos--;
                 }
-                p_list.push_back(tmp_pos);
+                p_list.push_back(i-1);
             } else {
                 i--;
             }
@@ -533,18 +536,298 @@ void suffixpair_int(pairing_data& p_data) {
     }
 }
 
+
+size_t create_new_rules(phrase_map_t& ht, gram_info_t& p_gram, sdsl::cache_config& config){
+
+    std::string new_rules_file = sdsl::cache_file_name("new_rules", config);
+    std::string new_rules_lim_file = sdsl::cache_file_name("new_rules_lim_file", config);
+    ivb_t new_rules(new_rules_file, std::ios::out);
+    sdsl::int_vector_buffer<1> new_r_lim(new_rules_lim_file, std::ios::out);
+
+    key_wrapper key_w{sdsl::bits::hi(p_gram.r)+1, ht.description_bits(), ht.get_data()};
+    string_t phrase(2,sdsl::bits::hi(p_gram.r)+1);
+    string_t suffix(2,sdsl::bits::hi(p_gram.r)+1);
+
+    size_t next_av_rule = p_gram.r-1, val;
+    for(auto elm : ht){
+        val = 0;
+        ht.get_value_from(elm, val);
+        if(val==1) { //repeated pair but new
+            val |= next_av_rule<<1UL;
+            ht.insert_value_at(elm, val);
+            next_av_rule++;
+        }
+    }
+
+    bool found;
+    for(auto elm : ht){
+        val = 0;
+        ht.get_value_from(elm, val);
+        if((val>>1UL)>=(p_gram.r-1)){ //repeated pair but new
+
+            //create the new rules
+            phrase.clear();
+            for(size_t i=key_w.size(elm);i-->0;){
+                phrase.push_back(key_w.read(elm, i));
+            }
+
+            suffix.clear();
+            for(size_t i=phrase.size();i-->1;){
+                suffix.push_back(phrase[i]);
+            }
+
+            found = false;
+            while(suffix.size()>1){
+                suffix.mask_tail();
+                auto res = ht.find(suffix.data(), suffix.n_bits());
+
+                assert(res.second);
+                val = 0;
+                ht.get_value_from(res.first, val);
+                if(val & 1UL){
+                    size_t prefix = phrase.size()-suffix.size();
+                    for(size_t i=0;i<prefix;i++){
+                        new_rules.push_back(phrase[i]);
+                        new_r_lim.push_back(false);
+                    }
+                    new_rules.push_back(val>>1UL);
+                    new_r_lim.push_back(true);
+
+                    found = true;
+                    break;
+                }
+                suffix.pop_back();
+            }
+
+            if(!found){
+                for(size_t i=0;i<phrase.size();i++){
+                    new_rules.push_back(phrase[i]);
+                    new_r_lim.push_back(false);
+                }
+                new_r_lim[new_r_lim.size()-1] = true;
+            }
+        }
+    }
+    new_rules.close();
+    new_r_lim.close();
+    return next_av_rule - (p_gram.r-1);
+}
+
+void compress_grammar(gram_info_t& p_gram, vector_t& rules, bv_t& r_lim, phrase_map_t& ht, sdsl::cache_config &config) {
+
+    size_t n_new_rules = create_new_rules(ht, p_gram, config);
+
+    /*std::string col_file = sdsl::cache_file_name("col_rules", config);
+    std::string col_lim_file = sdsl::cache_file_name("col_lim_file", config);
+
+    ivb_t col_rules(col_file, std::ios::out);
+    sdsl::int_vector_buffer<1> col_r_lim(col_lim_file, std::ios::out);
+
+    for(size_t i=0;i<=p_gram.max_tsym;i++){
+        col_rules.push_back(i);
+        col_r_lim.push_back(r_lim[i]);
+    }*/
+
+    string_t rule(2, sdsl::bits::hi(p_gram.r)+1);
+    size_t nt=p_gram.max_tsym+1, pos=p_gram.max_tsym+1, new_pos=p_gram.max_tsym+1, start, end, id, val, prefix;
+    bool found;
+    while(nt<p_gram.r-1) {
+
+        /*if(p_gram.is_rl(nt)){
+            col_rules.push_back(rules[pos]);
+            col_rules.push_back(rules[pos+1]);
+
+            col_r_lim.push_back(r_lim[pos]);
+            col_r_lim.push_back(r_lim[pos+1]);
+            pos+=2;
+            nt++;
+        }*/
+
+        assert(r_lim[pos-1]);
+        start = pos;
+        while(!r_lim[pos]) pos++;
+        end = pos;
+
+        rule.clear();
+        for(size_t i=end;i>start;i--){
+            rule.push_back(rules[i]);
+        }
+
+        found = false;
+        while(rule.size()>1){
+
+            rule.mask_tail();
+            auto res = ht.find(rule.data(), rule.n_bits());
+            assert(res.second);
+            val = 0;
+            ht.get_value_from(res.first, val);
+            if(val & 1UL){
+
+                id = val>>1UL;
+                prefix = (end-start+1) - rule.size();
+                for(size_t i=0;i<prefix;i++){
+                    rules[new_pos] = rules[start+i];
+                    r_lim[new_pos++] = false;
+                }
+                rules[new_pos] = id;
+                r_lim[new_pos++] = true;
+
+                /*std::cout<<"rule :";
+                for(size_t i=start;i<=end;i++){
+                    std::cout<<rules[i]<<" ";
+                }
+                std::cout<<"\nsuffix :";
+                for(size_t i=rule.size();i-->0;){
+                    std::cout<<rule[i]<<" ";
+                }
+                std::cout<<" -> "<<id<<std::endl;
+                std::cout<<"replacement: ";
+                for(size_t i=0;i<=prefix;i++){
+                    std::cout<<col_rules[start+i]<<" ";
+                }
+                std::cout<<" "<<std::endl;*/
+                found = true;
+                break;
+            }
+            rule.pop_back();
+            /*for(size_t i=rule.size();i-->0;){
+                std::cout<<rule[i]<<" ";
+            }
+            std::cout<<" "<<id<<std::endl;*/
+        }
+
+        if(!found){
+            for(size_t i=start;i<=end;i++){
+                rules[new_pos] = rules[i];
+                r_lim[new_pos++] = r_lim[i];
+            }
+        }
+
+        assert(r_lim[pos]);
+        nt++;
+        pos++;
+    }
+
+    std::string new_rules_file = sdsl::cache_file_name("new_rules", config);
+    std::string new_rules_lim_file = sdsl::cache_file_name("new_rules_lim_file", config);
+    ivb_t new_rules(new_rules_file, std::ios::in);
+    sdsl::int_vector_buffer<1> new_r_lim(new_rules_lim_file, std::ios::in);
+    for(size_t i=0;i<new_rules.size();i++){
+        rules[new_pos] = new_rules[i];
+        r_lim[new_pos++] = new_r_lim[i];
+    }
+    new_rules.close(true);
+    new_r_lim.close(true);
+
+    assert(r_lim[pos-1]);
+    for(size_t i=pos;i<rules.size();i++){
+        rules[new_pos] = rules[i];
+        r_lim[new_pos++] = false;
+    }
+    r_lim[new_pos-1] = true;
+
+    std::cout<<"    Stats:"<<std::endl;
+    std::cout<<"      Grammar size before:        "<<p_gram.g<< std::endl;
+    std::cout<<"      Grammar size after:         "<<new_pos<<std::endl;
+    std::cout<<"      Number of new nonterminals: "<<n_new_rules<<std::endl;
+    std::cout<<"      Compression ratio:          "<<double(new_pos)/double(rules.size()) << std::endl;
+
+    rules.resize(new_pos);
+    r_lim.resize(new_pos);
+    p_gram.sp_rules.first = p_gram.r-1;
+    p_gram.sp_rules.second = n_new_rules;
+    p_gram.r += n_new_rules;
+    p_gram.g = rules.size();
+
+    sdsl::store_to_file(rules, p_gram.rules_file);
+    sdsl::store_to_file(r_lim, p_gram.rules_lim_file);
+}
+
+void mark_repeated_nt(bv_t& rep_sym, vector_t& rules, bv_t& r_lim, gram_info_t& p_gram){
+
+    sdsl::int_vector<2> tmp_rep(p_gram.r, 0);
+    size_t rule_id=p_gram.max_tsym+1, sym;
+    for (size_t i=p_gram.max_tsym+1;i<rules.size();i++){
+        sym = rules[i];
+        if(rule_id<p_gram.rules_breaks[p_gram.n_p_rounds] && tmp_rep[sym]<2) tmp_rep[sym]++;
+        if(r_lim[i]) rule_id++;
+    }
+
+    size_t j=0;
+    for(auto const& i : tmp_rep){
+        if(i>1){
+            rep_sym[j] = true;
+        }
+        j++;
+    }
+}
+
 void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads, size_t hbuff_size) {
 
     std::cout<<"  Suffpair algorithm"<<std::endl;
-    //prepare the grammar symbols for suffix pairing
-    bv_t rep_syms(p_gram.r - 1, false);
-    prepare_input(p_gram, rep_syms, config);
 
-    //create an object with all the necessary
-    // information for the suffix pair algorithm
-    pairing_data p_data(p_gram, rep_syms, n_threads, hbuff_size, config);
+    string_t rule(2, sdsl::bits::hi(p_gram.r)+1);
+    sdsl::int_vector<> rules;
+    sdsl::load_from_file(rules, p_gram.rules_file);
+    bv_t r_lim;
+    sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
+    bv_t rep_sym(p_gram.r, false);
+    mark_repeated_nt(rep_sym, rules, r_lim, p_gram);
 
-    suffixpair_int(p_data);
-    update_grammar(p_data, p_gram);
+    phrase_map_t ht;
+    size_t end=rules.size(), j, id, full_size, nt = p_gram.rules_breaks.back()-1, tmp_nt=p_gram.r, val;
+    do{
+        if(r_lim[--end]) tmp_nt--;
+    } while(tmp_nt>nt);
+
+    j=end;
+    while(nt>p_gram.max_tsym){
+        assert(r_lim[j]);
+        rule.clear();
+        rule.push_back(rules[j--]);
+        while(!r_lim[j]){
+            rule.push_back(rules[j--]);
+        }
+
+        full_size = rule.size();
+
+        //size_t k=0;
+        //while(rep_sym[rule[k]]) k++;
+        //while(rule.size()>k) rule.pop_back();
+
+        /*for(size_t i=rule.size();i-->0;){
+            std::cout<<rule[i]<<" ";
+        }
+        std::cout<<" -> "<<std::endl;*/
+        while(rule.size()>1){
+
+            id = rule.size()==full_size ? nt<<1UL : 0;
+            rule.mask_tail();
+            auto res = ht.insert(rule.data(), rule.n_bits(), id);
+
+            if(!res.second){
+                val = 0;
+                ht.get_value_from(res.first, val);
+                val |= (id | 1UL);
+
+                /*if(rule.size()==3 && rule[0]==65 && rule[1]==84 && rule[2]==84){
+                    std::cout<<"asdasd: ";
+                    for(size_t i=rule.size();i-->0;){
+                        std::cout<<rule[i]<<" ";
+                    }
+                    std::cout<<" -> "<<id<<" "<<(val>>1UL)<<std::endl;
+                }*/
+                ht.insert_value_at(res.first, val);
+            }
+            /*for(size_t i=rule.size();i-->0;){
+                std::cout<<rule[i]<<" ";
+            }
+            std::cout<<" "<<id<<std::endl;*/
+            rule.pop_back();
+        }
+
+        nt--;
+    }
+    compress_grammar(p_gram, rules, r_lim, ht, config);
 }
 

@@ -15,6 +15,7 @@ typedef sdsl::bit_vector::rank_1_type           bv_rs_t;
 typedef sdsl::bit_vector::select_1_type         bv_ss_t;
 typedef sdsl::int_vector_buffer<1>              bvb_t;
 typedef sdsl::int_vector_buffer<>               ivb_t;
+typedef sdsl::int_vector<>                      vector_t;
 typedef int_array<size_t>                       string_t;
 typedef bit_hash_table<size_t,44>               phrase_map_t;
 typedef bit_hash_table<bool,1>                  dict_t;

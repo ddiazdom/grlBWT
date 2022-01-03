@@ -111,8 +111,8 @@ void decompress_text(arguments& args){
     std::cout<<"Grammar size:                 "<<gram.gram_size()<<std::endl;
     std::cout<<"Number of terminals symbols:  "<<gram.ter()<<std::endl;
     std::cout<<"Number of nonterminals m_rules: "<<gram.nter()<<std::endl;
-    std::cout<<"Number of run-length m_rules:   "<<gram.rl_rules()<<std::endl;
-    std::cout<<"Number of SP m_rules:           "<<gram.sp_rules()<<std::endl;
+    std::cout<<"Number of run-length m_rules:   "<<gram.n_rl_rules()<<std::endl;
+    std::cout<<"Number of SP m_rules:           "<<gram.n_sp_rules()<<std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
     gram.se_decomp_str(0, gram.strings()-1,
@@ -138,8 +138,8 @@ void get_bwt(arguments& args){
     std::cout<<"Grammar size:                 "<<gram.gram_size()<<std::endl;
     std::cout<<"Number of terminals symbols:  "<<gram.ter()<<std::endl;
     std::cout<<"Number of nonterminals m_rules: "<<gram.nter()<<std::endl;
-    std::cout<<"Number of run-length m_rules:   "<<gram.rl_rules()<<std::endl;
-    std::cout<<"Number of SP m_rules:           "<<gram.sp_rules()<<std::endl;
+    std::cout<<"Number of run-length m_rules:   "<<gram.n_rl_rules()<<std::endl;
+    std::cout<<"Number of SP m_rules:           "<<gram.n_sp_rules()<<std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
     gram2bwt<grammar<vector_t>>(gram);
