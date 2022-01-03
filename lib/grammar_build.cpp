@@ -475,10 +475,10 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     suffpair(p_gram, config, n_threads, hbuff_size);
-    //run_length_compress(p_gram, config);
-    //simplify_grammar(p_gram, true);
+    run_length_compress(p_gram, config);
+    simplify_grammar(p_gram, true);
     //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
-    check_plain_grammar(p_gram, i_file);
+    //check_plain_grammar(p_gram, i_file);
     //
 
     std::cout<<"  Final grammar: " << std::endl;

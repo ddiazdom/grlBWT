@@ -537,7 +537,7 @@ void suffixpair_int(pairing_data& p_data) {
 }
 
 
-size_t create_new_rules(phrase_map_t& ht, gram_info_t& p_gram, sdsl::cache_config& config){
+size_t create_new_rules(phrase_map_t& ht, gram_info_t& p_gram, bv_t& rep_sym, sdsl::cache_config& config){
 
     std::string new_rules_file = sdsl::cache_file_name("new_rules", config);
     std::string new_rules_lim_file = sdsl::cache_file_name("new_rules_lim_file", config);
@@ -572,15 +572,14 @@ size_t create_new_rules(phrase_map_t& ht, gram_info_t& p_gram, sdsl::cache_confi
             }
 
             suffix.clear();
-            for(size_t i=phrase.size();i-->1;){
+            for(size_t i=phrase.size()-1; rep_sym[phrase[i]] && i>0;i--){
                 suffix.push_back(phrase[i]);
             }
 
             found = false;
-            while(suffix.size()>1){
+            while(suffix.size()>1) {
                 suffix.mask_tail();
                 auto res = ht.find(suffix.data(), suffix.n_bits());
-
                 assert(res.second);
                 val = 0;
                 ht.get_value_from(res.first, val);
@@ -613,9 +612,9 @@ size_t create_new_rules(phrase_map_t& ht, gram_info_t& p_gram, sdsl::cache_confi
     return next_av_rule - (p_gram.r-1);
 }
 
-void compress_grammar(gram_info_t& p_gram, vector_t& rules, bv_t& r_lim, phrase_map_t& ht, sdsl::cache_config &config) {
+void compress_grammar(gram_info_t& p_gram, vector_t& rules, bv_t& r_lim, bv_t& rep_sym, phrase_map_t& ht, sdsl::cache_config &config) {
 
-    size_t n_new_rules = create_new_rules(ht, p_gram, config);
+    size_t n_new_rules = create_new_rules(ht, p_gram, rep_sym, config);
 
     /*std::string col_file = sdsl::cache_file_name("col_rules", config);
     std::string col_lim_file = sdsl::cache_file_name("col_lim_file", config);
@@ -644,12 +643,13 @@ void compress_grammar(gram_info_t& p_gram, vector_t& rules, bv_t& r_lim, phrase_
         }*/
 
         assert(r_lim[pos-1]);
+
         start = pos;
         while(!r_lim[pos]) pos++;
         end = pos;
 
         rule.clear();
-        for(size_t i=end;i>start;i--){
+        for(size_t i=end; rep_sym[rules[i]] && i>start;i--){
             rule.push_back(rules[i]);
         }
 
@@ -658,36 +658,37 @@ void compress_grammar(gram_info_t& p_gram, vector_t& rules, bv_t& r_lim, phrase_
 
             rule.mask_tail();
             auto res = ht.find(rule.data(), rule.n_bits());
-            assert(res.second);
-            val = 0;
-            ht.get_value_from(res.first, val);
-            if(val & 1UL){
+            if(res.second){
+                val = 0;
+                ht.get_value_from(res.first, val);
+                if(val & 1UL){
 
-                id = val>>1UL;
-                prefix = (end-start+1) - rule.size();
-                for(size_t i=0;i<prefix;i++){
-                    rules[new_pos] = rules[start+i];
-                    r_lim[new_pos++] = false;
-                }
-                rules[new_pos] = id;
-                r_lim[new_pos++] = true;
+                    id = val>>1UL;
+                    prefix = (end-start+1) - rule.size();
+                    for(size_t i=0;i<prefix;i++){
+                        rules[new_pos] = rules[start+i];
+                        r_lim[new_pos++] = false;
+                    }
+                    rules[new_pos] = id;
+                    r_lim[new_pos++] = true;
 
-                /*std::cout<<"rule :";
-                for(size_t i=start;i<=end;i++){
-                    std::cout<<rules[i]<<" ";
+                    /*std::cout<<"rule :";
+                    for(size_t i=start;i<=end;i++){
+                        std::cout<<rules[i]<<" ";
+                    }
+                    std::cout<<"\nsuffix :";
+                    for(size_t i=rule.size();i-->0;){
+                        std::cout<<rule[i]<<" ";
+                    }
+                    std::cout<<" -> "<<id<<std::endl;
+                    std::cout<<"replacement: ";
+                    for(size_t i=0;i<=prefix;i++){
+                        std::cout<<col_rules[start+i]<<" ";
+                    }
+                    std::cout<<" "<<std::endl;*/
+                    found = true;
+                    break;
                 }
-                std::cout<<"\nsuffix :";
-                for(size_t i=rule.size();i-->0;){
-                    std::cout<<rule[i]<<" ";
-                }
-                std::cout<<" -> "<<id<<std::endl;
-                std::cout<<"replacement: ";
-                for(size_t i=0;i<=prefix;i++){
-                    std::cout<<col_rules[start+i]<<" ";
-                }
-                std::cout<<" "<<std::endl;*/
-                found = true;
-                break;
             }
             rule.pop_back();
             /*for(size_t i=rule.size();i-->0;){
@@ -782,14 +783,19 @@ void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads,
 
     j=end;
     while(nt>p_gram.max_tsym){
+
         assert(r_lim[j]);
-        rule.clear();
-        rule.push_back(rules[j--]);
-        while(!r_lim[j]){
-            rule.push_back(rules[j--]);
+        if(!rep_sym[rules[j]]){
+            j--;
+            goto next_rule;
         }
 
-        full_size = rule.size();
+        rule.clear();
+        rule.push_back(rules[j--]);
+        while(!r_lim[j] && rep_sym[rules[j]]){
+            rule.push_back(rules[j--]);
+        }
+        full_size = r_lim[j];
 
         //size_t k=0;
         //while(rep_sym[rule[k]]) k++;
@@ -801,7 +807,7 @@ void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads,
         std::cout<<" -> "<<std::endl;*/
         while(rule.size()>1){
 
-            id = rule.size()==full_size ? nt<<1UL : 0;
+            id = full_size ? nt<<1UL : 0;
             rule.mask_tail();
             auto res = ht.insert(rule.data(), rule.n_bits(), id);
 
@@ -824,10 +830,13 @@ void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads,
             }
             std::cout<<" "<<id<<std::endl;*/
             rule.pop_back();
+            full_size=false;
         }
 
+        next_rule:
+        while(!r_lim[j]) j--;
         nt--;
     }
-    compress_grammar(p_gram, rules, r_lim, ht, config);
+    compress_grammar(p_gram, rules, r_lim, rep_sym, ht, config);
 }
 
