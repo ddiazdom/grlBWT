@@ -7,6 +7,7 @@
 
 #include <sdsl/int_vector.hpp>
 #include <sdsl/bit_vectors.hpp>
+#include <filesystem>
 #include "inv_bitstream.hpp"
 #include "iterators.hpp"
 #include "macros.h"

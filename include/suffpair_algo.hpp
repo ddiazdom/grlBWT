@@ -88,7 +88,6 @@
 //void * suffpair_thread(void * data);
 //void merge_ht_data(std::vector<thread_data>& t_data);
 //void suffixpair_int(pairing_data& p_data)
-void remove_uniq_nt(bv_t &rep_sym, vector_t &rules, bv_t &r_lim, gram_info_t &p_gram);
 size_t
 create_new_rules(phrase_map_t &ht, gram_info_t &p_gram, bv_t &rep_sym, sdsl::cache_config &config, vector_t &rules,
                  bv_t &r_lim);
