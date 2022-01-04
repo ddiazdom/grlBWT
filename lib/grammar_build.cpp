@@ -143,7 +143,6 @@ void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
 
     p_gram.rl_rules.first = p_gram.r-1;
     p_gram.rl_rules.second = ht.size();
-    //p_gram.rules_breaks.push_back(p_gram.rules_breaks.back() + ht.size());
 
     p_gram.r+= ht.size();
     p_gram.g = rl_rules.size();

@@ -74,6 +74,11 @@ struct gram_info_t{
         if(rl_rules.second==0) return false;
         return symbol>=rl_rules.first && symbol < (rl_rules.first + rl_rules.second);
     }
+
+    [[nodiscard]] inline bool is_sp(size_t symbol) const{
+        if(sp_rules.second==0) return false;
+        return symbol>=sp_rules.first && symbol < (sp_rules.first + sp_rules.second);
+    }
 };
 
 template<class grammar_t>
