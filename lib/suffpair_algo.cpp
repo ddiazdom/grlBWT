@@ -549,22 +549,105 @@ size_t create_new_rules(phrase_map_t &ht, gram_info_t &p_gram, bv_t &rep_sym,
     string_t phrase(2,sdsl::bits::hi(p_gram.r)+1);
     string_t suffix(2,sdsl::bits::hi(p_gram.r)+1);
 
+    //get the candidates suffix for the new rules
     phrase_map_t::val_type val;
     size_t next_av_rule = p_gram.r-1, n_rep=0;
     for(auto elm : ht){
         val = 0;
         ht.get_value_from(elm, val);
-        if(val==1) { //repeated pair but new
-            val |= next_av_rule<<1UL;
+        if(val==1) { //repeated suffix but it doesn't exist as a rule
+            val |= next_av_rule<<1UL; //we assign a temporal ID
             ht.insert_value_at(elm, val);
             next_av_rule++;
             n_rep++;
         }
     }
-    sdsl::int_vector<2> rep_new_rules(n_rep, 0);
+    sdsl::int_vector<2> new_rep_syms(n_rep, 0);
 
-    bool found;
+    //scan the grammar to check which of the candidate suffixes appear more than once
+    size_t nt=p_gram.max_tsym+1, pos=p_gram.max_tsym+1, start, end, id;
+    while(nt<p_gram.r-1) {
+        assert(r_lim[pos-1]);
+        start = pos;
+        while(!r_lim[pos]) pos++;
+        end = pos;
+
+        phrase.clear();
+        for(size_t i=end; rep_sym[rules[i]] && i>start;i--){
+            phrase.push_back(rules[i]);
+        }
+        while(phrase.size()>1){
+            phrase.mask_tail();
+            auto res = ht.find(phrase.data(), phrase.n_bits());
+            if(res.second){
+                val = 0;
+                ht.get_value_from(res.first, val);
+                if(val & 1UL){
+                    id = val>>1UL;
+                    if(id>=(p_gram.r-1) && new_rep_syms[id-(p_gram.r-1)]<2){
+                        new_rep_syms[id-(p_gram.r-1)]++;
+                    }
+                    break;
+                }
+            }
+            phrase.pop_back();
+        }
+        assert(r_lim[pos]);
+        nt++;
+        pos++;
+    }
+
+    //scan the hash table to check which of the candidate
+    // suffixes appear more than once
     for(auto elm : ht){
+        val = 0;
+        ht.get_value_from(elm, val);
+        if((val>>1UL)>=(p_gram.r-1)){ //candidate suffix
+            phrase.clear();
+            for(size_t i=key_w.size(elm);i-->0;){
+                phrase.push_back(key_w.read(elm, i));
+            }
+            suffix.clear();
+            for(size_t i=phrase.size()-1; rep_sym[phrase[i]] && i>0;i--){
+                suffix.push_back(phrase[i]);
+            }
+            while(suffix.size()>1) {
+                suffix.mask_tail();
+                auto res = ht.find(suffix.data(), suffix.n_bits());
+                assert(res.second);
+                val = 0;
+                ht.get_value_from(res.first, val);
+                if(val & 1UL){
+                    id = val>>1UL;
+                    if(id>=(p_gram.r-1) && new_rep_syms[id-(p_gram.r-1)]<2){
+                        new_rep_syms[id-(p_gram.r-1)]++;
+                    }
+                    break;
+                }
+                suffix.pop_back();
+            }
+        }
+    }
+
+    next_av_rule = p_gram.r-1;
+    for(auto elm : ht){
+        val = 0;
+        ht.get_value_from(elm, val);
+        id = val>>1UL;
+        if(id>=(p_gram.r-1)){//candidate suffix
+            if(new_rep_syms[id-(p_gram.r-1)]==2) {//the candidate suffix is repeated in the grammar
+                val = (next_av_rule<<1UL | 1UL); //update the id of the new rule
+                ht.insert_value_at(elm, val);
+                next_av_rule++;
+            }else{
+                ht.insert_value_at(elm, 0);//invalidate the phrase
+            }
+        }
+    }
+
+    size_t prefix;
+    bool found;
+    for(auto elm : ht) {
         val = 0;
         ht.get_value_from(elm, val);
         if((val>>1UL)>=(p_gram.r-1)){ //repeated pair but new
@@ -588,7 +671,7 @@ size_t create_new_rules(phrase_map_t &ht, gram_info_t &p_gram, bv_t &rep_sym,
                 val = 0;
                 ht.get_value_from(res.first, val);
                 if(val & 1UL){
-                    size_t prefix = phrase.size()-suffix.size();
+                    prefix = phrase.size()-suffix.size();
                     for(size_t i=0;i<prefix;i++){
                         new_rules.push_back(phrase[i]);
                         new_r_lim.push_back(false);
@@ -732,7 +815,7 @@ void mark_repeated(bv_t& rep_sym, vector_t& rules, bv_t& r_lim, gram_info_t& p_g
     }
 }
 
-void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads, size_t hbuff_size) {
+void suffpair(gram_info_t& p_gram, sdsl::cache_config &config) {
 
     std::cout<<"  Suffpair algorithm"<<std::endl;
 
@@ -770,14 +853,14 @@ void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads,
             id = full_size ? nt<<1UL : 0;
             rule.mask_tail();
 
-            if(rule.size()==13 && rule[0]==65 && rule[1]==71 && rule[2]==65){
+            /*if(rule.size()==13 && rule[0]==65 && rule[1]==71 && rule[2]==65){
                 std::cout<<nt<<", "<<id<<" ";
 
                 for(size_t i=rule.size();i-->0;){
                     std::cout<<rule[i]<<" ";
                 }
                 std::cout<<" "<<std::endl;
-            }
+            }*/
 
             auto res = ht.insert(rule.data(), rule.n_bits(), id);
             if(!res.second){

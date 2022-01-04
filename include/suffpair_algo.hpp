@@ -95,6 +95,6 @@ create_new_rules(phrase_map_t &ht, gram_info_t &p_gram, bv_t &rep_sym, sdsl::cac
 void compress_grammar(gram_info_t& p_gram, vector_t& rules, bv_t& r_lim, bv_t& rep_sym,
                       phrase_map_t& ht, sdsl::cache_config &config);
 void mark_repeated(bv_t& rep_sym, vector_t& rules, bv_t& r_lim, gram_info_t& p_gram);
-void suffpair(gram_info_t& p_gram, sdsl::cache_config &config, size_t n_threads, size_t hbuff_size);
+void suffpair(gram_info_t& p_gram, sdsl::cache_config &config);
 
 #endif //LPG_COMPRESSOR_SUFFPAIR_ALGO_H

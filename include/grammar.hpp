@@ -405,6 +405,10 @@ public:
         return sp_rules.second;
     }
 
+    [[nodiscard]] inline size_t n_lc_rules() const{
+        return rules_breaks[rules_breaks.size()-1]-ter();
+    }
+
     [[nodiscard]] inline size_t gram_size() const{
         return grammar_size;
     }

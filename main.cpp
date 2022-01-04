@@ -97,33 +97,6 @@ static void parse_app(CLI::App& app, struct arguments& args){
 
 template<class vector_t>
 void decompress_text(arguments& args){
-    std::cout << "Computing the BWT from its locally consistent grammar representation" << std::endl;
-    std::string tmp_folder = create_temp_folder(args.tmp_dir, "lc_gram");
-
-    if(args.output_file.empty()){
-        args.output_file = std::filesystem::path(args.input_file).filename();
-        args.output_file.resize(args.output_file.size()-5); //remove the ".gram" suffix
-    }
-
-    grammar<vector_t> gram;
-    sdsl::load_from_file(gram, args.input_file);
-
-    std::cout<<"Grammar size:                 "<<gram.gram_size()<<std::endl;
-    std::cout<<"Number of terminals symbols:  "<<gram.ter()<<std::endl;
-    std::cout<<"Number of nonterminals m_rules: "<<gram.nter()<<std::endl;
-    std::cout<<"Number of run-length m_rules:   "<<gram.n_rl_rules()<<std::endl;
-    std::cout<<"Number of SP m_rules:           "<<gram.n_sp_rules()<<std::endl;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    gram.se_decomp_str(0, gram.strings()-1,
-                       args.output_file, tmp_folder,
-                       args.n_threads, args.b_buff*1024*1024);
-    auto end = std::chrono::high_resolution_clock::now();
-    report_time(start, end);
-}
-
-template<class vector_t>
-void get_bwt(arguments& args){
     std::cout << "Decompressing the locally consistent grammar" << std::endl;
     std::string tmp_folder = create_temp_folder(args.tmp_dir, "lc_gram");
 
@@ -135,11 +108,40 @@ void get_bwt(arguments& args){
     grammar<vector_t> gram;
     sdsl::load_from_file(gram, args.input_file);
 
-    std::cout<<"Grammar size:                 "<<gram.gram_size()<<std::endl;
-    std::cout<<"Number of terminals symbols:  "<<gram.ter()<<std::endl;
-    std::cout<<"Number of nonterminals m_rules: "<<gram.nter()<<std::endl;
-    std::cout<<"Number of run-length m_rules:   "<<gram.n_rl_rules()<<std::endl;
-    std::cout<<"Number of SP m_rules:           "<<gram.n_sp_rules()<<std::endl;
+    std::cout<<"Grammar size:                         "<<gram.gram_size()<<std::endl;
+    std::cout<<"Number of terminals symbols:          "<<gram.ter()<<std::endl;
+    std::cout<<"Number of nonterminals rules:         "<<gram.nter()<<std::endl;
+    std::cout<<"  Number of locally consistent rules: "<<gram.n_lc_rules()<<std::endl;
+    std::cout<<"  Number of run-length rules:         "<<gram.n_rl_rules()<<std::endl;
+    std::cout<<"  Number of suffix pair rules:        "<<gram.n_sp_rules()<<std::endl;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    gram.se_decomp_str(0, gram.strings()-1,
+                       args.output_file, tmp_folder,
+                       args.n_threads, args.b_buff*1024*1024);
+    auto end = std::chrono::high_resolution_clock::now();
+    report_time(start, end);
+}
+
+template<class vector_t>
+void get_bwt(arguments& args){
+    std::cout << "Computing the BWT from its locally consistent grammar representation" << std::endl;
+    std::string tmp_folder = create_temp_folder(args.tmp_dir, "lc_gram");
+
+    if(args.output_file.empty()){
+        args.output_file = std::filesystem::path(args.input_file).filename();
+        args.output_file.resize(args.output_file.size()-5); //remove the ".gram" suffix
+    }
+
+    grammar<vector_t> gram;
+    sdsl::load_from_file(gram, args.input_file);
+
+    std::cout<<"Grammar size:                       "<<gram.gram_size()<<std::endl;
+    std::cout<<"Number of terminals symbols:        "<<gram.ter()<<std::endl;
+    std::cout<<"Number of nonterminals rules:       "<<gram.nter()<<std::endl;
+    std::cout<<"Number of locally consistent rules: "<<gram.n_lc_rules()<<std::endl;
+    std::cout<<"Number of run-length rules:         "<<gram.n_rl_rules()<<std::endl;
+    std::cout<<"Number of suffix pair rules:        "<<gram.n_sp_rules()<<std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
     gram2bwt<grammar<vector_t>>(gram);
