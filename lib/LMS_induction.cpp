@@ -3,13 +3,7 @@
 //
 #include "LMS_induction.h"
 
-void suffix_induction(std::string &sa_file, std::string &dict_file, std::string &d_lim_file, size_t alphabet) {
-
-    vector_t dict;
-    bv_t d_lim;
-
-    sdsl::load_from_file(dict, dict_file);
-    sdsl::load_from_file(d_lim, d_lim_file);
+void suffix_induction(std::string &sa_file, vector_t &dict, bv_t &d_lim, size_t alphabet) {
 
     vector_t buckets(alphabet+1, 0, sdsl::bits::hi(dict.size())+1);
 

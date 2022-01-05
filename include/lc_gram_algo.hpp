@@ -30,7 +30,7 @@ struct parse_data_t {
                                                          m_map(m_map_),
                                                          start(start_),
                                                          end(end_),
-                                                         thread_dict(hb_size, o_file_ + "_phrases", 0.8, hb_addr) {
+                                                         thread_dict(hb_size, o_file_ + "_phrases", 0.7, hb_addr) {
         //TODO for the moment the input string has to have a sep_symbol appended at the end
         //TODO assertion : sep_symbols cannot be consecutive
     };
@@ -87,10 +87,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                          sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
 void join_parse_chunks(const std::string &output_file,
                        std::vector<std::string> &chunk_files);
-void join_thread_phrases(phrase_map_t& mp_map, std::vector<std::string> &chunk_files);
+size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
 
 void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym, key_wrapper &key_w, bvb_t &r_lim,
-                sdsl::cache_config &config, ivb_t &r);
+                sdsl::cache_config &config, ivb_t &r, size_t dict_syms);
 
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H

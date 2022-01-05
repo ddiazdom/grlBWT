@@ -49,7 +49,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
     gram->add_option("-f,--hbuff",
                       args.hbuff_frac,
                       "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->
-            check(CLI::Range(0.0,1.0))->default_val(0.5);
+            check(CLI::Range(0.0,1.0))->default_val(0.15);
     gram->add_option("-T,--tmp",
                       args.tmp_dir,
                       "Temporal folder (def. /tmp/lc_gram.xxxx)")->

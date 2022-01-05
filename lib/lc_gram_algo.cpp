@@ -6,33 +6,30 @@
 #include <cmath>
 #include <thread>
 
-void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym,
-                key_wrapper &key_w, bvb_t &r_lim, sdsl::cache_config &config, ivb_t &r) {
+void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym, key_wrapper &key_w, bvb_t &r_lim,
+                sdsl::cache_config &config, ivb_t &r, size_t dict_syms) {
 
     std::string dict_file = sdsl::cache_file_name("dict_file", config);
     std::string dict_lim_file = sdsl::cache_file_name("dict_lim_file", config);
     std::string sa_file = sdsl::cache_file_name("sa_file", config);
+    vector_t dict(dict_syms, 0, sdsl::bits::hi(max_sym-min_sym+1)+1);
+    bv_t d_lim(dict_syms, false);
     {
-        ivb_t dict(dict_file, std::ios::out);
-        sdsl::int_vector_buffer<1> d_lim(dict_lim_file, std::ios::out);
+        size_t j=0;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
-                dict.push_back(key_w.read(ptr, i)-min_sym);
-                d_lim.push_back(false);
+                dict[j] = key_w.read(ptr, i)-min_sym;
+                d_lim[j++] = false;
             }
-            d_lim[d_lim.size()-1] = true;
+            d_lim[j-1] = true;
         }
-        dict.close();
-        d_lim.close();
+        assert(j==dict_syms);
     }
 
     vector_t ranks(mp_map.size(), 0, sdsl::bits::hi(mp_map.size())+1);
     {
-        suffix_induction(sa_file, dict_file, dict_lim_file, max_sym-min_sym+1);
-        bv_t d_lim;
-        vector_t dict, sa;
-        sdsl::load_from_file(d_lim, dict_lim_file);
-        sdsl::load_from_file(dict, dict_file);
+        suffix_induction(sa_file, dict, d_lim, max_sym-min_sym+1);
+        vector_t sa;
         sdsl::load_from_file(sa, sa_file);
         bv_rs_t d_lim_rs(&d_lim);
         size_t rank = 0;
@@ -126,10 +123,10 @@ void join_parse_chunks(const std::string &output_file, std::vector<std::string> 
     of.close();
 }
 
-
-void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
+size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
 
     bool rep;
+    size_t dic_bits=0;
 
     for(auto const& file : files){
 
@@ -177,6 +174,8 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
             auto res = map.insert(key, key_bits, rep);
             if(!res.second){
                 map.insert_value_at(res.first, 1UL);
+            }else{
+                dic_bits+=key_bits;
             }
         }
         text_i.close();
@@ -190,6 +189,7 @@ void join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
         free(buffer);
     }
     map.shrink_databuff();
+    return dic_bits;
 }
 
 template<class parser_t>
@@ -223,7 +223,7 @@ std::vector<std::pair<size_t, size_t>> compute_thread_ranges(size_t n_threads,
 
 template<template<class, class> class lc_parser_t>
 void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
-                      gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config){
+                      gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config) {
 
     std::cout<<"  Generating a locally consistent grammar:    "<<std::endl;
     std::string output_file = sdsl::cache_file_name("tmp_output", config);
@@ -336,7 +336,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
     parser_t parser(phrase_desc);
 
-    phrase_map_t mp_table(0, "", 0.85);
+    phrase_map_t mp_table(0, "", 0.8);
 
     auto thread_ranges = compute_thread_ranges<parser_t>(n_threads, i_file, parser);
 
@@ -380,16 +380,18 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     for(size_t i=0;i<threads_data.size();i++){
         phrases_files.push_back(threads_data[i].thread_dict.dump_file());
     }
-    join_thread_phrases(mp_table, phrases_files);
+    size_t dict_bits = join_thread_phrases(mp_table, phrases_files);
 
     size_t psize=0;//<- for the iter stats
     if(mp_table.size()>0){
 
+        size_t width = sdsl::bits::hi(p_gram.r+1)+1;
+
         size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
         size_t max_sym = p_gram.r-1;
+        size_t dict_syms = dict_bits/width;
 
         p_gram.rules_breaks.push_back(mp_table.size());
-        size_t width = sdsl::bits::hi(p_gram.r+1)+1;
         const bitstream<ht_buff_t>& stream = mp_table.get_data();
         key_wrapper key_w{width, mp_table.description_bits(), stream};
 
@@ -399,7 +401,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         //rename phrases according to their lexicographical ranks
         std::cout<<"      Assigning identifiers to the phrases"<<std::endl;
-        assign_ids(mp_table, max_sym, min_sym, key_w, rules_lim, config, rules);
+        assign_ids(mp_table, max_sym, min_sym, key_w, rules_lim, config, rules, dict_syms);
 
         //reload the hash table
         mp_table.load_table(st_table);

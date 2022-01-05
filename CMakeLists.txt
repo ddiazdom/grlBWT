@@ -13,7 +13,13 @@ add_executable(lpg
         lib/grammar_build.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
-        lib/suffpair_algo.cpp include/modules/compute_bwt.h include/modules/self_index.h include/modules/update_grammar.h lib/modules/compute_bwt.cpp include/LMS_induction.h lib/LMS_induction.cpp)
+        lib/suffpair_algo.cpp
+        include/modules/compute_bwt.h
+        include/modules/self_index.h
+        include/modules/update_grammar.h
+        lib/modules/compute_bwt.cpp
+        include/LMS_induction.h
+        lib/LMS_induction.cpp)
 
 target_compile_options(lpg
         PRIVATE

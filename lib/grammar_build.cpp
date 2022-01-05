@@ -473,7 +473,7 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     p_gram.r = p_gram.max_tsym + 1;
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
-    suffpair(p_gram, config);
+    //suffpair(p_gram, config);
     run_length_compress(p_gram, config);
     simplify_grammar(p_gram, false);
     //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
