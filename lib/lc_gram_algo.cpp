@@ -37,11 +37,9 @@ void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym,
         bv_rs_t d_lim_rs(&d_lim);
         size_t rank = 0;
 
-        std::unordered_map<size_t, size_t> tmp_map;
         for(auto pos : sa){
 
             if(pos==0) continue;
-            tmp_map[pos]++;
 
             pos--;
             if(pos==0 || d_lim[pos-1]){
