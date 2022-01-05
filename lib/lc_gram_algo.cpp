@@ -4,50 +4,76 @@
 
 #include "lc_gram_algo.hpp"
 #include <cmath>
-#include "cdt/parallel_string_sort.hpp"
 #include <thread>
 
-void assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r,
-                bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config) {
+void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym,
+                key_wrapper &key_w, bvb_t &r_lim, sdsl::cache_config &config, ivb_t &r) {
 
-    std::string syms_file = sdsl::cache_file_name("syms_file", config);
+    std::string dict_file = sdsl::cache_file_name("dict_file", config);
+    std::string dict_lim_file = sdsl::cache_file_name("dict_lim_file", config);
+    std::string sa_file = sdsl::cache_file_name("sa_file", config);
     {
-        sdsl::int_vector_buffer<> syms_buff(syms_file, std::ios::out);
-        for (auto const &phrase : mp_map) {
-            syms_buff.push_back(phrase);
+        ivb_t dict(dict_file, std::ios::out);
+        sdsl::int_vector_buffer<1> d_lim(dict_lim_file, std::ios::out);
+        for (auto const &ptr : mp_map) {
+            for(size_t i=key_w.size(ptr);i-->0;){
+                dict.push_back(key_w.read(ptr, i)-min_sym);
+                d_lim.push_back(false);
+            }
+            d_lim[d_lim.size()-1] = true;
         }
-        syms_buff.close();
-    }
-    auto compare = [&](const size_t &l, const size_t &r) -> bool {
-        return key_w.compare(l, r);
-    };
-    auto access = [&](const size_t &val, size_t idx) -> size_t {
-        return key_w.read(val, key_w.size(val)-1-idx);
-    };
-    parallel_str_sort(syms_file, compare, access, max_sym+1, n_threads, config);
-
-    sdsl::int_vector<> k_list;
-    sdsl::load_from_file(k_list, syms_file);
-
-    if(remove(syms_file.c_str())){
-        std::cout<<"Error trying to remove file "<<syms_file<<std::endl;
+        dict.close();
+        d_lim.close();
     }
 
-    for(size_t m_pos=0; m_pos < mp_map.size(); m_pos++){
+    vector_t ranks(mp_map.size(), 0, sdsl::bits::hi(mp_map.size())+1);
+    {
+        suffix_induction(sa_file, dict_file, dict_lim_file, max_sym-min_sym+1);
+        bv_t d_lim;
+        vector_t dict, sa;
+        sdsl::load_from_file(d_lim, dict_lim_file);
+        sdsl::load_from_file(dict, dict_file);
+        sdsl::load_from_file(sa, sa_file);
+        bv_rs_t d_lim_rs(&d_lim);
+        size_t rank = 0;
 
-        size_t len = key_w.size(k_list[m_pos]);
-        for(size_t i=len; i-- > 1;){
-            r.push_back(key_w.read(k_list[m_pos], i));
-            r_lim.push_back(false);
+        std::unordered_map<size_t, size_t> tmp_map;
+        for(auto pos : sa){
+
+            if(pos==0) continue;
+            tmp_map[pos]++;
+
+            pos--;
+            if(pos==0 || d_lim[pos-1]){
+                ranks[d_lim_rs(pos)] = rank++;
+                size_t j=pos;
+                while(!d_lim[j]){
+                    r.push_back(min_sym+dict[j++]);
+                    r_lim.push_back(false);
+                }
+                assert(d_lim[j]);
+                r.push_back(min_sym+dict[j]);
+                r_lim.push_back(true);
+            }
         }
-        r.push_back( key_w.read(k_list[m_pos], 0));
-        r_lim.push_back(true);
 
+        /*for(auto const& pair : tmp_map){
+            if(pair.second>1){
+                std::cout<<pair.first<<" "<<pair.second<<" "<<dict.size()<<" "<<d_lim[pair.first-1]<<std::endl;
+            }
+        }
+        std::cout<<rank<<" "<<mp_map.size()<<std::endl;
+        assert(rank==mp_map.size());*/
+    }
+
+    //assign the ranks
+    size_t j=0;
+    for(auto const& ptr : mp_map){
         //modify the key value
         phrase_map_t::val_type val=0;
-        mp_map.get_value_from(k_list[m_pos], val);
-        val |= (max_sym+m_pos+1)<<1UL;
-        mp_map.insert_value_at(k_list[m_pos], val);
+        mp_map.get_value_from(ptr, val);
+        val |= (max_sym+ranks[j++]+1)<<1UL;
+        mp_map.insert_value_at(ptr, val);
         //
     }
 }
@@ -361,6 +387,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     size_t psize=0;//<- for the iter stats
     if(mp_table.size()>0){
 
+        size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
+        size_t max_sym = p_gram.r-1;
+
         p_gram.rules_breaks.push_back(mp_table.size());
         size_t width = sdsl::bits::hi(p_gram.r+1)+1;
         const bitstream<ht_buff_t>& stream = mp_table.get_data();
@@ -372,7 +401,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         //rename phrases according to their lexicographical ranks
         std::cout<<"      Assigning identifiers to the phrases"<<std::endl;
-        assign_ids(mp_table, p_gram.r-1,  key_w, rules, rules_lim, n_threads, config);
+        assign_ids(mp_table, max_sym, min_sym, key_w, rules_lim, config, rules);
 
         //reload the hash table
         mp_table.load_table(st_table);
@@ -415,6 +444,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             size_t tmp_value, sym;
 
             while (it != it_end) {
+
                 tmp_value = 0;
                 auto val = it.value();
 

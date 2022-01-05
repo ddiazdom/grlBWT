@@ -8,6 +8,7 @@
 #include "grammar.hpp"
 #include "common.h"
 #include "lc_parsers.hpp"
+#include "LMS_induction.h"
 
 template<class istream_t,
          class out_sym_t=size_t,
@@ -88,8 +89,8 @@ void join_parse_chunks(const std::string &output_file,
                        std::vector<std::string> &chunk_files);
 void join_thread_phrases(phrase_map_t& mp_map, std::vector<std::string> &chunk_files);
 
-void assign_ids(phrase_map_t &mp_map, size_t max_sym, key_wrapper &key_w, ivb_t &r,
-                bvb_t &r_lim, size_t n_threads, sdsl::cache_config &config);
+void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym, key_wrapper &key_w, bvb_t &r_lim,
+                sdsl::cache_config &config, ivb_t &r);
 
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H

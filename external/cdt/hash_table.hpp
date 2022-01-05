@@ -140,7 +140,7 @@ private:
 
     //64-bit pointer for the
     // hash table
-    size_t* table= nullptr;
+    size_t* table = nullptr;
 
     //maximum buffer size in bytes
     // used for the data structure
@@ -287,7 +287,6 @@ private:
     }
 
     inline size_t new_table_size() const{
-
         //TODO if the hash table becomes too high, then I will change the growth policy to this:
         //size_t new_size = prime_generator::get_next_prime(size_t(double(n_buckets)/(m_max_load_factor-0.1)));
         //std::cout<<"Just testing "<<n_buckets<<" -> "<<new_size<<" -- "<<double(n_elms)/new_size<<", "<<(n_buckets<<1UL)<<std::endl;
@@ -776,16 +775,45 @@ public:
         return file;
     }
 
-    void unload_table(std::string output) {
+    void store_data_to_file(const std::string& output){
+        assert(!static_buffer);
+        std::filebuf fb;
+        fb.open(output, std::ios::out | std::ios::binary);
+        std::ostream ofs(&fb);
+        ofs.write(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
+        ofs.tellp();
+        free(table);
+        table = nullptr;
+        data.serialize(ofs, nullptr, "data_stream");
+        free(data.stream);
+        fb.close();
+    }
+
+    void load_data_from_file(const std::string& input){
+        assert(table== nullptr);
+        std::ifstream ifs(input, std::ios_base::binary);
+
+        ifs.seekg (0, std::ifstream::end);
+        size_t tot_bytes = ifs.tellg();
+        ifs.seekg (0, std::ifstream::beg);
+
+        table = reinterpret_cast<size_t*>(malloc(tot_bytes));
+        n_buckets = tot_bytes/sizeof(size_t);
+        ifs.read(reinterpret_cast<char *>(table), tot_bytes);
+        data.load(ifs);
+        ifs.close();
+    }
+
+    void unload_table(const std::string& output) {
         std::ofstream ofs(output, std::ios_base::binary);
         ofs.write(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
         ofs.tellp();
         free(table);
-        table= nullptr;
+        table = nullptr;
         ofs.close();
     }
 
-    void load_table(std::string input) {
+    void load_table(const std::string& input) {
         assert(table== nullptr);
         std::ifstream ifs(input, std::ios_base::binary);
 
