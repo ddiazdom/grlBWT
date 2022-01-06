@@ -6,26 +6,46 @@
 #include <cmath>
 #include <thread>
 
-void compress_dictionary(dictionary& dict, vector_t& sa) {
+void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
+                         bvb_t &r_lim, ivb_t &rules, phrase_map_t &mp_map) {
 
     size_t pos, prev_pos, lcp, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0;
+
+    vector_t ranks(dict.size, 0, dict.dict.width());
+    bv_rs_t d_lim_rs(&dict.d_lim);
 
     bool is_maximal, exists_as_rule;
     size_t i=1, run_bg;
     size_t new_phrases=0;
     std::vector<std::pair<size_t, size_t>> phrases_sa_ranges;
+    auto ht_it = mp_map.begin();
 
     while(i<sa.size()) {
 
-        while (sa[i] == 0 || sa[i - 1] == 0) i++;
+        while (sa[i] == 0 || sa[i - 1] == 0){
+            if(sa[i]-1==12331 && d_lim_rs(sa[i]-1)==3796){
+                std::cout<<prev_pos<<" "<<rank<<" "<<dict.d_lim[prev_pos-1]<<" "<<sa[i]<<std::endl;
+            }
+            i++;
+        }
 
         //lcp=0;
         prev_pos = sa[i - 1] - 1;
         exists_as_rule = prev_pos==0 || dict.d_lim[prev_pos - 1];
-        prev_l_sym = exists_as_rule ? dummy_sym : dict.dict[prev_pos - 1];
+
+        if(prev_pos==12331 && d_lim_rs(prev_pos)==3796){
+            std::cout<<prev_pos<<" "<<rank<<" "<<dict.d_lim[prev_pos-1]<<" "<<sa[i]<<std::endl;
+        }
+
+        if(exists_as_rule){
+            ranks[d_lim_rs(prev_pos)] = rank+1;
+            prev_l_sym = dummy_sym;
+        }else{
+            prev_l_sym = dict.dict[prev_pos - 1];
+        }
+
         is_maximal = false;
         run_bg = i-1;
-
 
         //TODO
         /*size_t k=prev_pos;
@@ -39,9 +59,12 @@ void compress_dictionary(dictionary& dict, vector_t& sa) {
         pos = sa[i];
         do {
             pos--;
-            //prev_lcp =  lcp;
             lcp = 0;
             bool limit_a, limit_b, equal;
+
+            if(pos==12331 && d_lim_rs(pos)==3796){
+                std::cout<<pos<<" "<<rank<<" "<<dict.d_lim[pos-1]<<" "<<sa[i]<<std::endl;
+            }
 
             do {
                 equal = dict.dict[pos+lcp] == dict.dict[prev_pos+lcp];
@@ -50,8 +73,9 @@ void compress_dictionary(dictionary& dict, vector_t& sa) {
                 lcp++;
             }while(equal && !limit_a && !limit_b);
 
-            if((equal+limit_a+limit_b)==3){
+            if((equal+limit_a+limit_b)==3) {
                 if (pos==0 || dict.d_lim[pos - 1]) {
+                    ranks[d_lim_rs(pos)] = rank+1;
                     exists_as_rule = true;
                     l_sym = dummy_sym;
                 } else {
@@ -76,7 +100,13 @@ void compress_dictionary(dictionary& dict, vector_t& sa) {
             }
 
             i++;
-            if(i==sa.size()) break;
+            if(i==sa.size() || sa[i]==0){
+                if(dict.d_lim[sa[i-1]-2]){
+                    ranks[d_lim_rs(sa[i-1]-1)] = rank+1;
+                    phrases_sa_ranges.emplace_back(i-1, i-1);
+                }
+                break;
+            }
             pos = sa[i];
         } while (lcp!=0 && pos != 0);
         //std::cout<<" "<<std::endl;
@@ -85,11 +115,8 @@ void compress_dictionary(dictionary& dict, vector_t& sa) {
             if(!exists_as_rule){
                 new_phrases++;
                 //std::cout <<"new phrase: "<<run_bg<<":"<<(i-2)<<" "<<((i-2) - run_bg +1) << " " << exists_as_rule <<" "<<is_maximal<<" -> "<<rank<<" "<<prev_lcp<<std::endl;
-            }else{
-                //std::cout <<"existing phrase: "<<run_bg<<":"<<(i-2)<<" "<<((i-2) - run_bg +1) << " " << exists_as_rule <<" "<<is_maximal<<" -> "<<rank<<" "<<prev_lcp<<std::endl;
             }
             phrases_sa_ranges.emplace_back(run_bg, i-2);
-
             /*size_t k=sa[run_bg]-1;
             while(!dict.d_lim[k]){
                 std::cout<<dict.dict[k++]<<" ";
@@ -101,6 +128,7 @@ void compress_dictionary(dictionary& dict, vector_t& sa) {
     }
     //std::cout<<new_phrases<<std::endl;
 
+    //replace the symbols
     rank=1;
     for(auto const &range : phrases_sa_ranges){
         for(size_t j=range.first+1;j<range.second;j++){
@@ -110,18 +138,37 @@ void compress_dictionary(dictionary& dict, vector_t& sa) {
         rank++;
     }
 
+    //collapse the symbols in the grammar
     rank=1;
     for(auto const &range : phrases_sa_ranges){
         //std::cout<<dict.max_sym+rank<<"\t";
         pos = sa[range.first]-1;
         while(dict.dict[pos]<=dict.max_sym && !dict.d_lim[pos]){
-            std::cout<<dict.dict[pos]<<" ";
+            rules.push_back(dict.dict[pos]);
+            r_lim.push_back(false);
+            //std::cout<<dict.dict[pos]<<" ";
             pos++;
         }
-        std::cout<<dict.dict[pos]<<std::endl;
+        rules.push_back(dict.dict[pos]);
+        r_lim.push_back(true);
+        //std::cout<<dict.dict[pos]<<std::endl;
         rank++;
     }
+    p_gram.rules_breaks.push_back(rank-1);
+    p_gram.r +=rank-1;
 
+    //assign the ranks
+    size_t j=0;
+    for(auto const& ptr : mp_map){
+        //modify the key value
+        phrase_map_t::val_type val=0;
+        mp_map.get_value_from(ptr, val);
+        //std::cout<<j<<" "<<ranks[j]<<std::endl;
+        assert(ranks[j]>0);
+        val |= (dict.max_sym+ranks[j++])<<1UL;
+        mp_map.insert_value_at(ptr, val);
+        //
+    }
     /*size_t k=pos;
     while(!dict.d_lim[k]){
         std::cout<<dict.dict[k++]<<" ";
@@ -157,8 +204,10 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
         }
     }
 
-    compress_dictionary(dict, sa);
+    p_gram.rules_breaks.push_back(rank);
+    p_gram.r +=rank;
 
+    //compress_dictionary(dict, sa, p_gram, r_lim, r, mp_map);
     //assign the ranks
     size_t j=0;
     for(auto const& ptr : mp_map){
@@ -483,7 +532,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     if(mp_table.size()>0){
 
         size_t width = sdsl::bits::hi(p_gram.r+1)+1;
-
         size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
         size_t max_sym = p_gram.r-1;
         size_t dict_syms = dict_bits/width;
@@ -537,7 +585,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         {
             //keep track of the phrases that have to be rephrased
-            phrase_desc.resize(p_gram.r+mp_table.size());
+            phrase_desc.resize(p_gram.r);
             std::cout << "      Updating symbols status" << std::endl;
             auto it = mp_table.begin();
             auto it_end = mp_table.end();
@@ -553,7 +601,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 if (phrase_desc[sym] & 2U) {//phrase is suffix of some string
                     tmp_value += 2;
                 }
-
                 phrase_desc[val >> 1UL] = tmp_value;
                 ++it;
             }
@@ -580,10 +627,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         }
     }
 
-    p_gram.r +=mp_table.size();
+    //p_gram.r +=mp_table.size();
     std::cout<<"      Stats:"<<std::endl;
     std::cout<<"        Parse size:          "<<psize<<std::endl;
-    std::cout<<"        New nonterminals:    "<<mp_table.size()<<std::endl;
+    std::cout<<"        New nonterminals:    "<<p_gram.rules_breaks.back()<<std::endl;
 
     if(psize>1){
         return mp_table.size();
