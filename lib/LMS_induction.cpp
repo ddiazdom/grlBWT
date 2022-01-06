@@ -41,6 +41,15 @@ void suffix_induction(std::string &sa_file, vector_t &dict, bv_t &d_lim, size_t 
     }
 
     induce_S_type(sa, dict, d_lim, buckets, freq);
+
+    /*size_t next_av=0;
+    for(size_t i=0;i<sa.size();i++){
+        if(sa[i]!=0){
+            sa[next_av++]=sa[i];
+        }
+    }
+    sa.resize(next_av);*/
+
     sdsl::store_to_file(sa, sa_file);
 
     /*for(auto && i : sa){

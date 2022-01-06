@@ -6,60 +6,158 @@
 #include <cmath>
 #include <thread>
 
-void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym, key_wrapper &key_w, bvb_t &r_lim,
-                sdsl::cache_config &config, ivb_t &r, size_t dict_syms) {
+void compress_dictionary(dictionary& dict, vector_t& sa) {
 
-    std::string dict_file = sdsl::cache_file_name("dict_file", config);
-    std::string dict_lim_file = sdsl::cache_file_name("dict_lim_file", config);
-    std::string sa_file = sdsl::cache_file_name("sa_file", config);
-    vector_t dict(dict_syms, 0, sdsl::bits::hi(max_sym-min_sym+1)+1);
-    bv_t d_lim(dict_syms, false);
-    {
-        size_t j=0;
-        for (auto const &ptr : mp_map) {
-            for(size_t i=key_w.size(ptr);i-->0;){
-                dict[j] = key_w.read(ptr, i)-min_sym;
-                d_lim[j++] = false;
-            }
-            d_lim[j-1] = true;
+    size_t pos, prev_pos, lcp, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0;
+
+    bool is_maximal, exists_as_rule;
+    size_t i=1, run_bg;
+    size_t new_phrases=0;
+    std::vector<std::pair<size_t, size_t>> phrases_sa_ranges;
+
+    while(i<sa.size()) {
+
+        while (sa[i] == 0 || sa[i - 1] == 0) i++;
+
+        //lcp=0;
+        prev_pos = sa[i - 1] - 1;
+        exists_as_rule = prev_pos==0 || dict.d_lim[prev_pos - 1];
+        prev_l_sym = exists_as_rule ? dummy_sym : dict.dict[prev_pos - 1];
+        is_maximal = false;
+        run_bg = i-1;
+
+
+        //TODO
+        /*size_t k=prev_pos;
+        std::cout<<i-1<<" "<<prev_pos<<" "<<exists_as_rule<<" "<<is_maximal<<" "<<prev_l_sym<<"\t";
+        while(!dict.d_lim[k]){
+            std::cout<<dict.dict[k++]<<" ";
         }
-        assert(j==dict_syms);
-    }
+        std::cout<<dict.dict[k]<<std::endl;*/
+        //
 
-    vector_t ranks(mp_map.size(), 0, sdsl::bits::hi(mp_map.size())+1);
-    {
-        suffix_induction(sa_file, dict, d_lim, max_sym-min_sym+1);
-        vector_t sa;
-        sdsl::load_from_file(sa, sa_file);
-        bv_rs_t d_lim_rs(&d_lim);
-        size_t rank = 0;
-
-        for(auto pos : sa){
-
-            if(pos==0) continue;
-
+        pos = sa[i];
+        do {
             pos--;
-            if(pos==0 || d_lim[pos-1]){
-                ranks[d_lim_rs(pos)] = rank++;
-                size_t j=pos;
-                while(!d_lim[j]){
-                    r.push_back(min_sym+dict[j++]);
-                    r_lim.push_back(false);
-                }
-                assert(d_lim[j]);
-                r.push_back(min_sym+dict[j]);
-                r_lim.push_back(true);
-            }
-        }
+            //prev_lcp =  lcp;
+            lcp = 0;
+            bool limit_a, limit_b, equal;
 
-        /*for(auto const& pair : tmp_map){
-            if(pair.second>1){
-                std::cout<<pair.first<<" "<<pair.second<<" "<<dict.size()<<" "<<d_lim[pair.first-1]<<std::endl;
+            do {
+                equal = dict.dict[pos+lcp] == dict.dict[prev_pos+lcp];
+                limit_a = dict.d_lim[pos+lcp] || dict.dict[pos+lcp]>dict.max_sym;
+                limit_b = dict.d_lim[prev_pos+lcp] || dict.dict[prev_pos+lcp]>dict.max_sym;
+                lcp++;
+            }while(equal && !limit_a && !limit_b);
+
+            if((equal+limit_a+limit_b)==3){
+                if (pos==0 || dict.d_lim[pos - 1]) {
+                    exists_as_rule = true;
+                    l_sym = dummy_sym;
+                } else {
+                    l_sym = dict.dict[pos - 1];
+                    if (!is_maximal && prev_l_sym != dummy_sym) {
+                        is_maximal = lcp>1 && (prev_l_sym != l_sym);
+                    }
+                }
+                prev_pos = pos;
+                if (l_sym != dummy_sym) prev_l_sym = l_sym;
+
+                //TODO
+                /*k=pos;
+                std::cout<<i<<" "<<pos<<" "<<exists_as_rule<<" "<<is_maximal<<" "<<l_sym<<"\t";
+                while(!dict.d_lim[k]){
+                    std::cout<<dict.dict[k++]<<" ";
+                }
+                std::cout<<dict.dict[k]<<std::endl;*/
+                //
+            }else{
+                lcp=0;
             }
+
+            i++;
+            if(i==sa.size()) break;
+            pos = sa[i];
+        } while (lcp!=0 && pos != 0);
+        //std::cout<<" "<<std::endl;
+
+        if(exists_as_rule || is_maximal) {
+            if(!exists_as_rule){
+                new_phrases++;
+                //std::cout <<"new phrase: "<<run_bg<<":"<<(i-2)<<" "<<((i-2) - run_bg +1) << " " << exists_as_rule <<" "<<is_maximal<<" -> "<<rank<<" "<<prev_lcp<<std::endl;
+            }else{
+                //std::cout <<"existing phrase: "<<run_bg<<":"<<(i-2)<<" "<<((i-2) - run_bg +1) << " " << exists_as_rule <<" "<<is_maximal<<" -> "<<rank<<" "<<prev_lcp<<std::endl;
+            }
+            phrases_sa_ranges.emplace_back(run_bg, i-2);
+
+            /*size_t k=sa[run_bg]-1;
+            while(!dict.d_lim[k]){
+                std::cout<<dict.dict[k++]<<" ";
+            }
+            std::cout<<dict.dict[k]<<std::endl;*/
+            rank++;
         }
-        std::cout<<rank<<" "<<mp_map.size()<<std::endl;
-        assert(rank==mp_map.size());*/
+        //
     }
+    //std::cout<<new_phrases<<std::endl;
+
+    rank=1;
+    for(auto const &range : phrases_sa_ranges){
+        for(size_t j=range.first+1;j<range.second;j++){
+            dict.dict[sa[j]-1] = dict.max_sym+rank;
+            sa[j] = 0;
+        }
+        rank++;
+    }
+
+    rank=1;
+    for(auto const &range : phrases_sa_ranges){
+        //std::cout<<dict.max_sym+rank<<"\t";
+        pos = sa[range.first]-1;
+        while(dict.dict[pos]<=dict.max_sym && !dict.d_lim[pos]){
+            std::cout<<dict.dict[pos]<<" ";
+            pos++;
+        }
+        std::cout<<dict.dict[pos]<<std::endl;
+        rank++;
+    }
+
+    /*size_t k=pos;
+    while(!dict.d_lim[k]){
+        std::cout<<dict.dict[k++]<<" ";
+    }
+    std::cout<<dict.dict[k]<<std::endl;*/
+}
+
+void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, gram_info_t &p_gram,
+                sdsl::cache_config &config) {
+
+    std::string sa_file = sdsl::cache_file_name("sa_file", config);
+    suffix_induction(sa_file, dict.dict, dict.d_lim, dict.alphabet);
+    vector_t sa;
+    sdsl::load_from_file(sa, sa_file);
+
+    bv_rs_t d_lim_rs(&dict.d_lim);
+    vector_t ranks(dict.size, 0, sdsl::bits::hi(dict.size)+1);
+    size_t rank = 0, pos;
+    for(auto && i : sa){
+        if(i==0) continue;
+        pos = i-1;
+        //write the dictionary in the grammar
+        if(pos==0 || dict.d_lim[pos-1]){
+            ranks[d_lim_rs(pos)] = rank++;
+            size_t j=pos;
+            while(!dict.d_lim[j]){
+                r.push_back(dict.min_sym+dict.dict[j++]);
+                r_lim.push_back(false);
+            }
+            assert(dict.d_lim[j]);
+            r.push_back(dict.min_sym+dict.dict[j]);
+            r_lim.push_back(true);
+        }
+    }
+
+    compress_dictionary(dict, sa);
 
     //assign the ranks
     size_t j=0;
@@ -67,7 +165,7 @@ void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym, key_wrappe
         //modify the key value
         phrase_map_t::val_type val=0;
         mp_map.get_value_from(ptr, val);
-        val |= (max_sym+ranks[j++]+1)<<1UL;
+        val |= (dict.max_sym+ranks[j++]+1)<<1UL;
         mp_map.insert_value_at(ptr, val);
         //
     }
@@ -253,7 +351,6 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
     size_t iter=1;
     size_t rem_phrases;
 
-
     typedef lc_parser_t<i_file_stream<uint8_t>, string_t> byte_parser_t;
     typedef lc_parser_t<i_file_stream<size_t>, string_t> int_parser_t;
 
@@ -391,7 +488,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         size_t max_sym = p_gram.r-1;
         size_t dict_syms = dict_bits/width;
 
-        p_gram.rules_breaks.push_back(mp_table.size());
+        //p_gram.rules_breaks.push_back(mp_table.size());
         const bitstream<ht_buff_t>& stream = mp_table.get_data();
         key_wrapper key_w{width, mp_table.description_bits(), stream};
 
@@ -399,9 +496,12 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         std::string st_table = sdsl::cache_file_name("ht_data", config);
         mp_table.unload_table(st_table);
 
+        //create a dictionary from where the ids will be computed
+        dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms);
+
         //rename phrases according to their lexicographical ranks
         std::cout<<"      Assigning identifiers to the phrases"<<std::endl;
-        assign_ids(mp_table, max_sym, min_sym, key_w, rules_lim, config, rules, dict_syms);
+        assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
 
         //reload the hash table
         mp_table.load_table(st_table);
@@ -447,11 +547,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
                 tmp_value = 0;
                 auto val = it.value();
-
-                //more than one occurrence of the phrase
-                if (val & 1UL) {
-                    tmp_value += 1;
-                }
 
                 //read the (reversed) last symbol
                 sym = key_w.read(*it, 0);

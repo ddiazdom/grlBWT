@@ -80,7 +80,7 @@
 //        finished = false;
 //    }
 //};
-//void create_new_rules(phrase_map_t& ht, pairing_data& p_data);
+//void compress_dictionary(phrase_map_t& ht, pairing_data& p_data);
 //void update_grammar(pairing_data& p_data, gram_info_t& gram);
 //void prepare_input(gram_info_t& gram_info, bv_t& rep_syms, sdsl::cache_config& config);
 //void collect_pairs(thread_data* d, i_file_stream<size_t>& p_list, o_file_stream<size_t>& r);

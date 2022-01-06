@@ -13,7 +13,7 @@
 //
 //
 //create a set of new m_rules from the hash table
-//void create_new_rules(phrase_map_t& ht, pairing_data& p_data){
+//void compress_dictionary(phrase_map_t& ht, pairing_data& p_data){
 //    key_wrapper key_w{p_data.s_width, ht.description_bits(), ht.get_data()};
 //    phrase_map_t::val_type val=0;
 //    //size_t first_pos = p_data.new_rules.size();
@@ -498,7 +498,7 @@
 //        }
 //
 //        merge_ht_data(threads_data);
-//        create_new_rules(ht, p_data);
+//        compress_dictionary(ht, p_data);
 //
 //        {// tell the worker they can replace the pairs by
 //            // their values

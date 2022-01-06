@@ -477,7 +477,7 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     run_length_compress(p_gram, config);
     simplify_grammar(p_gram, false);
     //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
-    //check_plain_grammar(p_gram, i_file);
+    check_plain_grammar(p_gram, i_file);
     //
 
     std::cout<<"  Final grammar: " << std::endl;

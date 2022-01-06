@@ -36,6 +36,33 @@ struct parse_data_t {
     };
 };
 
+struct dictionary{
+    size_t min_sym;
+    size_t max_sym;
+    size_t alphabet;
+    size_t size;
+    vector_t dict;
+    bv_t d_lim;
+
+    dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
+               key_wrapper &key_w, size_t dict_syms): min_sym(_min_sym),
+                                                      max_sym(_max_sym),
+                                                      alphabet(max_sym-min_sym+1),
+                                                      size(mp_map.size()),
+                                                      dict(dict_syms, 0, sdsl::bits::hi(alphabet+dict_syms)+1),
+                                                      d_lim(dict_syms, false){
+        size_t j=0;
+        for (auto const &ptr : mp_map) {
+            for(size_t i=key_w.size(ptr);i-->0;){
+                dict[j] = key_w.read(ptr, i)-min_sym;
+                d_lim[j++] = false;
+            }
+            d_lim[j-1] = true;
+        }
+        assert(j==dict_syms);
+    }
+};
+
 template<typename parse_data_t,
          typename parser_t>
 struct hash_functor{
@@ -89,8 +116,8 @@ void join_parse_chunks(const std::string &output_file,
                        std::vector<std::string> &chunk_files);
 size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
 
-void assign_ids(phrase_map_t &mp_map, size_t max_sym, size_t min_sym, key_wrapper &key_w, bvb_t &r_lim,
-                sdsl::cache_config &config, ivb_t &r, size_t dict_syms);
+void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, gram_info_t &p_gram,
+                sdsl::cache_config &config);
 
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H
