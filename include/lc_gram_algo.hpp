@@ -40,7 +40,7 @@ struct dictionary{
     size_t min_sym;
     size_t max_sym;
     size_t alphabet;
-    size_t size;
+    size_t n_phrases;
     vector_t dict;
     bv_t d_lim;
 
@@ -48,8 +48,8 @@ struct dictionary{
                key_wrapper &key_w, size_t dict_syms): min_sym(_min_sym),
                                                       max_sym(_max_sym),
                                                       alphabet(max_sym-min_sym+1),
-                                                      size(mp_map.size()),
-                                                      dict(dict_syms, 0, sdsl::bits::hi(alphabet+dict_syms)+1),
+                                                      n_phrases(mp_map.size()),
+                                                      dict(dict_syms, 0, sdsl::bits::hi(alphabet+dict_syms-n_phrases)+1),
                                                       d_lim(dict_syms, false){
         size_t j=0;
         for (auto const &ptr : mp_map) {

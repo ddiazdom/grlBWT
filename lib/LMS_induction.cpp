@@ -35,12 +35,10 @@ void suffix_induction(std::string &sa_file, vector_t &dict, bv_t &d_lim, size_t 
     induce_L_type(sa, dict, d_lim, buckets, freq);
 
     for(size_t bck=0;bck<buckets.size()-1;bck++){
-        tmp = buckets[bck+1];
-        buckets[bck] = buckets[bck]+freq[bck];
-        freq[bck] = tmp - buckets[bck]-1;
+        buckets[bck] = buckets[bck+1]-1;
     }
 
-    induce_S_type(sa, dict, d_lim, buckets, freq);
+    induce_S_type(sa, dict, d_lim, buckets);
 
     /*size_t next_av=0;
     for(size_t i=0;i<sa.size();i++){
@@ -79,7 +77,7 @@ void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets,
     }
 }
 
-void induce_S_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets, vector_t& freq){
+void induce_S_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
     size_t pos, sym, prev_sym;
     for(size_t i=sa.size();i-->0;){
         pos = sa[i];
@@ -90,7 +88,7 @@ void induce_S_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets,
 
         if(prev_sym < sym ||
            (prev_sym==sym && i >= buckets[sym])){
-           sa[buckets[prev_sym]+freq[prev_sym]--] = pos-1;
+           sa[buckets[prev_sym]--] = pos-1;
         }
     }
 }
