@@ -49,7 +49,7 @@ struct dictionary{
                                                       max_sym(_max_sym),
                                                       alphabet(max_sym-min_sym+1),
                                                       n_phrases(mp_map.size()),
-                                                      dict(dict_syms, 0, sdsl::bits::hi(alphabet+dict_syms-n_phrases)+1),
+                                                      dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
                                                       d_lim(dict_syms, false){
         size_t j=0;
         for (auto const &ptr : mp_map) {

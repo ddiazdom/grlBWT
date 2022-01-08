@@ -49,37 +49,35 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
             end = r_lim_ss(curr_sym+1);
 
             if(r[start] == curr_sym){
-                if(i==176188){
-                    std::cout<<idx<<" "<<p_gram.sym_map[curr_sym]<<" "<<(char)if_stream.read(idx)<<std::endl;
-                }
+                //std::cout<<idx<<" "<<p_gram.sym_map[curr_sym]<<" "<<(char)if_stream.read(idx)<<std::endl;
                 assert(p_gram.sym_map[curr_sym]==if_stream.read(idx));
                 idx++;
             }else{
-                if(i==176188){
-                    std::cout<<curr_sym<<" -> ";
-                }
+                //if(i==176188){
+                //    std::cout<<curr_sym<<" -> ";
+                //}
                 if(p_gram.is_rl(curr_sym)){
                     assert(end-start+1==2);
                     for(size_t k=0;k<r[end];k++){
                         stack.push(r[start]);
-                        if(i==176188){
-                            std::cout<<r[start]<<" ";
-                        }
+                        //if(i==176188){
+                        //    std::cout<<r[start]<<" ";
+                        //}
                     }
                 }else{
                     for(size_t j=end+1; j-->start;){
                         stack.push(r[j]);
                     }
 
-                    if(i==176188){
-                        for(size_t j=start; j<=end;j++){
-                            std::cout<<r[j]<<" ";
-                        }
-                    }
+                    //if(i==176188){
+                    //    for(size_t j=start; j<=end;j++){
+                    //        std::cout<<r[j]<<" ";
+                    //    }
+                    //}
                 }
-                if(i==176188){
-                    std::cout<<""<<std::endl;
-                }
+                //if(i==176188){
+                //    std::cout<<""<<std::endl;
+                //}
             }
         }
     }
@@ -485,9 +483,9 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     //suffpair(p_gram, config);
     //run_length_compress(p_gram, config);
-    //simplify_grammar(p_gram, false);
+    simplify_grammar(p_gram, false);
     //assert(p_gram.r-1==p_gram.rules_breaks[p_gram.n_p_rounds + 2]);
-    check_plain_grammar(p_gram, i_file);
+    //check_plain_grammar(p_gram, i_file);
     //
 
     std::cout<<"  Final grammar: " << std::endl;
