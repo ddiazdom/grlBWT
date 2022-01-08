@@ -43,6 +43,7 @@ struct dictionary{
     size_t n_phrases;
     vector_t dict;
     bv_t d_lim;
+    typedef size_t size_type;
 
     dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
                key_wrapper &key_w, size_t dict_syms): min_sym(_min_sym),
@@ -60,6 +61,26 @@ struct dictionary{
             d_lim[j-1] = true;
         }
         assert(j==dict_syms);
+    }
+
+    size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const{
+        sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
+        size_type written_bytes= sdsl::write_member(min_sym, out, child, "min_sym");
+        written_bytes+= sdsl::write_member(max_sym, out, child, "max_sym");
+        written_bytes+= sdsl::write_member(alphabet, out, child, "alphabet");
+        written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
+        dict.serialize(out, child);
+        d_lim.serialize(out, child);
+        return written_bytes;
+    }
+
+    void load(std::istream& in){
+        sdsl::read_member(min_sym, in);
+        sdsl::read_member(max_sym, in);
+        sdsl::read_member(alphabet, in);
+        sdsl::read_member(n_phrases, in);
+        dict.load(in);
+        d_lim.load(in);
     }
 };
 

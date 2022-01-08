@@ -11,6 +11,13 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     size_t pos, prev_pos, lcs, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0;
 
+    //TODO for fixing the bug
+    std::string gfile = "p_gram_tmp";
+    sdsl::store_to_file(dict, "dictionary_tmp");
+    sdsl::store_to_file(sa, "sa_tmp");
+    p_gram.save_to_file(gfile);
+    //
+
     //remove unnecessary entries from the SA to
     // avoid dealing with corner cases
     size_t k=0;
