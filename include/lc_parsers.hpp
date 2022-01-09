@@ -73,13 +73,6 @@ struct lms_parsing{
         prev_sym = ifs.read(end);
         curr_lms.push_back(prev_sym);
 
-        /*if(end>=447492){
-            for(size_t i=447488;i<=447500;i++){
-                std::cout<<ifs.read(i)<<" ";
-            }
-            std::cout<<" "<<std::endl;
-        }*/
-
         for (size_t i = end; i-- > start;) {
 
             curr_sym = ifs.read(i);
