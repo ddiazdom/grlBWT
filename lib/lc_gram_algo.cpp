@@ -28,7 +28,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             // i) a suffix of length >= 2
             // ii) phrase of length 1
             if(!dict.d_lim[pos] || // pattern 0...1 means i)
-               (pos>0 && dict.d_lim[pos] && dict.d_lim[pos-1])){ //pattern 11 means ii)
+               (dict.d_lim[pos] && (pos==0 || dict.d_lim[pos-1]))){ //pattern 11 means ii)
                 sa[k++] = sa[j];
             }
         }
@@ -176,7 +176,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     //corner case
     if(lcs==0){
-        if(dict.d_lim[sa[i-1]-2]){
+        if(sa[i-1]==0 || dict.d_lim[sa[i-1]-2]){
             ranks[d_lim_rs(sa[i-1]-1)] = rank+1;
             phrases_sa_ranges.emplace_back((i-1)-rem_elms);
         }
