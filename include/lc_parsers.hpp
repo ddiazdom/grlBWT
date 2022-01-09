@@ -75,6 +75,7 @@ struct lms_parsing{
 
         for (size_t i = end; i-- > start;) {
 
+
             curr_sym = ifs.read(i);
 
             //                                     L_TYPE   S_TYPE*
@@ -95,12 +96,20 @@ struct lms_parsing{
                 } else {//L_TYPE type
                     s_type = L_TYPE;
 
-                    if (prev_s_type == S_TYPE) {//Left-most suffix
-                        curr_lms.pop_back();
-                        if (!curr_lms.empty()) {
-                            task(curr_lms, false);
-                            curr_lms.clear();
+                    if (prev_s_type == S_TYPE) {//Left-most S suffix
+                        //curr_lms.pop_back();
+                        /*for(size_t j=curr_lms.size();j-->0;){
+                            std::cout<<curr_lms[j]<<" ";
                         }
+                        std::cout<<" "<<std::endl;
+                        if(curr_lms.size()==1){
+                            assert(is_suffix(curr_lms[0]));
+                        }*/
+
+                        if (curr_lms.size()>1) {
+                            task(curr_lms, false);
+                        }
+                        curr_lms.clear();
                         curr_lms.push_back(prev_sym);
                     }
                 }

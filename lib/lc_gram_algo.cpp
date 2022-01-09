@@ -11,13 +11,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     size_t pos, prev_pos, lcs, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0;
 
-    //TODO for fixing the bug
-    //std::string gfile = "p_gram_tmp";
-    //sdsl::store_to_file(dict, "dictionary_tmp");
-    //sdsl::store_to_file(sa, "sa_tmp");
-    //p_gram.save_to_file(gfile);
-    //
-
     //remove unnecessary entries from the SA to
     // avoid dealing with corner cases
     size_t k=0;
@@ -191,9 +184,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     }
     sa.resize(k);
 
-    //std::cout<<new_phrases_ht.size()<<" "<<phrases_sa_ranges.size()<<std::endl;
-    //std::cout<<existing_phrases<<" "<<new_phrases<<" "<<phrases_sa_ranges.size()<<std::endl;
-
     //assign the ranks to the original phrases
     j=0;
     for(auto const& ptr : mp_map){
@@ -223,6 +213,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     size_t em_nt, p_len;
     bool found;
     k=0;
+    rank = 1;
     for(auto const &sa_locus : phrases_sa_ranges) {
         pos = sa[sa_locus]-1;
 
@@ -260,15 +251,18 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             p_len++;
         }
 
+        //std::cout<<dict.max_sym+rank<<" -> ";
         if(!found){
             while(!dict.d_lim[tmp_pos]){
                 assert(inv_sa_bv[tmp_pos]);
                 sa[inv_sa[inv_sa_bv_rs(tmp_pos)]] = k++;
+                //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<" ";
                 rules.push_back(dict.min_sym+dict.dict[tmp_pos++]);
                 r_lim.push_back(false);
             }
 
             rules.push_back(dict.min_sym+dict.dict[tmp_pos]);
+            //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<std::endl;
             r_lim.push_back(true);
             k++;
         }else{
@@ -291,16 +285,9 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             k++;
         }
 
-        /*std::cout<<dict.max_sym+rank<<" -> ";
-        while(!dict.d_lim[tmp_pos]){
-            std::cout<<dict.min_sym+dict.dict[tmp_pos]<<" ";
-            rules.push_back(dict.min_sym+dict.dict[tmp_pos++]);
-            r_lim.push_back(false);
-        }
-        rules.push_back(dict.min_sym+dict.dict[tmp_pos]);
-        std::cout<<dict.min_sym+dict.dict[tmp_pos]<<std::endl;
-        r_lim.push_back(true);*/
+        //TODO
         //rank++;
+        //
     }
 
     p_gram.rules_breaks.push_back(phrases_sa_ranges.size());
@@ -321,7 +308,7 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
     vector_t sa;
     sdsl::load_from_file(sa, sa_file);
 
-    /*bv_rs_t d_lim_rs(&dict.d_lim);
+    bv_rs_t d_lim_rs(&dict.d_lim);
     vector_t ranks(dict.n_phrases, 0, sdsl::bits::hi(dict.n_phrases)+1);
     size_t rank = 0, pos;
     for(auto && i : sa){
@@ -339,11 +326,12 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
             r.push_back(dict.min_sym+dict.dict[j]);
             r_lim.push_back(true);
         }
-    }*/
+    }
 
-    compress_dictionary(dict, sa, p_gram, r_lim, r, mp_map);
+    //compress_dictionary(dict, sa, p_gram, r_lim, r, mp_map);
+
     //assign the ranks
-    /*size_t j=0;
+    size_t j=0;
     for(auto const& ptr : mp_map){
         //modify the key value
         phrase_map_t::val_type val=0;
@@ -353,7 +341,7 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
         //
     }
     p_gram.rules_breaks.push_back(rank);
-    p_gram.r +=rank;*/
+    p_gram.r +=rank;
 }
 
 void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files) {
@@ -494,6 +482,7 @@ std::vector<std::pair<size_t, size_t>> compute_thread_ranges(size_t n_threads,
 
         start = start==0? 0 : size_t(parser.prev_break(start, is)+1);
         long long tmp_end = parser.prev_break(end, is);
+        std::cout<<start<<" "<<end<<std::endl;
 
         end = tmp_end<0?  0 : size_t(tmp_end);
         if(start<end){

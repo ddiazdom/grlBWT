@@ -90,6 +90,7 @@ struct hash_functor{
     void operator()(parse_data_t& data, parser_t& parser){
         auto task = [&](string_t& phrase, bool is_full_str){
             phrase.mask_tail();
+
             if(!is_full_str){
                 data.thread_dict.insert(phrase.data(), phrase.n_bits(), false);
             }

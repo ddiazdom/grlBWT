@@ -79,6 +79,19 @@ struct gram_info_t{
         if(sp_rules.second==0) return false;
         return symbol>=sp_rules.first && symbol < (sp_rules.first + sp_rules.second);
     }
+
+    [[nodiscard]] inline long long int parsing_level(size_t symbol) const{
+        if(symbol < sigma) return 0;
+        if(symbol>=rules_breaks[n_p_rounds]){
+            assert(is_sp(symbol) || is_rl(symbol));
+            return -1;
+        }
+
+        for(long long int i=0;i<int(n_p_rounds);i++){
+            if(rules_breaks[i]<=symbol && symbol<rules_breaks[i+1]) return i+1;
+        }
+        return -1;
+    }
 };
 
 template<class grammar_t>
