@@ -29,23 +29,17 @@ struct lms_parsing{
     * @param ifs : input file stream
     * @return
     */
-    long long prev_break(long long idx, stream_t& ifs) {
-        bool type, prev_type;
-        size_t sym, prev_sym = ifs.read(idx);
+    long long prev_break(long long idx, stream_t& ifs) const {
 
-        //get the suffix type of the symbol at idx
-        if (is_suffix(prev_sym)) {
-            return idx;
-        } else {
-            long long pos = idx;
-            sym = ifs.read(++pos);
-            while (!is_suffix(sym) && prev_sym == sym) {
-                sym = ifs.read(++pos);
-            }
-            prev_type = prev_sym < sym;
+        if(idx<=0) return 0;
+        size_t sym=ifs.read(idx), prev_sym=sym;
+        size_t pos = idx;
+        while(pos<ifs.size() && !is_suffix(sym) && prev_sym == sym) {
+            prev_sym = ifs.read(pos++);
         }
+        bool type, prev_type = sym < prev_sym;
+        prev_sym = sym;
 
-        //reach the next LMS-symbol
         while(true) {
             idx--;
             if(idx<0) return idx;
@@ -53,9 +47,10 @@ struct lms_parsing{
             sym = ifs.read(idx);
             type = sym==prev_sym? prev_type : sym < prev_sym;
 
-            if(is_suffix(sym)) return idx;
-            if(type==L_TYPE && prev_type==S_TYPE) return idx+1;
-
+            if(is_suffix(sym) || (type==L_TYPE && prev_type==S_TYPE)){
+                //std::cout<<(idx+1)<<" -> "<<ifs.read(idx)<<" ("<<is_suffix(ifs.read(idx))<<") "<<ifs.read(idx+1)<<"* "<<ifs.read(idx+2)<<std::endl;
+                return idx+1;
+            }
             prev_sym = sym;
             prev_type = type;
         }
@@ -63,7 +58,7 @@ struct lms_parsing{
 
     void operator()(stream_t& ifs,
                     size_t start, size_t end,
-                    std::function<void(string_t&, bool)> task) {
+                    std::function<void(string_t&, bool)> task) const {
 
 
         bool s_type, prev_s_type = S_TYPE;
@@ -75,7 +70,6 @@ struct lms_parsing{
 
         for (size_t i = end; i-- > start;) {
 
-
             curr_sym = ifs.read(i);
 
             //                                     L_TYPE   S_TYPE*
@@ -84,6 +78,16 @@ struct lms_parsing{
             if (is_suffix(curr_sym)) {
                 bool full_str = curr_lms.size()==1 && is_suffix(curr_lms[0]);
                 if (!curr_lms.empty()) {
+                    //TODO testing
+                    /*if(!first){
+                        std::cout<<"first -> ";
+                        for(size_t j=curr_lms.size();j-->0;){
+                            std::cout<<curr_lms[j]<<" ";
+                        }
+                        std::cout<<" "<<i<<" "<<end<<std::endl;
+                        first = true;
+                    }*/
+                    //
                     task(curr_lms, full_str);
                 }
                 curr_lms.clear();
@@ -97,16 +101,18 @@ struct lms_parsing{
                     s_type = L_TYPE;
 
                     if (prev_s_type == S_TYPE) {//Left-most S suffix
-                        //curr_lms.pop_back();
-                        /*for(size_t j=curr_lms.size();j-->0;){
-                            std::cout<<curr_lms[j]<<" ";
-                        }
-                        std::cout<<" "<<std::endl;
-                        if(curr_lms.size()==1){
-                            assert(is_suffix(curr_lms[0]));
-                        }*/
-
                         if (curr_lms.size()>1) {
+                            //TODO testing
+                            /*if(!first){
+                                std::cout<<"ffirst -> ";
+                                for(size_t j=curr_lms.size();j-->0;){
+                                    std::cout<<curr_lms[j]<<" ";
+                                }
+                                std::cout<<" "<<std::endl;
+                                first = true;
+                            }*/
+                            //
+                            //std::cout<<i<<std::endl;
                             task(curr_lms, false);
                         }
                         curr_lms.clear();
@@ -122,7 +128,48 @@ struct lms_parsing{
         bool full_str = curr_lms.size()==1 &&
                         is_suffix(curr_lms[0]) &&
                         (start == 0 || is_suffix(ifs.read(start - 1)));
-        if(!curr_lms.empty()) task(curr_lms, full_str);
+        if(!curr_lms.empty()){
+            //TODO testing
+            /*for(size_t j=curr_lms.size();j-->0;){
+                std::cout<<curr_lms[j]<<" ";
+            }
+            std::cout<<" "<<std::endl;*/
+            //
+            task(curr_lms, full_str);
+        }
+    }
+
+    std::vector<std::pair<size_t, size_t>> partition_text(size_t n_chunks,
+                                                          std::string& i_file) const {
+        std::vector<std::pair<size_t, size_t>> thread_ranges;
+
+        stream_type is(i_file, BUFFER_SIZE);
+        size_t n_chars = is.tot_cells;
+        assert(n_chars>0);
+        size_t sym_per_chunk = INT_CEIL(n_chars, n_chunks);
+        size_t start, end;
+        size_t eff_threads = INT_CEIL(n_chars, sym_per_chunk);
+
+        for(size_t i=0;i<eff_threads;i++){
+            start = (i * sym_per_chunk);
+            end = std::min<size_t>(((i + 1) * sym_per_chunk), n_chars-1);
+
+            start = start==0? 0 : size_t(prev_break(start, is));
+            if(end!=n_chars-1){
+                long long tmp_end = prev_break(end, is);
+                end = tmp_end<0?  0 : size_t(tmp_end);
+                if(is_suffix(is.read(end-1))) end--;
+            }else{
+                assert(is_suffix(is.read(end)));
+            }
+
+            //std::cout<<"range: "<<start<<" "<<end<<std::endl;
+            if(start<end){
+                thread_ranges.emplace_back(start, end);
+            }
+        }
+        is.close();
+        return thread_ranges;
     }
 };
 

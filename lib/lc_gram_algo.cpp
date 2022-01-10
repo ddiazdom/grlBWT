@@ -308,7 +308,7 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
     vector_t sa;
     sdsl::load_from_file(sa, sa_file);
 
-    bv_rs_t d_lim_rs(&dict.d_lim);
+    /*bv_rs_t d_lim_rs(&dict.d_lim);
     vector_t ranks(dict.n_phrases, 0, sdsl::bits::hi(dict.n_phrases)+1);
     size_t rank = 0, pos;
     for(auto && i : sa){
@@ -326,12 +326,12 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
             r.push_back(dict.min_sym+dict.dict[j]);
             r_lim.push_back(true);
         }
-    }
+    }*/
 
-    //compress_dictionary(dict, sa, p_gram, r_lim, r, mp_map);
+    compress_dictionary(dict, sa, p_gram, r_lim, r, mp_map);
 
     //assign the ranks
-    size_t j=0;
+    /*size_t j=0;
     for(auto const& ptr : mp_map){
         //modify the key value
         phrase_map_t::val_type val=0;
@@ -341,7 +341,7 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, 
         //
     }
     p_gram.rules_breaks.push_back(rank);
-    p_gram.r +=rank;
+    p_gram.r +=rank;*/
 }
 
 void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files) {
@@ -463,35 +463,6 @@ size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
     return dic_bits;
 }
 
-template<class parser_t>
-std::vector<std::pair<size_t, size_t>> compute_thread_ranges(size_t n_threads,
-                                                             std::string& i_file,
-                                                             parser_t& parser) {
-    std::vector<std::pair<size_t, size_t>> thread_ranges;
-
-    typename parser_t::stream_type is(i_file, BUFFER_SIZE);
-    size_t n_chars = is.tot_cells;
-    assert(n_chars>0);
-    size_t sym_per_thread = INT_CEIL(n_chars, n_threads);
-    size_t start, end;
-    size_t eff_threads = INT_CEIL(n_chars, sym_per_thread);
-
-    for(size_t i=0;i<eff_threads;i++){
-        start = (i * sym_per_thread);
-        end = std::min<size_t>(((i + 1) * sym_per_thread), n_chars-1);
-
-        start = start==0? 0 : size_t(parser.prev_break(start, is)+1);
-        long long tmp_end = parser.prev_break(end, is);
-        std::cout<<start<<" "<<end<<std::endl;
-
-        end = tmp_end<0?  0 : size_t(tmp_end);
-        if(start<end){
-            thread_ranges.emplace_back(start, end);
-        }
-    }
-    is.close();
-    return thread_ranges;
-}
 
 template<template<class, class> class lc_parser_t>
 void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
@@ -532,7 +503,6 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                                              n_threads, hbuff_size,
                                              p_gram, rules, rules_lim,
                                              symbol_desc, config);
-
     while (rem_phrases > 0) {
         std::cout<<"    Parsing round "<<iter++<<std::endl;
         rem_phrases = build_lc_gram_int<int_parser_t>(tmp_i_file, output_file,
@@ -608,7 +578,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
     phrase_map_t mp_table(0, "", 0.8);
 
-    auto thread_ranges = compute_thread_ranges<parser_t>(n_threads, i_file, parser);
+    auto thread_ranges = parser.partition_text(n_threads, i_file);
 
     std::vector<parse_data_type> threads_data;
     threads_data.reserve(thread_ranges.size());

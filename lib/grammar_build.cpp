@@ -51,9 +51,9 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
 
             if(r[start] == curr_sym.first){
                 //std::cout<<idx<<" "<<p_gram.sym_map[curr_sym.first]<<" "<<(char)if_stream.read(idx)<<std::endl;
-                if(p_gram.sym_map[curr_sym.first]!=if_stream.read(idx)){
-                    std::cout<<f<<" "<<i<<" "<<i-f<<std::endl;
-                }
+                //if(p_gram.sym_map[curr_sym.first]!=if_stream.read(idx)){
+                //    std::cout<<f<<" "<<i<<" "<<i-f<<std::endl;
+                //}
                 assert(p_gram.sym_map[curr_sym.first]==if_stream.read(idx));
                 idx++;
             }else{
@@ -65,18 +65,18 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
                     }
                 }else{
 
-                    bool is_sp;
-                    bool is_first;
+                    uint8_t is_sp;
+                    uint8_t is_first;
                     if(curr_sym.second!=0){
                         for(size_t j=end+1; j-->start;){
-                            //is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
-                            is_first = j==start;//&& curr_sym.second &1UL;
-                            stack.emplace(r[j], is_first);
+                            is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
+                            is_first = j==start && curr_sym.second & 1UL;
+                            stack.emplace(r[j], is_first | (is_sp<<1UL));
                         }
                     }else{
                         for(size_t j=end; j>start;j--){
                             is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
-                            stack.emplace(r[j], false);
+                            stack.emplace(r[j], is_sp<<1UL);
                         }
                     }
 
@@ -491,7 +491,7 @@ void build_gram(std::string &i_file, std::string &p_gram_file,
     //suffpair(p_gram, config);
     //run_length_compress(p_gram, config);
     simplify_grammar(p_gram, false);
-    check_plain_grammar(p_gram, i_file);
+    //check_plain_grammar(p_gram, i_file);
     //
 
     std::cout<<"  Final grammar: " << std::endl;
