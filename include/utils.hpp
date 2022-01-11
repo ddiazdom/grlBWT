@@ -5,9 +5,11 @@
 #ifndef LPG_COMPRESSOR_UTILS_HPP
 #define LPG_COMPRESSOR_UTILS_HPP
 
+#include <sys/resource.h>
 #include <chrono>
 #include <iostream>
 #include <vector>
+#include <iomanip>
 
 //create temporal folder
 std::string create_temp_folder(std::string& base_folder, std::string const & prefix);
@@ -24,19 +26,25 @@ std::string get_output_name(std::string& output_p,
                             std::vector<std::string>& in_ext,//extension to remove
                             std::vector<std::string>& out_ext);
 
+void report_mem_peak();
+
 template<class time_t>
-void report_time(time_t start, time_t end){
+void report_time(time_t start, time_t end, size_t padding){
     auto dur = end - start;
     auto h = std::chrono::duration_cast<std::chrono::hours>(dur);
     auto m = std::chrono::duration_cast<std::chrono::minutes>(dur -= h);
     auto s = std::chrono::duration_cast<std::chrono::seconds>(dur -= m);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur -= s);
+
+    for(size_t i=0;i<padding;i++) std::cout<<" ";
     if(h.count()>0){
-        std::cerr<<"Elapsed time (h:mm:ss.ms): "<<h.count()<<":"<<m.count()<<":"<<s.count()<<"."<<ms.count()<<std::endl;
+        std::cout<<"Elapsed time (hh:mm:ss.ms): "<<h.count()<<":"<<m.count()<<":"<<s.count()<<"."<<ms.count()<<std::endl;
+    }else if(m.count()>0){
+        std::cout<<"Elapsed time (mm:ss.ms): "<<size_t(m.count())<<":"<<s.count()<<"."<<ms.count()<<std::endl;
+    }else if(s.count()>0){
+        std::cout<<"Elapsed time (ss.ms): "<<size_t(s.count())<<"."<<ms.count()<<std::endl;
     }else{
-        std::cerr<<"Elapsed time (mm:ss.ms): "<<m.count()<<":"<<s.count()<<"."<<ms.count()<<std::endl;
+        std::cout<<"Elapsed time (ms): "<<ms.count()<<std::endl;
     }
 }
-
-
 #endif //LPG_COMPRESSOR_UTILS_HPP

@@ -15,12 +15,12 @@ struct lms_parsing{
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
 
-    const sdsl::int_vector<2>& phrase_desc;
+    const bv_t& phrase_desc;
 
-    explicit lms_parsing(const sdsl::int_vector<2>& pr_desc): phrase_desc(pr_desc){};
+    explicit lms_parsing(const bv_t& pr_desc): phrase_desc(pr_desc){};
 
     inline bool is_suffix(sym_type symbol) const{
-        return phrase_desc[symbol] & 2;
+        return phrase_desc[symbol];
     }
 
     /***

@@ -5,6 +5,8 @@
 #include "lc_gram_algo.hpp"
 #include <cmath>
 #include <thread>
+#include <chrono>
+#include "utils.hpp"
 
 void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                          bvb_t &r_lim, ivb_t &rules, phrase_map_t &mp_map) {
@@ -190,7 +192,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         phrase_map_t::val_type val=0;
         mp_map.get_value_from(ptr, val);
         assert(ranks[j]>0);
-        val |= (dict.max_sym+ranks[j++])<<1UL;
+        val = dict.max_sym+ranks[j++];
         mp_map.insert_value_at(ptr, val);
     }
     sdsl::util::clear(ranks);
@@ -396,8 +398,7 @@ void join_parse_chunks(const std::string &output_file, std::vector<std::string> 
 
 size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
 
-    bool rep;
-    size_t dic_bits=0;
+    size_t dic_bits=0, freq;
 
     for(auto const& file : files){
 
@@ -417,6 +418,7 @@ size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
         size_t next_bit = 32;
         size_t tot_bits = tot_bytes*8;
         size_t key_bits;
+        size_t value_bits=sizeof(size_t)*8;
         void* key=nullptr;
         size_t max_key_bits=0;
 
@@ -439,12 +441,15 @@ size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
 
             bits.read_chunk(key, next_bit, next_bit+key_bits-1);
             next_bit+=key_bits;
-            rep = bits.read(next_bit, next_bit);
-            next_bit+=33;
+            freq = bits.read(next_bit, next_bit+value_bits-1);
+            next_bit+=value_bits+32;
 
-            auto res = map.insert(key, key_bits, rep);
+            auto res = map.insert(key, key_bits, freq);
             if(!res.second){
-                map.insert_value_at(res.first, 1UL);
+                size_t val;
+                map.get_value_from(res.first, val);
+                val+=freq;
+                map.insert_value_at(res.first, val);
             }else{
                 dic_bits+=key_bits;
             }
@@ -468,19 +473,13 @@ template<template<class, class> class lc_parser_t>
 void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                       gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config) {
 
-    std::cout<<"  Generating a locally consistent grammar:    "<<std::endl;
+    std::cout<<"Generating the grammar from the text:    "<<std::endl;
     std::string output_file = sdsl::cache_file_name("tmp_output", config);
     std::string tmp_i_file = sdsl::cache_file_name("tmp_input", config);
 
-    // given an index i in symbol_desc
-    //0 symbol i is in alphabet is unique
-    //>2 symbol i is sep symbol
-    sdsl::int_vector<2> symbol_desc(alphabet.back().first+1,0);
-
-    for(auto & sym : alphabet){
-        symbol_desc[sym.first] = sym.second > 1;
-    }
-    symbol_desc[alphabet[0].first]+=2;
+    // mark which symbols represent string boundaries
+    bv_t symbol_desc(alphabet.back().first+1,false);
+    symbol_desc[alphabet[0].first] = true;
 
     ivb_t rules(p_gram.rules_file, std::ios::out, BUFFER_SIZE);
     bvb_t rules_lim(p_gram.rules_lim_file, std::ios::out);
@@ -498,17 +497,26 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
     typedef lc_parser_t<i_file_stream<uint8_t>, string_t> byte_parser_t;
     typedef lc_parser_t<i_file_stream<size_t>, string_t> int_parser_t;
 
-    std::cout<<"    Parsing round "<<iter++<<std::endl;
+    std::cout<<"  Parsing round "<<iter++<<std::endl;
+    auto start = std::chrono::steady_clock::now();
     rem_phrases = build_lc_gram_int<byte_parser_t>(i_file, tmp_i_file,
                                              n_threads, hbuff_size,
                                              p_gram, rules, rules_lim,
                                              symbol_desc, config);
+    auto end = std::chrono::steady_clock::now();
+    report_time(start, end, 6);
+    report_mem_peak();
+
     while (rem_phrases > 0) {
-        std::cout<<"    Parsing round "<<iter++<<std::endl;
+        start = std::chrono::steady_clock::now();
+        std::cout<<"  Parsing round "<<iter++<<std::endl;
         rem_phrases = build_lc_gram_int<int_parser_t>(tmp_i_file, output_file,
                                                       n_threads, hbuff_size,
                                                       p_gram, rules, rules_lim,
                                                       symbol_desc, config);
+        end = std::chrono::steady_clock::now();
+        report_time(start, end,6);
+        report_mem_peak();
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
     }
@@ -551,12 +559,12 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
     rules.close();
     rules_lim.close();
 
-    std::cout<<"  Locally consistent grammar finished"<<std::endl;
-    std::cout<<"    Stats:"<<std::endl;
-    std::cout<<"      Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
-    std::cout<<"      Number of nonterminals: "<<p_gram.rules_breaks.back()-(p_gram.max_tsym+1)+1<<std::endl;
-    std::cout<<"      Grammar size:           "<<p_gram.g<<std::endl;
-    std::cout<<"      Compressed string:      "<<p_gram.c<<std::endl;
+    std::cout<<"Locally consistent grammar finished"<<std::endl;
+    std::cout<<"  Stats:"<<std::endl;
+    std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
+    std::cout<<"    Number of nonterminals: "<<p_gram.rules_breaks.back()-(p_gram.max_tsym+1)+1<<std::endl;
+    std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
+    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -567,7 +575,7 @@ template<class parser_t, class out_sym_t>
 size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                          size_t n_threads, size_t hbuff_size,
                          gram_info_t &p_gram, ivb_t &rules,
-                         bvb_t &rules_lim, sdsl::int_vector<2> &phrase_desc,
+                         bvb_t &rules_lim, bv_t &phrase_desc,
                          sdsl::cache_config &config) {
 
     typedef typename parser_t::sym_type          sym_type;
@@ -575,7 +583,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     typedef parse_data_t<stream_type, out_sym_t> parse_data_type;
 
     parser_t parser(phrase_desc);
-
     phrase_map_t mp_table(0, "", 0.8);
 
     auto thread_ranges = parser.partition_text(n_threads, i_file);
@@ -601,7 +608,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         k++;
     }
 
-    std::cout<<"      Computing the phrases in the text"<<std::endl;
+    std::cout<<"    Computing the phrases in the text"<<std::endl;
     {
         std::vector<std::thread> threads(threads_data.size());
         hash_functor<parse_data_type, parser_t> hf;
@@ -642,7 +649,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms);
 
         //rename phrases according to their lexicographical ranks
-        std::cout<<"      Assigning identifiers to the phrases"<<std::endl;
+        std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
         assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
 
         //reload the hash table
@@ -653,7 +660,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             exit(1);
         }
 
-        std::cout<<"      Creating the parse of the text"<<std::endl;
+        std::cout<<"    Creating the parse of the text"<<std::endl;
         {//store the phrases into a new file
             std::vector<std::thread> threads(threads_data.size());
             parse_functor<parse_data_type, parser_t> pf;
@@ -679,23 +686,16 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         {
             //keep track of the phrases that have to be rephrased
+            std::cout <<"    Updating symbols status" << std::endl;
             phrase_desc.resize(p_gram.r);
-            std::cout << "      Updating symbols status" << std::endl;
             auto it = mp_table.begin();
             auto it_end = mp_table.end();
-            size_t tmp_value, sym;
-
+            size_t sym;
             while (it != it_end) {
-
-                tmp_value = 0;
                 auto val = it.value();
-
                 //read the (reversed) last symbol
                 sym = key_w.read(*it, 0);
-                if (phrase_desc[sym] & 2U) {//phrase is suffix of some string
-                    tmp_value += 2;
-                }
-                phrase_desc[val >> 1UL] = tmp_value;
+                phrase_desc[val] = phrase_desc[sym];
                 ++it;
             }
         }
@@ -721,10 +721,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         }
     }
 
-    //p_gram.r +=mp_table.size();
-    std::cout<<"      Stats:"<<std::endl;
-    std::cout<<"        Parse size:          "<<psize<<std::endl;
-    std::cout<<"        New nonterminals:    "<<p_gram.rules_breaks.back()<<std::endl;
+    std::cout<<"    Stats:"<<std::endl;
+    std::cout<<"      Parse size:          "<<psize<<std::endl;
+    std::cout<<"      New nonterminals:    "<<p_gram.rules_breaks.back()<<std::endl;
 
     if(psize>1){
         return mp_table.size();
@@ -737,8 +736,8 @@ template void build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, 
 
 template size_t build_lc_gram_int<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
                                            gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
-                                           sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
+                                           bv_t &phrase_desc, sdsl::cache_config &config);
 
 template size_t build_lc_gram_int<lms_parsing<i_file_stream<size_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
                                           gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
-                                          sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
+                                          bv_t &phrase_desc, sdsl::cache_config &config);

@@ -21,7 +21,7 @@ struct parse_data_t {
     phrase_map_t&         m_map;
     size_t                start;
     size_t                end;
-    dict_t                thread_dict;
+    phrase_map_t          thread_dict;
 
     parse_data_t(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
                  size_t start_, size_t end_,
@@ -56,6 +56,7 @@ struct dictionary{
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i)-min_sym;
+
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;
@@ -90,11 +91,17 @@ struct hash_functor{
     void operator()(parse_data_t& data, parser_t& parser){
         auto task = [&](string_t& phrase, bool is_full_str){
             phrase.mask_tail();
-
             if(!is_full_str){
-                data.thread_dict.insert(phrase.data(), phrase.n_bits(), false);
+                auto res = data.thread_dict.insert(phrase.data(), phrase.n_bits(), 1);
+                if(!res.second){
+                    size_t val;
+                    data.thread_dict.get_value_from(res.first, val);
+                    val++;
+                    data.thread_dict.insert_value_at(res.first, val);
+                }
             }
         };
+
         parser(data.ifs, data.start, data.end, task);
         data.thread_dict.flush();
         pthread_exit(nullptr);
@@ -112,7 +119,7 @@ struct parse_functor{
                 assert(res.second);
                 size_t id = 0;
                 data.m_map.get_value_from(res.first, id);
-                data.ofs.push_back(id>>1UL);
+                data.ofs.push_back(id);
             }else{
                 data.ofs.push_back(phrase[0]);
             }
@@ -133,7 +140,7 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
 template<class parser_t, class out_sym_t=size_t>
 size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
                          gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
-                         sdsl::int_vector<2> &phrase_desc, sdsl::cache_config &config);
+                         bv_t &phrase_desc, sdsl::cache_config &config);
 void join_parse_chunks(const std::string &output_file,
                        std::vector<std::string> &chunk_files);
 size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);

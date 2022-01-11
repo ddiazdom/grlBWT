@@ -66,3 +66,13 @@ std::string get_output_name(std::string& output_p,
 
     return output;
 }
+
+void report_mem_peak(){
+    struct rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+#ifdef __APPLE__
+    std::cout<<"Memory peak so far: "<<double(usage.ru_maxrss)/1000000<<" MB "<<std::endl;
+#else
+    std::cout<<"Memory peak so far: "<<double(usage.ru_maxrss)/1000<<" MB "<<std::endl;
+#endif
+}

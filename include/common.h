@@ -17,9 +17,8 @@ typedef sdsl::int_vector_buffer<1>              bvb_t;
 typedef sdsl::int_vector_buffer<>               ivb_t;
 typedef sdsl::int_vector<>                      vector_t;
 typedef int_array<size_t>                       string_t;
-typedef bit_hash_table<size_t,44>               phrase_map_t;
-typedef bit_hash_table<bool,1>                  dict_t;
-typedef typename dict_t::buff_t                 ht_buff_t;
+typedef bit_hash_table<size_t>                  phrase_map_t;
+typedef typename phrase_map_t::buff_t           ht_buff_t;
 typedef std::vector<std::pair<uint8_t, size_t>> alpha_t;
 
 // the phrases are stored in a bit-compressed hash table:

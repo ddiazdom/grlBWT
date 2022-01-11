@@ -1,0 +1,274 @@
+//
+// Created by Diaz, Diego on 23.11.2021.
+//
+#include "gbwt.hpp"
+
+void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
+
+    sdsl::int_vector<> r;
+    bv_t r_lim;
+    sdsl::load_from_file(r, p_gram.rules_file);
+    sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
+    bv_t::select_1_type r_lim_ss;
+    sdsl::util::init_support(r_lim_ss, &r_lim);
+
+    std::cout<<"  Checking the grammar produces the exact input string"<<std::endl;
+    std::cout<<"    This step is optional and for debugging purposes"<<std::endl;
+    std::cout<<"    Terminals:              "<<(size_t)p_gram.sigma<<std::endl;
+    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
+    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
+
+    std::vector<size_t> tmp_decomp;
+
+    i_file_stream<uint8_t> if_stream(uncomp_file, BUFFER_SIZE);
+
+    size_t start, end;
+    std::stack<std::pair<size_t, uint8_t>> stack;
+
+    size_t f = r_lim_ss(p_gram.r - 1) + 1;
+    size_t l = r_lim_ss(p_gram.r);
+    size_t idx = 0;
+
+
+    for(size_t i=f; i <= l; i++){
+        //std::cout<<i-f<<" "<<l-f<<std::endl;
+        tmp_decomp.clear();
+        stack.emplace(r[i], 1);
+        assert(stack.size()<=if_stream.size());
+
+        while(!stack.empty()){
+
+            auto curr_sym = stack.top() ;
+            stack.pop();
+
+            if(curr_sym.first==0){
+                start = 0;
+            }else{
+                start = r_lim_ss(curr_sym.first)+1;
+            }
+
+            end = r_lim_ss(curr_sym.first+1);
+
+            if(r[start] == curr_sym.first){
+                //std::cout<<idx<<" "<<p_gram.sym_map[curr_sym.first]<<" "<<(char)if_stream.read(idx)<<std::endl;
+                //if(p_gram.sym_map[curr_sym.first]!=if_stream.read(idx)){
+                //    std::cout<<f<<" "<<i<<" "<<i-f<<std::endl;
+                //}
+                assert(p_gram.sym_map[curr_sym.first]==if_stream.read(idx));
+                idx++;
+            }else{
+                //std::cout<<curr_sym.first<<" -> ";
+                if(p_gram.is_rl(curr_sym.first)){
+                    assert(end-start+1==2);
+                    for(size_t k=0;k<r[end];k++){
+                        stack.emplace(r[start], k==0);
+                    }
+                }else{
+
+                    uint8_t is_sp;
+                    uint8_t is_first;
+                    if(curr_sym.second!=0){
+                        for(size_t j=end+1; j-->start;){
+                            is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
+                            is_first = j==start && curr_sym.second & 1UL;
+                            stack.emplace(r[j], is_first | (is_sp<<1UL));
+                        }
+                    }else{
+                        for(size_t j=end; j>start;j--){
+                            is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
+                            stack.emplace(r[j], is_sp<<1UL);
+                        }
+                    }
+
+                    //for(size_t j=start; j<=end;j++){
+                    //    std::cout<<r[j]<<", "<<p_gram.parsing_level(r[j])<<" ";
+                   //}
+                }
+                //std::cout<<""<<std::endl;
+            }
+        }
+    }
+    std::cout<<"\tGrammar is correct!!"<<std::endl;
+}
+
+void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
+
+    std::cout<<"  Run-length compressing the grammar"<<std::endl;
+
+    ivb_t rules(p_gram.rules_file, std::ios::in);
+    sdsl::int_vector_buffer<1> r_lim(p_gram.rules_lim_file, std::ios::in);
+
+    std::string rl_rules_file = sdsl::cache_file_name("tmp_rl_file", config);
+    ivb_t rl_rules(rl_rules_file, std::ios::out);
+    std::string rl_r_lim_file = sdsl::cache_file_name("tmp_rl_lim_file", config);
+    sdsl::int_vector_buffer<1> rl_r_lim(rl_r_lim_file, std::ios::out);
+
+    size_t run_len=1;
+    size_t new_id = p_gram.r-1;
+    size_t tmp_sym;
+    phrase_map_t ht;
+    string_t pair(2,sdsl::bits::hi(rules.size())+1);
+
+    for(size_t i=0;i<=p_gram.max_tsym;i++){
+        rl_rules.push_back(i);
+        rl_r_lim.push_back(true);
+    }
+
+    size_t i=p_gram.max_tsym+2;
+    while(i<=rules.size()-p_gram.c){
+        if(rules[i]!=rules[i-1] || r_lim[i-1]){
+            if(run_len>1){
+                pair.write(0, rules[i-1]);
+                pair.write(1, run_len);
+                auto res = ht.insert(pair.data(), pair.n_bits(), 0);
+                if(res.second){
+                    tmp_sym = new_id++;
+                    ht.insert_value_at(res.first, tmp_sym);
+                }else{
+                    tmp_sym = 0;
+                    ht.get_value_from(res.first, tmp_sym);
+                    //tmp_sym = res.first.value();
+                }
+            }else{
+                tmp_sym = rules[i-1];
+            }
+            run_len=0;
+
+            rl_rules.push_back(tmp_sym);
+            if(r_lim[i-1]){
+                rl_r_lim[rl_rules.size()-1] = true;
+            }
+        }
+        run_len++;
+        i++;
+    }
+
+    const bitstream<phrase_map_t::buff_t>& stream = ht.get_data();
+    key_wrapper key_w{pair.width(), ht.description_bits(), stream};
+    for(auto const& phrase : ht){
+        rl_rules.push_back(key_w.read(phrase, 0));
+        rl_rules.push_back(key_w.read(phrase, 1));
+        rl_r_lim[rl_rules.size()-1] = true;
+    }
+
+    for(size_t k=rules.size()-p_gram.c;k<rules.size();k++){
+        rl_rules.push_back(rules[k]);
+    }
+    rl_r_lim[rl_rules.size()-1] = true;
+
+    p_gram.rl_rules.first = p_gram.r-1;
+    p_gram.rl_rules.second = ht.size();
+
+    p_gram.r+= ht.size();
+    p_gram.g = rl_rules.size();
+
+    std::cout<<"    Stats:"<<std::endl;
+    std::cout<<"      Grammar size before:        "<<rules.size()<<std::endl;
+    std::cout<<"      Grammar size after:         "<<rl_rules.size()<<std::endl;
+    std::cout<<"      Number of new nonterminals: "<<ht.size()<<std::endl;
+    std::cout<<"      Compression ratio:          "<<float(rl_rules.size())/float(rules.size())<<std::endl;
+
+    rules.close();
+    r_lim.close();
+    rl_rules.close();
+    rl_r_lim.close();
+
+    rename(rl_rules_file.c_str(), p_gram.rules_file.c_str());
+    rename(rl_r_lim_file.c_str(), p_gram.rules_lim_file.c_str());
+}
+
+alpha_t get_alphabet(std::string &i_file) {
+
+    std::cout <<"Reading input file:" << std::endl;
+
+    //TODO this can be done in parallel if the input is too big
+    size_t alph_frq[256] = {0};
+    alpha_t alphabet;
+
+    i_file_stream<uint8_t> if_stream(i_file, BUFFER_SIZE);
+    for (size_t i = 0; i < if_stream.tot_cells; i++) {
+        alph_frq[if_stream.read(i)]++;
+    }
+
+    for (size_t i = 0; i < 256; i++) {
+        if (alph_frq[i] > 0) alphabet.emplace_back(i, alph_frq[i]);
+    }
+
+    std::cout<<"  Number of characters: "<< if_stream.size() << std::endl;
+    std::cout<<"  Number of strings:    "<< alphabet[0].second << std::endl;
+    std::cout<<"  Alphabet:             "<< alphabet.size() << std::endl;
+    std::cout<<"  Smallest symbol:      "<< (int) alphabet[0].first << std::endl;
+    std::cout<<"  Greatest symbol:      "<< (int) alphabet.back().first << std::endl;
+
+    if (if_stream.read(if_stream.size() - 1) != alphabet[0].first) {
+        std::cout << "Error: sep. symbol " << alphabet[0].first << " differs from last symbol in file "
+                  << if_stream.read(if_stream.size() - 1) << std::endl;
+        exit(1);
+    }
+    return alphabet;
+}
+
+void sa2bwt(std::string& sp_sa, std::string& output){
+
+}
+
+void induce_sp_sa(gram_info_t& p_gram){
+
+}
+
+void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac) {
+
+    auto alphabet = get_alphabet(i_file);
+    size_t n_chars = 0;
+    for (auto const &sym : alphabet) n_chars += sym.second;
+    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(n_chars) * hbuff_frac)));
+
+    sdsl::cache_config config(false, tmp_folder);
+    std::string g_info_file = sdsl::cache_file_name("g_info_file", config);
+
+    std::string rules_file = sdsl::cache_file_name("m_rules", config);
+    std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
+
+    gram_info_t p_gram(rules_file, rules_len_file);
+    p_gram.sigma = alphabet.size();
+    for(auto & sym : alphabet){
+        p_gram.sym_map[sym.first] = sym.first;
+    }
+    p_gram.max_tsym = alphabet.back().first;
+    p_gram.r = p_gram.max_tsym + 1;
+
+    build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
+    induce_sp_sa(p_gram);
+
+    //suffpair(p_gram, config);
+    //run_length_compress(p_gram, config);
+    //simplify_grammar(p_gram, false);
+    //check_plain_grammar(p_gram, i_file);
+    //
+    /*std::cout<<"  Final grammar: " << std::endl;
+    std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;
+    std::cout<<"    Number of nonterminals:         "<< p_gram.r - p_gram.sigma<<std::endl;
+    std::cout<<"    Grammar size:                   "<< p_gram.g<<std::endl;
+    std::cout<<"    Breakdown:"<<std::endl;
+    for(size_t i=0;i<p_gram.n_p_rounds;i++){
+        std::cout<<"      Rules of parsing round "<<(i+1);
+        if(i<9) std::cout<<" ";
+        std::cout<<":    "<<p_gram.rules_breaks[i+1]-p_gram.rules_breaks[i]<<std::endl;
+    }
+    std::cout<<"  Compression stats: " << std::endl;
+    std::cout<<"    Text size in MB:        " << double(n_chars)/1000000<<std::endl;
+    std::cout<<"    Grammar size in MB:     " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(1000000)<< std::endl;
+    std::cout<<"    Compression ratio:      " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(n_chars) << std::endl;
+
+    std::cout<<"  Storing the final grammar in " << p_gram_file <<std::endl;
+    if(comp_lvl==1){
+        grammar<sdsl::int_vector<>> final_gram(p_gram, n_chars, alphabet[0].second);
+        sdsl::store_to_file(final_gram, p_gram_file);
+        final_gram.space_breakdown();
+    }else if(comp_lvl==2){
+        grammar<huff_vector<>> final_gram(p_gram, n_chars, alphabet[0].second);
+        sdsl::store_to_file(final_gram, p_gram_file);
+        final_gram.space_breakdown();
+    }*/
+}
+
