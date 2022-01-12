@@ -775,7 +775,7 @@ public:
         return file;
     }
 
-    void store_data_to_file(const std::string& output){
+    /*void store_data_to_file(const std::string& output){
         assert(!static_buffer);
         std::filebuf fb;
         fb.open(output, std::ios::out | std::ios::binary);
@@ -802,6 +802,10 @@ public:
         ifs.read(reinterpret_cast<char *>(table), tot_bytes);
         data.load(ifs);
         ifs.close();
+    }*/
+
+    size_t data_bytes() const {
+        return (data.stream_size*stream_t::word_bits)/8;
     }
 
     void unload_table(const std::string& output) {

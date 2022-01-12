@@ -3,10 +3,13 @@
 //
 
 #include "lc_gram_algo.hpp"
-#include <cmath>
 #include <thread>
 #include <chrono>
+#include <cstdlib>
 #include "utils.hpp"
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
 void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                          bvb_t &r_lim, ivb_t &rules, phrase_map_t &mp_map) {
@@ -39,8 +42,9 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     bool is_maximal, exists_as_rule;
     size_t i=1, run_bg, rem_elms=0, new_phrases=0, existing_phrases=0;
-    std::vector<size_t> phrases_sa_ranges;
-    phrases_sa_ranges.reserve(dict.n_phrases);
+    int_array<size_t> phrases_sa_ranges(dict.n_phrases, sdsl::bits::hi(dict.dict.size())+1);
+
+
 
     while(i<sa.size()) {
 
@@ -120,7 +124,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             if(lcs!=0) assert(i==sa.size());
 
             size_t run_end = lcs==0 ? i-2 : i-1;
-            phrases_sa_ranges.emplace_back(run_bg-rem_elms);
+            phrases_sa_ranges.push_back(run_bg-rem_elms);
 
             if((run_end-run_bg+1)>1) {
 
@@ -173,10 +177,18 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     if(lcs==0){
         if(sa[i-1]==0 || dict.d_lim[sa[i-1]-2]){
             ranks[d_lim_rs(sa[i-1]-1)] = rank+1;
-            phrases_sa_ranges.emplace_back((i-1)-rem_elms);
+            phrases_sa_ranges.push_back((i-1)-rem_elms);
         }
         //existing_phrases++;
     }
+
+    std::cout<<"SA "<<double(sdsl::size_in_bytes(sa))/1000000<<std::endl;
+    std::cout<<"SA_phrases "<<(double(phrases_sa_ranges.size()*phrases_sa_ranges.width())/8)/1000000<<std::endl;
+    std::cout<<"dict "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
+    std::cout<<"dict_rl "<<double(sdsl::size_in_bytes(dict.d_lim))/1000000<<std::endl;
+    std::cout<<"ranks "<<double(sdsl::size_in_bytes(ranks))/1000000<<std::endl;
+    std::cout<<"bv_rs "<<double(sdsl::size_in_bytes(d_lim_rs))/1000000<<std::endl;
+    std::cout<<"ht "<<double(mp_map.data_bytes())/1000000<<std::endl;
 
     k=0;
     size_t j=0;
@@ -215,9 +227,9 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     bool found;
     //k=0;
     rank = 1;
-    for(auto const &sa_locus : phrases_sa_ranges) {
-        pos = sa[sa_locus]-1;
+    for(size_t u=0;u<phrases_sa_ranges.size();u++) {
 
+        pos = sa[phrases_sa_ranges[u]]-1;
         //extract the greatest proper suffix of the phrase
         // in reverse order
         size_t tmp_pos = pos;
@@ -576,6 +588,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                          bvb_t &rules_lim, bv_t &phrase_desc,
                          sdsl::cache_config &config) {
 
+    std::cout<<"0. ";report_mem_peak();
+
     typedef typename parser_t::sym_type          sym_type;
     typedef typename parser_t::stream_type       stream_type;
     typedef parse_data_t<stream_type, out_sym_t> parse_data_type;
@@ -594,31 +608,39 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     //number of bytes per thread
     size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
-    void *buff_addr = malloc(hbuff_size);
-    auto tmp_addr = reinterpret_cast<char*>(buff_addr);
-
-    size_t k=0;
-    for(auto &range : thread_ranges) {
-        std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
-        tmp_o_file.append("_range_"+std::to_string(range.first)+"_"+std::to_string(range.second));
-        threads_data.emplace_back(i_file, tmp_o_file, mp_table, range.first, range.second, hb_bytes,
-                                  tmp_addr + (k*hb_bytes));
-        k++;
-    }
-
-    std::cout<<"    Computing the phrases in the text"<<std::endl;
     {
+        std::cout << "1. ";
+        report_mem_peak();
+        std::cout << "    Computing the phrases in the text" << std::endl;
+
+        void *buff_addr = malloc(hbuff_size);
+        auto tmp_addr = reinterpret_cast<char *>(buff_addr);
+        size_t k = 0;
+        for (auto &range: thread_ranges) {
+            std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
+            tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
+            threads_data.emplace_back(i_file, tmp_o_file, mp_table, range.first, range.second, hb_bytes,
+                                      tmp_addr + (k * hb_bytes));
+            k++;
+        }
+
         std::vector<std::thread> threads(threads_data.size());
         hash_functor<parse_data_type, parser_t> hf;
-        for(size_t i=0;i<threads_data.size();i++){
+        for (size_t i = 0; i < threads_data.size(); i++) {
             threads[i] = std::thread(hf, std::ref(threads_data[i]), std::ref(parser));
         }
 
-        for(size_t i=0;i<threads_data.size();i++) {
+        for (size_t i = 0; i < threads_data.size(); i++) {
             threads[i].join();
         }
+        free(buff_addr);
+
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+
     }
-    free(buff_addr);
+    std::cout<<"2. ";report_mem_peak();
 
     //join the different phrase files
     std::vector<std::string> phrases_files;
@@ -642,13 +664,16 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         //temporal unload of the hash table (not the data)
         std::string st_table = sdsl::cache_file_name("ht_data", config);
         mp_table.unload_table(st_table);
+        std::cout<<"3. ";report_mem_peak();
 
         //create a dictionary from where the ids will be computed
         dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms);
+        std::cout<<"4. ";report_mem_peak();
 
         //rename phrases according to their lexicographical ranks
         std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
         assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
+        std::cout<<"5. ";report_mem_peak();
 
         //reload the hash table
         mp_table.load_table(st_table);
@@ -670,6 +695,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 threads[i].join();
             }
         }
+        std::cout<<"6. ";report_mem_peak();
 
         std::vector<std::string> chunk_files;
         for(size_t i=0;i<threads_data.size();i++){
@@ -697,6 +723,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 ++it;
             }
         }
+        std::cout<<"7. ";report_mem_peak();
     }else{ //just copy the input
         std::ifstream in(i_file, std::ios_base::binary);
         std::ofstream out(o_file, std::ios_base::binary);
