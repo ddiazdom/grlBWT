@@ -42,27 +42,42 @@ struct dictionary{
     size_t alphabet;
     size_t n_phrases;
     vector_t dict;
+    vector_t freqs;
     bv_t d_lim;
     typedef size_t size_type;
+    const bv_t& desc_bv;
 
     dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
-               key_wrapper &key_w, size_t dict_syms): min_sym(_min_sym),
-                                                      max_sym(_max_sym),
-                                                      alphabet(max_sym-min_sym+1),
-                                                      n_phrases(mp_map.size()),
-                                                      dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
-                                                      d_lim(dict_syms, false){
-        size_t j=0;
+               key_wrapper &key_w, size_t dict_syms, size_t max_freq,
+               bv_t& is_suffix_bv): min_sym(_min_sym),
+                                    max_sym(_max_sym),
+                                    alphabet(max_sym-min_sym+1),
+                                    n_phrases(mp_map.size()),
+                                    dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
+                                    freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
+                                    d_lim(dict_syms, false),
+                                    desc_bv(is_suffix_bv){
+        size_t j=0, k=0, freq;
+        //size_t tot_freq=0;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i)-min_sym;
-
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;
+
+            freq = 0;
+            mp_map.get_value_from(ptr, freq);
+            freqs[k++] = freq;
+            //tot_freq+=freq;
         }
+        //std::cout<<"total phrases: "<<tot_freq<<std::endl;
         assert(j==dict_syms);
     }
+
+    [[nodiscard]] inline bool is_suffix(size_t sym) const{
+        return desc_bv[min_sym+sym];
+    };
 
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const{
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
@@ -121,6 +136,7 @@ struct parse_functor{
                 data.m_map.get_value_from(res.first, id);
                 data.ofs.push_back(id);
             }else{
+                std::cout<<"tendra que ver con esto?"<<std::endl;
                 data.ofs.push_back(phrase[0]);
             }
         };
@@ -131,9 +147,6 @@ struct parse_functor{
     };
 };
 
-template<class parser_t> std::vector<std::pair<size_t, size_t>>
-compute_thread_ranges(size_t n_threads, std::string& i_file, parser_t& phrase_desct);
-
 template<template<class, class> class lc_parser_t>
 void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                     gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);
@@ -143,7 +156,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                          bv_t &phrase_desc, sdsl::cache_config &config);
 void join_parse_chunks(const std::string &output_file,
                        std::vector<std::string> &chunk_files);
-size_t join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
+std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
 
 void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, gram_info_t &p_gram,
                 sdsl::cache_config &config);
