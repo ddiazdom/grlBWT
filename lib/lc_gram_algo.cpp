@@ -198,23 +198,22 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     sdsl::util::clear(ranks);
     sdsl::util::clear(d_lim_rs);
 
-    vector_t inv_sa(sa.size(), 0, sdsl::bits::hi(sa.size())+1);
+    /*vector_t inv_sa(sa.size(), 0, sdsl::bits::hi(sa.size())+1);
     bv_t inv_sa_bv(dict.dict.size(), false);
     for(auto const& sa_pos : sa){
         inv_sa_bv[sa_pos-1] = true;
     }
-
     bv_rs_t inv_sa_bv_rs(&inv_sa_bv);
     j = 0;
     for(auto const& sa_pos : sa){
         inv_sa[inv_sa_bv_rs(sa_pos-1)] = j;
         j++;
-    }
+    }*/
 
     //collapse the full dictionary in the grammar
     size_t em_nt, p_len;
     bool found;
-    k=0;
+    //k=0;
     rank = 1;
     for(auto const &sa_locus : phrases_sa_ranges) {
         pos = sa[sa_locus]-1;
@@ -256,8 +255,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         //std::cout<<dict.max_sym+rank<<" -> ";
         if(!found){
             while(!dict.d_lim[tmp_pos]){
-                assert(inv_sa_bv[tmp_pos]);
-                sa[inv_sa[inv_sa_bv_rs(tmp_pos)]] = k++;
+                //assert(inv_sa_bv[tmp_pos]);
+                //sa[inv_sa[inv_sa_bv_rs(tmp_pos)]] = k++;
                 //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<" ";
                 rules.push_back(dict.min_sym+dict.dict[tmp_pos++]);
                 r_lim.push_back(false);
@@ -266,12 +265,12 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             rules.push_back(dict.min_sym+dict.dict[tmp_pos]);
             //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<std::endl;
             r_lim.push_back(true);
-            k++;
+            //k++;
         }else{
             j = 0;
             while(j<p_len){
-                assert(inv_sa_bv[tmp_pos+j]);
-                sa[inv_sa[inv_sa_bv_rs(tmp_pos+j)]] = k++;
+                //assert(inv_sa_bv[tmp_pos+j]);
+                //sa[inv_sa[inv_sa_bv_rs(tmp_pos+j)]] = k++;
                 rules.push_back(dict.min_sym+dict.dict[tmp_pos+j]);
                 //std::cout<<dict.min_sym+dict.dict[tmp_pos+j]<<" ";
                 r_lim.push_back(false);
@@ -279,12 +278,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             }
             //std::cout<<" "<<std::endl;
 
-
             assert(em_nt>0);
             //std::cout<<dict.max_sym+em_nt<<std::endl;
             rules.push_back(dict.max_sym+em_nt);
             r_lim.push_back(true);
-            k++;
+            //k++;
         }
 
         //TODO

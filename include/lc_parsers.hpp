@@ -48,7 +48,6 @@ struct lms_parsing{
             type = sym==prev_sym? prev_type : sym < prev_sym;
 
             if(is_suffix(sym) || (type==L_TYPE && prev_type==S_TYPE)){
-                //std::cout<<(idx+1)<<" -> "<<ifs.read(idx)<<" ("<<is_suffix(ifs.read(idx))<<") "<<ifs.read(idx+1)<<"* "<<ifs.read(idx+2)<<std::endl;
                 return idx+1;
             }
             prev_sym = sym;

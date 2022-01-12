@@ -208,12 +208,18 @@ alpha_t get_alphabet(std::string &i_file) {
     return alphabet;
 }
 
-void sa2bwt(std::string& sp_sa, std::string& output){
+void sp_sa2bwt(std::string& sp_sa, std::string& output){
 
 }
 
-void induce_sp_sa(gram_info_t& p_gram){
+void induce_sym_order(gram_info_t& p_gram, size_t p_round){
+    //TODO perform counting sort
+}
 
+void gram2sp_sa(gram_info_t& p_gram){
+    for(size_t i=p_gram.n_p_rounds-1;i-->0;){
+        induce_sym_order(p_gram, i);
+    }
 }
 
 void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac) {
@@ -238,7 +244,7 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
     p_gram.r = p_gram.max_tsym + 1;
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
-    induce_sp_sa(p_gram);
+    gram2sp_sa(p_gram);
 
     //suffpair(p_gram, config);
     //run_length_compress(p_gram, config);

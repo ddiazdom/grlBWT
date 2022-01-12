@@ -56,7 +56,6 @@ struct gram_info_t{
     std::vector<size_t>                rules_breaks; // number of m_rules generated in every LMS parsing round
     size_t                             n_p_rounds{}; // number of parsing rounds
     std::pair<size_t, size_t>          rl_rules={0,0};
-    std::pair<size_t, size_t>          sp_rules={0,0};
 
     gram_info_t() = default;
     gram_info_t(std::string& r_file_,
@@ -75,15 +74,9 @@ struct gram_info_t{
         return symbol>=rl_rules.first && symbol < (rl_rules.first + rl_rules.second);
     }
 
-    [[nodiscard]] inline bool is_sp(size_t symbol) const{
-        if(sp_rules.second==0) return false;
-        return symbol>=sp_rules.first && symbol < (sp_rules.first + sp_rules.second);
-    }
-
     [[nodiscard]] inline long long int parsing_level(size_t symbol) const{
         if(symbol < sigma) return 0;
         if(symbol>=rules_breaks[n_p_rounds]){
-            assert(is_sp(symbol) || is_rl(symbol));
             return -1;
         }
 
@@ -312,7 +305,7 @@ public:
         }
 
         rl_rules = gram_info.rl_rules;
-        sp_rules = gram_info.sp_rules;
+        //sp_rules = gram_info.sp_rules;
 
         sdsl::int_vector_buffer<1> rules_lim_buff(gram_info.rules_lim_file, std::ios::in);
         m_nter_ptr.width(sdsl::bits::hi(grammar_size) + 1);
