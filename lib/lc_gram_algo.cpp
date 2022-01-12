@@ -586,6 +586,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                          bvb_t &rules_lim, bv_t &phrase_desc,
                          sdsl::cache_config &config) {
 
+#ifdef __linux__
+    malloc_trim(0);
+#endif
     std::cout<<"phrases desc: "<<double(sdsl::size_in_bytes(phrase_desc))/1000000<<" MB "<<std::endl;
     std::cout<<"0. ";report_mem_peak();
 
