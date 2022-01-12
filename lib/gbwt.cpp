@@ -237,6 +237,8 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
 
     gram_info_t p_gram(rules_file, rules_len_file);
     p_gram.sigma = alphabet.size();
+    p_gram.last_dict_size = p_gram.sigma;
+
     for(auto & sym : alphabet){
         p_gram.sym_map[sym.first] = sym.first;
     }

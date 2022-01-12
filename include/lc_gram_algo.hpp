@@ -104,16 +104,14 @@ template<typename parse_data_t,
          typename parser_t>
 struct hash_functor{
     void operator()(parse_data_t& data, parser_t& parser){
-        auto task = [&](string_t& phrase, bool is_full_str){
+        auto task = [&](string_t& phrase){
             phrase.mask_tail();
-            if(!is_full_str){
-                auto res = data.thread_dict.insert(phrase.data(), phrase.n_bits(), 1);
-                if(!res.second){
-                    size_t val;
-                    data.thread_dict.get_value_from(res.first, val);
-                    val++;
-                    data.thread_dict.insert_value_at(res.first, val);
-                }
+            auto res = data.thread_dict.insert(phrase.data(), phrase.n_bits(), 1);
+            if(!res.second){
+                size_t val;
+                data.thread_dict.get_value_from(res.first, val);
+                val++;
+                data.thread_dict.insert_value_at(res.first, val);
             }
         };
 
@@ -127,18 +125,13 @@ template<typename parse_data_t,
          typename parser_t>
 struct parse_functor{
     void operator()(parse_data_t& data, parser_t& parser){
-        auto task = [&](string_t& phrase, bool is_full_str){
+        auto task = [&](string_t& phrase){
             phrase.mask_tail();
-            if(!is_full_str){
-                auto res = data.m_map.find(phrase.data(), phrase.n_bits());
-                assert(res.second);
-                size_t id = 0;
-                data.m_map.get_value_from(res.first, id);
-                data.ofs.push_back(id);
-            }else{
-                std::cout<<"tendra que ver con esto?"<<std::endl;
-                data.ofs.push_back(phrase[0]);
-            }
+            auto res = data.m_map.find(phrase.data(), phrase.n_bits());
+            assert(res.second);
+            size_t id = 0;
+            data.m_map.get_value_from(res.first, id);
+            data.ofs.push_back(id);
         };
         parser(data.ifs, data.start, data.end, task);
         data.ofs.close();

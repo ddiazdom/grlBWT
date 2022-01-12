@@ -57,7 +57,7 @@ struct lms_parsing{
 
     void operator()(stream_t& ifs,
                     size_t start, size_t end,
-                    std::function<void(string_t&, bool)> task) const {
+                    std::function<void(string_t&)> task) const {
 
 
         bool s_type, prev_s_type = S_TYPE;
@@ -75,19 +75,8 @@ struct lms_parsing{
             //                                        ---- ----
             //this is a junction between two strings = ...$ $...
             if (is_suffix(curr_sym)) {
-                bool full_str = curr_lms.size()==1 && is_suffix(curr_lms[0]);
                 if (!curr_lms.empty()) {
-                    //TODO testing
-                    /*if(!first){
-                        std::cout<<"first -> ";
-                        for(size_t j=curr_lms.size();j-->0;){
-                            std::cout<<curr_lms[j]<<" ";
-                        }
-                        std::cout<<" "<<i<<" "<<end<<std::endl;
-                        first = true;
-                    }*/
-                    //
-                    task(curr_lms, full_str);
+                    task(curr_lms);
                 }
                 curr_lms.clear();
                 s_type = S_TYPE;
@@ -101,18 +90,7 @@ struct lms_parsing{
 
                     if (prev_s_type == S_TYPE) {//Left-most S suffix
                         if (curr_lms.size()>1) {
-                            //TODO testing
-                            /*if(!first){
-                                std::cout<<"ffirst -> ";
-                                for(size_t j=curr_lms.size();j-->0;){
-                                    std::cout<<curr_lms[j]<<" ";
-                                }
-                                std::cout<<" "<<std::endl;
-                                first = true;
-                            }*/
-                            //
-                            //std::cout<<i<<std::endl;
-                            task(curr_lms, false);
+                            task(curr_lms);
                         }
                         curr_lms.clear();
                         curr_lms.push_back(prev_sym);
@@ -124,17 +102,8 @@ struct lms_parsing{
             prev_s_type = s_type;
         }
         assert(curr_lms[0]!=1);
-        bool full_str = curr_lms.size()==1 &&
-                        is_suffix(curr_lms[0]) &&
-                        (start == 0 || is_suffix(ifs.read(start - 1)));
         if(!curr_lms.empty()){
-            //TODO testing
-            /*for(size_t j=curr_lms.size();j-->0;){
-                std::cout<<curr_lms[j]<<" ";
-            }
-            std::cout<<" "<<std::endl;*/
-            //
-            task(curr_lms, full_str);
+            task(curr_lms);
         }
     }
 

@@ -50,6 +50,7 @@ struct gram_info_t{
     size_t                             c{}; //c: length of the right-hand of the start symbol
     size_t                             g{}; //g: sum of the m_rules' right-hand sides
     size_t                             max_tsym{}; //highest terminal symbol
+    size_t                             last_dict_size{}; //size of the last dictionary
     std::unordered_map<size_t,uint8_t> sym_map; //map terminal symbols to their original byte symbols
     std::string                        rules_file; // m_rules are concatenated in this array
     std::string                        rules_lim_file; // bit vector marking the last symbol of every right-hand

@@ -35,11 +35,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                   sa[k++] = sa[j];
             //}
 
-            if(dict.d_lim[sa[j]-1] &&
+            /*if(dict.d_lim[sa[j]-1] &&
               (sa[j]-1==0 || dict.d_lim[sa[j]-2]) &&
               dict.is_suffix(dict.dict[sa[j]-1])){
                 std::cout<<"holaaaa"<<std::endl;
-            }
+            }*/
 
             if(!(dict.d_lim[sa[j]-1] && !dict.is_suffix(dict.dict[sa[j]-1]))){
                 freq+=dict.freqs[d_lim_rs(sa[j]-1)];
@@ -566,7 +566,8 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                                                       p_gram, rules, rules_lim,
                                                       symbol_desc, config);
         end = std::chrono::steady_clock::now();
-        report_time(start, end,6);
+
+        report_time(start, end,4);
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
     }
@@ -694,8 +695,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     auto join_res = join_thread_phrases(mp_table, phrases_files);
 
     size_t psize=0;//<- for the iter stats
-    if(mp_table.size()>0){
-
+    if(mp_table.size()!=p_gram.last_dict_size){
         size_t width = sdsl::bits::hi(p_gram.r+1)+1;
         size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
         size_t max_sym = p_gram.r-1;
@@ -768,7 +768,14 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 ++it;
             }
         }
+
+        p_gram.last_dict_size = mp_table.size();
+        std::cout<<"    Stats:"<<std::endl;
+        std::cout<<"      Parse size:          "<<psize<<std::endl;
+        std::cout<<"      New nonterminals:    "<<p_gram.rules_breaks.back()<<std::endl;
         //std::cout<<"7. ";report_mem_peak();
+        return mp_table.size();
+
     }else{ //just copy the input
         std::ifstream in(i_file, std::ios_base::binary);
         std::ofstream out(o_file, std::ios_base::binary);
@@ -789,15 +796,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
             }
         }
-    }
-
-    std::cout<<"    Stats:"<<std::endl;
-    std::cout<<"      Parse size:          "<<psize<<std::endl;
-    std::cout<<"      New nonterminals:    "<<p_gram.rules_breaks.back()<<std::endl;
-
-    if(psize>1){
-        return mp_table.size();
-    }else{
+        std::cout<<"    No new phrases found"<<std::endl;
         return 0;
     }
 }
