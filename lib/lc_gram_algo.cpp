@@ -515,7 +515,6 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                                              symbol_desc, config);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 6);
-    report_mem_peak();
 
     while (rem_phrases > 0) {
         start = std::chrono::steady_clock::now();
@@ -526,7 +525,6 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                                                       symbol_desc, config);
         end = std::chrono::steady_clock::now();
         report_time(start, end,6);
-        report_mem_peak();
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
     }
@@ -588,6 +586,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                          bvb_t &rules_lim, bv_t &phrase_desc,
                          sdsl::cache_config &config) {
 
+    std::cout<<"phrases desc: "<<double(sdsl::size_in_bytes(phrase_desc))/1000000<<" MB "<<std::endl;
     std::cout<<"0. ";report_mem_peak();
 
     typedef typename parser_t::sym_type          sym_type;
@@ -609,8 +608,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
     {
-        std::cout << "1. ";
-        report_mem_peak();
+        std::cout << "1. ";report_mem_peak();
         std::cout << "    Computing the phrases in the text" << std::endl;
 
         void *buff_addr = malloc(hbuff_size);
@@ -623,6 +621,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                                       tmp_addr + (k * hb_bytes));
             k++;
         }
+        std::cout << "1.1 ";report_mem_peak();
 
         std::vector<std::thread> threads(threads_data.size());
         hash_functor<parse_data_type, parser_t> hf;
