@@ -58,123 +58,29 @@ void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
                 idx++;
             }else{
                 //std::cout<<curr_sym.first<<" -> ";
-                if(p_gram.is_rl(curr_sym.first)){
-                    assert(end-start+1==2);
-                    for(size_t k=0;k<r[end];k++){
-                        stack.emplace(r[start], k==0);
-                    }
-                }else{
+                 uint8_t is_sp;
+                 uint8_t is_first;
+                 if(curr_sym.second!=0){
+                     for(size_t j=end+1; j-->start;){
+                         is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
+                         is_first = j==start && curr_sym.second & 1UL;
+                         stack.emplace(r[j], is_first | (is_sp<<1UL));
+                     }
+                 }else{
+                     for(size_t j=end; j>start;j--){
+                         is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
+                         stack.emplace(r[j], is_sp<<1UL);
+                     }
+                 }
 
-                    uint8_t is_sp;
-                    uint8_t is_first;
-                    if(curr_sym.second!=0){
-                        for(size_t j=end+1; j-->start;){
-                            is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
-                            is_first = j==start && curr_sym.second & 1UL;
-                            stack.emplace(r[j], is_first | (is_sp<<1UL));
-                        }
-                    }else{
-                        for(size_t j=end; j>start;j--){
-                            is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
-                            stack.emplace(r[j], is_sp<<1UL);
-                        }
-                    }
-
-                    //for(size_t j=start; j<=end;j++){
-                    //    std::cout<<r[j]<<", "<<p_gram.parsing_level(r[j])<<" ";
-                   //}
-                }
+                 //for(size_t j=start; j<=end;j++){
+                 //    std::cout<<r[j]<<", "<<p_gram.parsing_level(r[j])<<" ";
+                //}
                 //std::cout<<""<<std::endl;
             }
         }
     }
     std::cout<<"\tGrammar is correct!!"<<std::endl;
-}
-
-void run_length_compress(gram_info_t &p_gram, sdsl::cache_config& config) {
-
-    std::cout<<"  Run-length compressing the grammar"<<std::endl;
-
-    ivb_t rules(p_gram.rules_file, std::ios::in);
-    sdsl::int_vector_buffer<1> r_lim(p_gram.rules_lim_file, std::ios::in);
-
-    std::string rl_rules_file = sdsl::cache_file_name("tmp_rl_file", config);
-    ivb_t rl_rules(rl_rules_file, std::ios::out);
-    std::string rl_r_lim_file = sdsl::cache_file_name("tmp_rl_lim_file", config);
-    sdsl::int_vector_buffer<1> rl_r_lim(rl_r_lim_file, std::ios::out);
-
-    size_t run_len=1;
-    size_t new_id = p_gram.r-1;
-    size_t tmp_sym;
-    phrase_map_t ht;
-    string_t pair(2,sdsl::bits::hi(rules.size())+1);
-
-    for(size_t i=0;i<=p_gram.max_tsym;i++){
-        rl_rules.push_back(i);
-        rl_r_lim.push_back(true);
-    }
-
-    size_t i=p_gram.max_tsym+2;
-    while(i<=rules.size()-p_gram.c){
-        if(rules[i]!=rules[i-1] || r_lim[i-1]){
-            if(run_len>1){
-                pair.write(0, rules[i-1]);
-                pair.write(1, run_len);
-                auto res = ht.insert(pair.data(), pair.n_bits(), 0);
-                if(res.second){
-                    tmp_sym = new_id++;
-                    ht.insert_value_at(res.first, tmp_sym);
-                }else{
-                    tmp_sym = 0;
-                    ht.get_value_from(res.first, tmp_sym);
-                    //tmp_sym = res.first.value();
-                }
-            }else{
-                tmp_sym = rules[i-1];
-            }
-            run_len=0;
-
-            rl_rules.push_back(tmp_sym);
-            if(r_lim[i-1]){
-                rl_r_lim[rl_rules.size()-1] = true;
-            }
-        }
-        run_len++;
-        i++;
-    }
-
-    const bitstream<phrase_map_t::buff_t>& stream = ht.get_data();
-    key_wrapper key_w{pair.width(), ht.description_bits(), stream};
-    for(auto const& phrase : ht){
-        rl_rules.push_back(key_w.read(phrase, 0));
-        rl_rules.push_back(key_w.read(phrase, 1));
-        rl_r_lim[rl_rules.size()-1] = true;
-    }
-
-    for(size_t k=rules.size()-p_gram.c;k<rules.size();k++){
-        rl_rules.push_back(rules[k]);
-    }
-    rl_r_lim[rl_rules.size()-1] = true;
-
-    p_gram.rl_rules.first = p_gram.r-1;
-    p_gram.rl_rules.second = ht.size();
-
-    p_gram.r+= ht.size();
-    p_gram.g = rl_rules.size();
-
-    std::cout<<"    Stats:"<<std::endl;
-    std::cout<<"      Grammar size before:        "<<rules.size()<<std::endl;
-    std::cout<<"      Grammar size after:         "<<rl_rules.size()<<std::endl;
-    std::cout<<"      Number of new nonterminals: "<<ht.size()<<std::endl;
-    std::cout<<"      Compression ratio:          "<<float(rl_rules.size())/float(rules.size())<<std::endl;
-
-    rules.close();
-    r_lim.close();
-    rl_rules.close();
-    rl_r_lim.close();
-
-    rename(rl_rules_file.c_str(), p_gram.rules_file.c_str());
-    rename(rl_r_lim_file.c_str(), p_gram.rules_lim_file.c_str());
 }
 
 alpha_t get_alphabet(std::string &i_file) {

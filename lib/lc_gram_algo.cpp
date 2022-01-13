@@ -17,13 +17,15 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     size_t pos, prev_pos, lcs, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0, freq;
 
     std::string lvl_bwt_file = sdsl::cache_file_name("lvl_bwt_"+std::to_string(p_gram.rules_breaks.size()), config);
+    std::string h_occ_file = sdsl::cache_file_name("lvl_hocc_"+std::to_string(p_gram.rules_breaks.size()), config);
     ivb_t lvl_bwt(lvl_bwt_file, std::ios::out);
+    bvb_t h_occ_bv(h_occ_file, std::ios::out);
 
     //remove unnecessary entries from the SA to
     // avoid dealing with corner cases
     bv_rs_t d_lim_rs(&dict.d_lim);
     size_t k=0;
-    freq=0;
+    //freq=0;
     for(size_t j=0;j<sa.size();j++){
         if(sa[j]!=0){
             //pos = sa[j]-1;
@@ -32,7 +34,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             // ii) phrase of length 1
             //if(!dict.d_lim[pos] || // pattern 0...1 means i)
             //   (dict.d_lim[pos] && (pos==0 || dict.d_lim[pos-1]))){ //pattern 11 means ii)
-                  sa[k++] = sa[j];
+            sa[k++] = sa[j];
             //}
 
             /*if(dict.d_lim[sa[j]-1] &&
@@ -41,12 +43,12 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 std::cout<<"holaaaa"<<std::endl;
             }*/
 
-            if(!(dict.d_lim[sa[j]-1] && !dict.is_suffix(dict.dict[sa[j]-1]))){
+            /*if(!(dict.d_lim[sa[j]-1] && !dict.is_suffix(dict.dict[sa[j]-1]))){
                 freq+=dict.freqs[d_lim_rs(sa[j]-1)];
-            }
+            }*/
         }
     }
-    std::cout<<"tot symbols: "<<freq<<std::endl;
+    //std::cout<<"tot symbols: "<<freq<<std::endl;
     sa.resize(k);
 
     size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
@@ -168,6 +170,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                     auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank+1);
                     assert(res.second);
                 }
+
+
                 /*std::cout<<sa[run_bg]<<" ";
                 for(size_t u=phrase.size();u-->0;){
                     std::cout<<phrase[u]<<" ";
@@ -186,10 +190,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 std::cout<<dict.dict[k++]<<" ";
             }
             std::cout<<dict.dict[k]<<" "<<run_bg<<" "<<run_end<<std::endl;*/
-            rank++;
-
             lvl_bwt.push_back(dummy_sym);
             lvl_bwt.push_back(freq);
+            h_occ_bv.push_back((run_end-run_bg+1)>1);
+            rank++;
+
         }else if(!dict.d_lim[sa[run_bg]-1]){
             size_t sym = dict.dict[sa[run_bg]-2];
             if(lvl_bwt.size()>2 && lvl_bwt[lvl_bwt.size()-2]==sym){
@@ -212,6 +217,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             phrases_sa_ranges.push_back((i-1)-rem_elms);
             lvl_bwt.push_back(dummy_sym);
             lvl_bwt.push_back(freq);
+            h_occ_bv.push_back(false);
         }else{
             size_t sym = dict.dict[sa[i-1]-2];
             if(lvl_bwt.size()>2 && lvl_bwt[lvl_bwt.size()-2]==sym){
@@ -224,22 +230,18 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         //existing_phrases++;
     }
 
-    freq=0;
-    for(size_t u=1;u<lvl_bwt.size();u+=2){
-        freq+=lvl_bwt[u];
-    }
-    std::cout<<"total number of symbols "<<freq<<std::endl;
+    //TODO this is new
+    //TODO just checking
+    //freq=0;
+    //for(size_t u=1;u<lvl_bwt.size();u+=2){
+    //    freq+=lvl_bwt[u];
+    //}
+    //std::cout<<"total number of symbols "<<freq<<std::endl;
+    //std::cout<<h_occ_bv.size()<<std::endl;
+    //
 
-    /*std::cout<<"SA "<<double(sdsl::size_in_bytes(sa))/1000000<<std::endl;
-    std::cout<<"SA_phrases "<<(double(phrases_sa_ranges.size()*phrases_sa_ranges.width())/8)/1000000<<std::endl;
-    std::cout<<"dict "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
-    std::cout<<"dict_rl "<<double(sdsl::size_in_bytes(dict.d_lim))/1000000<<std::endl;
-    std::cout<<"ranks "<<double(sdsl::size_in_bytes(ranks))/1000000<<std::endl;
-    std::cout<<"bv_rs "<<double(sdsl::size_in_bytes(d_lim_rs))/1000000<<std::endl;
-    std::cout<<"ht "<<double(mp_map.data_bytes())/1000000<<std::endl;*/
-
+    size_t j =0;
     k=0;
-    size_t j=0;
     while(j<sa.size()){
         if(sa[j]!=0) sa[k++] = sa[j];
         j++;
@@ -247,6 +249,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     sa.resize(k);
 
     //assign the ranks to the original phrases
+    size_t p_len, em_nt;
     j=0;
     for(auto const& ptr : mp_map){
         phrase_map_t::val_type val=0;
@@ -258,21 +261,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     sdsl::util::clear(ranks);
     sdsl::util::clear(d_lim_rs);
 
-    /*vector_t inv_sa(sa.size(), 0, sdsl::bits::hi(sa.size())+1);
-    bv_t inv_sa_bv(dict.dict.size(), false);
-    for(auto const& sa_pos : sa){
-        inv_sa_bv[sa_pos-1] = true;
-    }
-    bv_rs_t inv_sa_bv_rs(&inv_sa_bv);
-    j = 0;
-    for(auto const& sa_pos : sa){
-        inv_sa[inv_sa_bv_rs(sa_pos-1)] = j;
-        j++;
-    }*/
-
-    //collapse the full dictionary in the grammar
-    size_t em_nt, p_len;
     bool found;
+    //collapse the full dictionary in the grammar
     for(size_t u=0;u<phrases_sa_ranges.size();u++) {
         pos = sa[phrases_sa_ranges[u]]-1;
         //extract the greatest proper suffix of the phrase
@@ -344,12 +334,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     }
     p_gram.rules_breaks.push_back(phrases_sa_ranges.size());
     p_gram.r += phrases_sa_ranges.size();
-
-    /*size_t k=pos;
-    while(!dict.d_lim[k]){
-        std::cout<<dict.dict[k++]<<" ";
-    }
-    std::cout<<dict.dict[k]<<std::endl;*/
 }
 
 void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
@@ -556,7 +540,7 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                                              p_gram, rules, rules_lim,
                                              symbol_desc, config);
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 6);
+    report_time(start, end, 4);
 
     while (rem_phrases > 0) {
         start = std::chrono::steady_clock::now();
@@ -598,8 +582,8 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
         free(buffer);
     }
     p_gram.g = rules.size();
-
     p_gram.n_p_rounds = p_gram.rules_breaks.size();
+
     std::vector<size_t> rule_breaks;
     rule_breaks.push_back(p_gram.max_tsym+1);
     for(unsigned long i : p_gram.rules_breaks){
@@ -609,13 +593,6 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
 
     rules.close();
     rules_lim.close();
-
-    std::cout<<"Locally consistent grammar finished"<<std::endl;
-    std::cout<<"  Stats:"<<std::endl;
-    std::cout<<"    Number of terimnals:    "<<(int)p_gram.sigma<<std::endl;
-    std::cout<<"    Number of nonterminals: "<<p_gram.rules_breaks.back()-(p_gram.max_tsym+1)+1<<std::endl;
-    std::cout<<"    Grammar size:           "<<p_gram.g<<std::endl;
-    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
 
     if(remove(tmp_i_file.c_str())){
         std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
@@ -683,7 +660,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 #ifdef __linux__
         malloc_trim(0);
 #endif
-
     }
     //std::cout<<"2. ";report_mem_peak();
 
@@ -777,9 +753,19 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         return mp_table.size();
 
     }else{ //just copy the input
+
+        //TODO this is new
+        /*i_file_stream<sym_type> ifs(i_file, BUFFER_SIZE);
+        size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
+        size_t max_sym = p_gram.r-1;
+        size_t alphabet = max_sym-min_sym+1;
+        for(size_t i=0;i<ifs.size();i++){
+            std::cout<<ifs.read(i)-min_sym<<std::endl;
+        }*/
+        //
+
         std::ifstream in(i_file, std::ios_base::binary);
         std::ofstream out(o_file, std::ios_base::binary);
-
         auto buffer = reinterpret_cast<char*>(malloc(BUFFER_SIZE));
         do {
             in.read(&buffer[0], BUFFER_SIZE);
