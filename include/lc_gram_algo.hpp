@@ -36,16 +36,18 @@ struct parse_data_t {
     };
 };
 
-struct dictionary{
+struct dictionary {
     size_t min_sym;
     size_t max_sym;
     size_t alphabet;
     size_t n_phrases;
     vector_t dict;
     vector_t freqs;
-    bv_t d_lim;
+    bv_t     d_lim;
     typedef size_t size_type;
     const bv_t& desc_bv;
+    bv_t phrase_has_h_occ;
+    vector_t phrases_ptr;
 
     dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
                key_wrapper &key_w, size_t dict_syms, size_t max_freq,
@@ -58,10 +60,10 @@ struct dictionary{
                                     d_lim(dict_syms, false),
                                     desc_bv(is_suffix_bv){
         size_t j=0, k=0, freq;
-        //size_t tot_freq=0;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
-                dict[j] = key_w.read(ptr, i)-min_sym;
+                dict[j] = key_w.read(ptr, i);
+                assert(key_w.read(ptr,i)==dict[j]);
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;
@@ -69,14 +71,12 @@ struct dictionary{
             freq = 0;
             mp_map.get_value_from(ptr, freq);
             freqs[k++] = freq;
-            //tot_freq+=freq;
         }
-        //std::cout<<"total phrases: "<<tot_freq<<std::endl;
         assert(j==dict_syms);
     }
 
     [[nodiscard]] inline bool is_suffix(size_t sym) const{
-        return desc_bv[min_sym+sym];
+        return desc_bv[sym];
     };
 
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const{

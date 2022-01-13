@@ -4,6 +4,7 @@
 
 #include "grammar.hpp"
 #include <fstream>
+#include <cassert>
 
 void gram_info_t::save_to_file(std::string& output_file){
 

@@ -59,9 +59,9 @@ int main(int argc, char** argv) {
 
     CLI11_PARSE(app, argc, argv);
 
-    std::cout << "Input file:        "<<args.input_file<<std::endl;
-    std::cout << "Temporal folder:   "<<args.tmp_dir<<std::endl;
     std::string tmp_folder = create_temp_folder(args.tmp_dir, "gbwt_tmp");
+    std::cout << "Input file:        "<<args.input_file<<std::endl;
+    std::cout << "Temporal folder:   "<<tmp_folder<<std::endl;
 
     if(args.output_file.empty()){
         args.output_file = std::filesystem::path(args.input_file).filename();
