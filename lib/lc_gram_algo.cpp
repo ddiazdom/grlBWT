@@ -93,9 +93,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     size_t pos, prev_pos, lcs, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0, freq;
 
     std::string lvl_bwt_file = sdsl::cache_file_name("lvl_bwt_"+std::to_string(p_gram.rules_breaks.size()), config);
-    std::string h_occ_file = sdsl::cache_file_name("lvl_hocc_"+std::to_string(p_gram.rules_breaks.size()), config);
     ivb_t lvl_bwt(lvl_bwt_file, std::ios::out);
-    bvb_t h_occ_bv(h_occ_file, std::ios::out);
 
     //remove unnecessary entries from the SA to
     // avoid dealing with corner cases
@@ -267,7 +265,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             std::cout<<dict.dict[k]<<" "<<run_bg<<" "<<run_end<<std::endl;*/
             lvl_bwt.push_back(dummy_sym);
             lvl_bwt.push_back(freq);
-            h_occ_bv.push_back((run_end-run_bg+1)>1);
+            dict.phrases_has_hocc[rank] = (run_end-run_bg+1)>1;
             rank++;
         }else if(!dict.d_lim[sa[run_bg]-1]){
             size_t sym = dict.dict[sa[run_bg]-2];
@@ -287,11 +285,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     if(lcs==0){
         freq = dict.freqs[d_lim_rs(sa[i-1]-1)];
         if(sa[i-1]==0 || dict.d_lim[sa[i-1]-2]){
-            ranks[d_lim_rs(sa[i-1]-1)] = rank++;
+            ranks[d_lim_rs(sa[i-1]-1)] = rank;
             phrases_sa_ranges.push_back(sa[i-1]-1);
             lvl_bwt.push_back(dummy_sym);
             lvl_bwt.push_back(freq);
-            h_occ_bv.push_back(false);
+            dict.phrases_has_hocc[rank++] = false;
         }else{
             size_t sym = dict.dict[sa[i-1]-2];
             if(lvl_bwt.size()>2 && lvl_bwt[lvl_bwt.size()-2]==sym){
@@ -303,6 +301,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         }
         //existing_phrases++;
     }
+    dict.phrases_has_hocc.resize(rank);
+    //TODO shrink to fit sp SA array
 
     //comp_dict_int(dict, new_phrases_ht, ranks, rank);
     //TODO just checking
@@ -328,10 +328,12 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     sdsl::util::clear(d_lim_rs);
     sdsl::util::clear(sa);
     sdsl::util::clear(dict.freqs);
+    new_phrases_ht.shrink_databuff();
 
-
+    //TODO this is for testing purposes
     bool found;
     //collapse the full dictionary in the grammar
+    size_t tmp = rules.size();
     for(size_t u=0;u<phrases_sa_ranges.size();u++) {
         pos = phrases_sa_ranges[u];
         //extract the greatest proper suffix of the phrase
@@ -381,7 +383,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             rules.push_back(dict.min_sym+dict.dict[tmp_pos]);
             //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<std::endl;
             r_lim.push_back(true);
-            //k++;
         }else{
             j = 0;
             while(j<p_len){
@@ -398,13 +399,27 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             //std::cout<<dict.max_sym+em_nt<<std::endl;
             rules.push_back(dict.max_sym+em_nt+1);
             r_lim.push_back(true);
-            //k++;
         }
     }
+    //
 
     comp_dict_int(dict, new_phrases_ht, phrases_sa_ranges);
+
+    std::string dict_file = sdsl::cache_file_name("dictionary_"+std::to_string(p_gram.rules_breaks.size()), config);
+    sdsl::store_to_file(dict, dict_file);
+
     p_gram.rules_breaks.push_back(phrases_sa_ranges.size());
     p_gram.r += phrases_sa_ranges.size();
+
+    //TODO this is for testing purposes
+    for(size_t u=tmp, x=0;u<rules.size();u++, x++){
+        if(dict.dict[x]<dict.alphabet){
+            assert(dict.min_sym+dict.dict[x]==rules[u]);
+        }else{
+            assert(dict.max_sym+(dict.dict[x]-dict.alphabet)+1==rules[u]);
+        }
+    }
+    //
 }
 
 void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
@@ -759,14 +774,15 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         mp_table.unload_table(st_table);
         //std::cout<<"3. ";report_mem_peak();
 
-        //create a dictionary from where the ids will be computed
-        dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms, max_freq, phrase_desc);
-        //std::cout<<"4. ";report_mem_peak();
-
-        //rename phrases according to their lexicographical ranks
-        std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
-        assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
-        //std::cout<<"5. ";report_mem_peak();
+        {
+            //create a dictionary from where the ids will be computed
+            dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms, max_freq, phrase_desc);
+            //std::cout<<"4. ";report_mem_peak();
+            //rename phrases according to their lexicographical ranks
+            std::cout << "    Assigning identifiers to the phrases" << std::endl;
+            assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
+            //std::cout<<"5. ";report_mem_peak();
+        }
 
         //reload the hash table
         mp_table.load_table(st_table);

@@ -45,8 +45,8 @@ struct dictionary {
     vector_t freqs;
     bv_t     d_lim;
     typedef size_t size_type;
-    const bv_t& desc_bv;
-    bv_t phrase_has_h_occ;
+    bv_t phrases_has_hocc;
+    bv_t* desc_bv;
     vector_t phrases_ptr;
 
     dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
@@ -58,7 +58,8 @@ struct dictionary {
                                     dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
                                     freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
                                     d_lim(dict_syms, false),
-                                    desc_bv(is_suffix_bv){
+                                    phrases_has_hocc(dict.size(), false),
+                                    desc_bv(&is_suffix_bv){
         size_t j=0, k=0, freq;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
@@ -76,27 +77,25 @@ struct dictionary {
     }
 
     [[nodiscard]] inline bool is_suffix(size_t sym) const{
-        return desc_bv[sym];
+        return (*desc_bv)[sym];
     };
 
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const{
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
-        size_type written_bytes= sdsl::write_member(min_sym, out, child, "min_sym");
-        written_bytes+= sdsl::write_member(max_sym, out, child, "max_sym");
-        written_bytes+= sdsl::write_member(alphabet, out, child, "alphabet");
+        size_type written_bytes = sdsl::write_member(alphabet, out, child, "alphabet");
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
         dict.serialize(out, child);
-        d_lim.serialize(out, child);
+        phrases_ptr.serialize(out, child);
+        phrases_has_hocc.serialize(out, child);
         return written_bytes;
     }
 
     void load(std::istream& in){
-        sdsl::read_member(min_sym, in);
-        sdsl::read_member(max_sym, in);
         sdsl::read_member(alphabet, in);
         sdsl::read_member(n_phrases, in);
         dict.load(in);
-        d_lim.load(in);
+        phrases_ptr.load(in);
+        phrases_has_hocc.load(in);
     }
 };
 

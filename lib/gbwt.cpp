@@ -154,7 +154,7 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     //gram2sp_sa(p_gram);
     //run_length_compress(p_gram, config);
-    //check_plain_grammar(p_gram, i_file);
+    check_plain_grammar(p_gram, i_file);
     //
     /*std::cout<<"  Final grammar: " << std::endl;
     std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;
