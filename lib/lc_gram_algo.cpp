@@ -15,23 +15,21 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, s
 
     //collapse the full dictionary
     bool found;
-    size_t pos, p_len, em_nt, j, new_size=0;
+    size_t pos, len, p_len, em_nt, j, new_size=0, dummy_sym = dict.alphabet+s_sa.size()+1;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
-    vector_t new_dict(new_dict_size, 0, sdsl::bits::hi(dict.alphabet+s_sa.size())+1);
+    vector_t new_dict(new_dict_size, 0, sdsl::bits::hi(dummy_sym)+1);
     vector_t phrases_ptrs(s_sa.size(), 0, sdsl::bits::hi(dict.dict.size()+1));
 
     for(size_t u=0;u<s_sa.size();u++) {
 
         pos = s_sa[u];
-        //extract the greatest proper suffix of the phrase
-        // in reverse order
+        //get the greatest phrase's proper suffix in reverse order
         size_t tmp_pos = pos;
-        while(!dict.d_lim[pos]){
-            pos++;
-        }
-        p_len = pos-tmp_pos+1;
+        while(!dict.d_lim[pos]) pos++;
+        len = pos-tmp_pos+1;
 
         phrase.clear();
+        p_len = len;
         while(pos>tmp_pos){
             phrase.push_back(dict.dict[pos--]);
             p_len--;
@@ -39,44 +37,35 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, s
 
         //check if the proper suffixes exists as phrases
         found = false;
-        while(phrase.size()>1){
-            /*for(size_t u=phrase.size();u-->0;){
-                std::cout<<phrase[u]<<" ";
-            }
-            std::cout<<""<<std::endl;*/
+        while(!phrase.empty()){
             phrase.mask_tail();
             auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
             if(res.second){
                 em_nt = 0;
                 phrases_ht.get_value_from(res.first, em_nt);
                 found = true;
-                //std::cout<<" found: "<<dict.max_sym+em_nt<<std::endl;
                 break;
             }
             phrase.pop_back();
             p_len++;
         }
 
-        //std::cout<<dict.max_sym+rank<<" -> ";
         if(!found) {
-            while(!dict.d_lim[tmp_pos]){
-                //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<" ";
+            new_dict[new_size++] = len==1?  dummy_sym : dict.dict[tmp_pos+len-2];
+            new_dict[new_size++] = dict.dict[tmp_pos+len-1];
+            /*while(!dict.d_lim[tmp_pos]){
                 new_dict[new_size++] = dict.dict[tmp_pos++];
             }
-            new_dict[new_size++] = dict.dict[tmp_pos];
-            //std::cout<<dict.min_sym+dict.dict[tmp_pos]<<std::endl;
+            new_dict[new_size++] = dict.dict[tmp_pos];*/
         }else{
-            j = 0;
+            new_dict[new_size++] = dict.dict[tmp_pos+p_len-1];
+            new_dict[new_size++] = dict.alphabet+em_nt;
+            /*j = 0;
             while(j<p_len){
                 new_dict[new_size++] = dict.dict[tmp_pos+j];
-                //std::cout<<dict.min_sym+dict.dict[tmp_pos+j]<<" ";
                 j++;
             }
-            //std::cout<<" "<<std::endl;
-
-            //assert(em_nt>0);
-            //std::cout<<dict.max_sym+em_nt<<std::endl;
-            new_dict[new_size++] = dict.alphabet+em_nt;
+            new_dict[new_size++] = dict.alphabet+em_nt;*/
         }
         phrases_ptrs[u] = new_size-1;
     }
@@ -353,7 +342,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
         //check if the proper suffixes exists as phrases
         found = false;
-        while(phrase.size()>1){
+        while(!phrase.empty()){
             //for(size_t u=phrase.size();u-->0;){
             //    std::cout<<phrase[u]<<" ";
             //}

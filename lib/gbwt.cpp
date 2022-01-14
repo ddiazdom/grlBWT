@@ -220,6 +220,6 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     //infer_lvl_bwt(p_gram);
-    //check_plain_grammar(p_gram, i_file);
+    check_plain_grammar(p_gram, i_file);
 }
 
