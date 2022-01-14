@@ -37,18 +37,19 @@ struct parse_data_t {
 };
 
 struct dictionary {
-    size_t min_sym;
-    size_t max_sym;
-    size_t alphabet;
-    size_t n_phrases;
+    typedef size_t size_type;
+    size_t min_sym{};
+    size_t max_sym{};
+    size_t alphabet{};
+    size_t n_phrases{};
     vector_t dict;
     vector_t freqs;
     bv_t     d_lim;
-    typedef size_t size_type;
     bv_t phrases_has_hocc;
-    bv_t* desc_bv;
+    bv_t* desc_bv=nullptr;
     vector_t phrases_ptr;
 
+    dictionary()=default;
     dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
                key_wrapper &key_w, size_t dict_syms, size_t max_freq,
                bv_t& is_suffix_bv): min_sym(_min_sym),

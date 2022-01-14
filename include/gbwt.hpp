@@ -14,10 +14,7 @@
  * @param uncomp_file : original input text
  */
 void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file);
-
-void sp_sa2bwt(std::string& sp_sa, std::string& output);
-void induce_sym_order(gram_info_t& p_gram);
-void gram2sp_sa(gram_info_t& p_gram);
+void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round);
 
 /***
  *

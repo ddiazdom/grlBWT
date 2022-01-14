@@ -114,17 +114,87 @@ alpha_t get_alphabet(std::string &i_file) {
     return alphabet;
 }
 
-void sp_sa2bwt(std::string& sp_sa, std::string& output){
+void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
 
-}
+    dictionary dict;
+    bv_t is_suffix_bv;
+    std::string dict_file = sdsl::cache_file_name("dictionary_"+std::to_string(p_round), config);
+    sdsl::load_from_file(dict, dict_file);
+    std::string is_suffix_file = sdsl::cache_file_name("is_suffix_bv_"+std::to_string(p_round), config);
+    sdsl::load_from_file(is_suffix_bv, is_suffix_file);
 
-void induce_sym_order(gram_info_t& p_gram, size_t p_round){
-    //TODO perform counting sort
-}
+    std::string prev_bwt_file = sdsl::cache_file_name("lvl_bwt_"+std::to_string(p_round+1), config);
+    ivb_t prev_bwt(prev_bwt_file, std::ios::in);
 
-void gram2sp_sa(gram_info_t& p_gram){
-    for(size_t i=p_gram.n_p_rounds-1;i-->0;){
-        induce_sym_order(p_gram, i);
+    bv_rs_t hocc_rs(&dict.phrases_has_hocc);
+    vector_t hocc;
+    vector_t buckets_hocc;
+
+    size_t sym, left_sym, pos, freq, ptr, rank, dummy_sym = dict.alphabet+1;
+    for(size_t i=0;i<prev_bwt.size();i+=2){
+        sym = prev_bwt[i];
+        freq = prev_bwt[i+1];
+
+        if(dict.phrases_has_hocc[sym]){
+            rank = hocc_rs(sym);
+            ptr = buckets_hocc[rank];
+            if(hocc[ptr]==dummy_sym+1){
+                hocc[ptr+1] += freq;
+            }else{
+                hocc[ptr] = dummy_sym+1;
+                hocc[ptr+1] = freq;
+                buckets_hocc[rank]+=2;
+            }
+        }
+
+        pos = dict.phrases_ptr[sym];
+        sym = dict.dict[pos];
+        while(sym>=dict.alphabet){
+            sym -= dict.alphabet;
+            left_sym = dict.dict[pos-1];
+            assert(left_sym<dict.alphabet && dict.phrases_has_hocc[sym]);
+            rank = hocc_rs(sym);
+            ptr = buckets_hocc[sym];
+            if(hocc[ptr]==left_sym+1){
+                hocc[ptr+1] += freq;
+            }else{
+                hocc[ptr] = left_sym+1;
+                hocc[ptr+1] = freq;
+                buckets_hocc[rank]+=2;
+            }
+            pos = dict.phrases_ptr[sym];
+            sym = dict.dict[pos];
+        }
+        prev_bwt[i] = is_suffix_bv[sym] ? sym : dict.dict[pos-1];
+    }
+
+    size_t j=0,k=0;
+    while(j<hocc.size()){
+        if(hocc[j]!=0){
+            hocc[k] = hocc[j];
+            hocc[k+1] = hocc[j+1];
+            j+=2;
+            k+=2;
+        }else{
+            while(hocc[j]==0) j++;
+        }
+    }
+    hocc.resize(k);
+
+    rank = 0 ;
+    std::string lvl_bwt_file = sdsl::cache_file_name("lvl_bwt_"+std::to_string(p_round), config);
+    ivb_t lvl_bwt(lvl_bwt_file, std::ios::in);
+    for(size_t i=0;i<lvl_bwt.size();i+=2){
+        if(lvl_bwt[i]==dummy_sym){
+            if(dict.phrases_has_hocc[rank]){
+                //copy from hocc
+            }else{
+                //copy from the previous bwt
+            }
+            rank++;
+        }else{
+            //maintain the bwt
+        }
     }
 }
 
@@ -152,9 +222,9 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
     p_gram.r = p_gram.max_tsym + 1;
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
-    //gram2sp_sa(p_gram);
+    //infer_lvl_bwt(p_gram);
     //run_length_compress(p_gram, config);
-    check_plain_grammar(p_gram, i_file);
+    //check_plain_grammar(p_gram, i_file);
     //
     /*std::cout<<"  Final grammar: " << std::endl;
     std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;

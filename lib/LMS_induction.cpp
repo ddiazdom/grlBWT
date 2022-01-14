@@ -3,7 +3,7 @@
 //
 #include "LMS_induction.h"
 
-void suffix_induction(std::string &sa_file, vector_t &dict, bv_t &d_lim, size_t alphabet) {
+void suffix_induction(vector_t& sa, vector_t &dict, bv_t &d_lim, size_t alphabet) {
 
     vector_t buckets(alphabet+1, 0, sdsl::bits::hi(dict.size())+1);
 
@@ -20,7 +20,6 @@ void suffix_induction(std::string &sa_file, vector_t &dict, bv_t &d_lim, size_t 
     }
     buckets[buckets.size()-1] = acc;
 
-    vector_t sa(dict.size(), 0, sdsl::bits::hi(dict.size())+1);
     vector_t freq(alphabet, 0, sdsl::bits::hi(max_freq)+1);
 
     size_t sym;
@@ -48,7 +47,7 @@ void suffix_induction(std::string &sa_file, vector_t &dict, bv_t &d_lim, size_t 
     }
     sa.resize(next_av);*/
 
-    sdsl::store_to_file(sa, sa_file);
+    //sdsl::store_to_file(sa, sa_file);
 
     /*for(auto && i : sa){
         if(i==0)continue;
