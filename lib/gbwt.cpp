@@ -206,15 +206,12 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(n_chars) * hbuff_frac)));
 
     sdsl::cache_config config(false, tmp_folder);
-    std::string g_info_file = sdsl::cache_file_name("g_info_file", config);
 
     std::string rules_file = sdsl::cache_file_name("m_rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
-
     gram_info_t p_gram(rules_file, rules_len_file);
     p_gram.sigma = alphabet.size();
     p_gram.last_dict_size = p_gram.sigma;
-
     for(auto & sym : alphabet){
         p_gram.sym_map[sym.first] = sym.first;
     }
@@ -223,33 +220,6 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
 
     build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
     //infer_lvl_bwt(p_gram);
-    //run_length_compress(p_gram, config);
     //check_plain_grammar(p_gram, i_file);
-    //
-    /*std::cout<<"  Final grammar: " << std::endl;
-    std::cout<<"    Number of terminals:            "<< (size_t) p_gram.sigma << std::endl;
-    std::cout<<"    Number of nonterminals:         "<< p_gram.r - p_gram.sigma<<std::endl;
-    std::cout<<"    Grammar size:                   "<< p_gram.g<<std::endl;
-    std::cout<<"    Breakdown:"<<std::endl;
-    for(size_t i=0;i<p_gram.n_p_rounds;i++){
-        std::cout<<"      Rules of parsing round "<<(i+1);
-        if(i<9) std::cout<<" ";
-        std::cout<<":    "<<p_gram.rules_breaks[i+1]-p_gram.rules_breaks[i]<<std::endl;
-    }
-    std::cout<<"  Compression stats: " << std::endl;
-    std::cout<<"    Text size in MB:        " << double(n_chars)/1000000<<std::endl;
-    std::cout<<"    Grammar size in MB:     " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(1000000)<< std::endl;
-    std::cout<<"    Compression ratio:      " << INT_CEIL(p_gram.g*(sdsl::bits::hi(p_gram.r)+1),8)/double(n_chars) << std::endl;
-
-    std::cout<<"  Storing the final grammar in " << p_gram_file <<std::endl;
-    if(comp_lvl==1){
-        grammar<sdsl::int_vector<>> final_gram(p_gram, n_chars, alphabet[0].second);
-        sdsl::store_to_file(final_gram, p_gram_file);
-        final_gram.space_breakdown();
-    }else if(comp_lvl==2){
-        grammar<huff_vector<>> final_gram(p_gram, n_chars, alphabet[0].second);
-        sdsl::store_to_file(final_gram, p_gram_file);
-        final_gram.space_breakdown();
-    }*/
 }
 

@@ -42,25 +42,28 @@ struct dictionary {
     size_t max_sym{};
     size_t alphabet{};
     size_t n_phrases{};
+    size_t t_size{};
     vector_t dict;
     vector_t freqs;
     bv_t     d_lim;
-    bv_t phrases_has_hocc;
-    bv_t* desc_bv=nullptr;
     vector_t phrases_ptr;
+    bv_t phrases_has_hocc;
+    vector_t hocc_buckets;
+    bv_t* desc_bv=nullptr;
 
     dictionary()=default;
     dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
                key_wrapper &key_w, size_t dict_syms, size_t max_freq,
-               bv_t& is_suffix_bv): min_sym(_min_sym),
-                                    max_sym(_max_sym),
-                                    alphabet(max_sym-min_sym+1),
-                                    n_phrases(mp_map.size()),
-                                    dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
-                                    freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
-                                    d_lim(dict_syms, false),
-                                    phrases_has_hocc(dict.size(), false),
-                                    desc_bv(&is_suffix_bv){
+               bv_t& is_suffix_bv, size_t _t_size): min_sym(_min_sym),
+                                                    max_sym(_max_sym),
+                                                    alphabet(max_sym-min_sym+1),
+                                                    n_phrases(mp_map.size()),
+                                                    t_size(_t_size),
+                                                    dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
+                                                    freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
+                                                    d_lim(dict_syms, false),
+                                                    phrases_has_hocc(dict.size(), false),
+                                                    desc_bv(&is_suffix_bv){
         size_t j=0, k=0, freq;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
@@ -88,6 +91,7 @@ struct dictionary {
         dict.serialize(out, child);
         phrases_ptr.serialize(out, child);
         phrases_has_hocc.serialize(out, child);
+        hocc_buckets.serialize(out, child);
         return written_bytes;
     }
 
@@ -97,6 +101,7 @@ struct dictionary {
         dict.load(in);
         phrases_ptr.load(in);
         phrases_has_hocc.load(in);
+        hocc_buckets.load(in);
     }
 };
 

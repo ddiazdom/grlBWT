@@ -11,13 +11,13 @@
 #include <malloc.h>
 #endif
 
-void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa) {
+void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, size_t new_dict_size) {
 
     //collapse the full dictionary
     bool found;
     size_t pos, p_len, em_nt, j, new_size=0;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
-    vector_t new_dict(dict.dict.size(), 0, sdsl::bits::hi(dict.alphabet+s_sa.size())+1);
+    vector_t new_dict(new_dict_size, 0, sdsl::bits::hi(dict.alphabet+s_sa.size())+1);
     vector_t phrases_ptrs(s_sa.size(), 0, sdsl::bits::hi(dict.dict.size()+1));
 
     for(size_t u=0;u<s_sa.size();u++) {
@@ -80,7 +80,6 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa) {
         }
         phrases_ptrs[u] = new_size-1;
     }
-    assert(new_size<=dict.dict.size());
     new_dict.resize(new_size);
     dict.dict.swap(new_dict);
     dict.phrases_ptr.swap(phrases_ptrs);
@@ -93,37 +92,16 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     size_t pos, prev_pos, lcs, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0, freq;
 
-    std::string lvl_bwt_file = sdsl::cache_file_name("lvl_bwt_"+std::to_string(p_gram.rules_breaks.size()), config);
+    std::string lvl_bwt_file = sdsl::cache_file_name("pbwt_par_"+std::to_string(p_gram.rules_breaks.size()), config);
     ivb_t lvl_bwt(lvl_bwt_file, std::ios::out);
 
     //remove unnecessary entries from the SA to
     // avoid dealing with corner cases
     bv_rs_t d_lim_rs(&dict.d_lim);
     size_t k=0;
-    //freq=0;
     for(size_t j=0;j<sa.size();j++){
-        if(sa[j]!=0){
-            //pos = sa[j]-1;
-            //the SA position represents either
-            // i) a suffix of length >= 2
-            // ii) phrase of length 1
-            //if(!dict.d_lim[pos] || // pattern 0...1 means i)
-            //   (dict.d_lim[pos] && (pos==0 || dict.d_lim[pos-1]))){ //pattern 11 means ii)
-            sa[k++] = sa[j];
-            //}
-
-            /*if(dict.d_lim[sa[j]-1] &&
-              (sa[j]-1==0 || dict.d_lim[sa[j]-2]) &&
-              dict.is_suffix(dict.dict[sa[j]-1])){
-                std::cout<<"holaaaa"<<std::endl;
-            }*/
-
-            /*if(!(dict.d_lim[sa[j]-1] && !dict.is_suffix(dict.dict[sa[j]-1]))){
-                freq+=dict.freqs[d_lim_rs(sa[j]-1)];
-            }*/
-        }
+        if(sa[j]!=0) sa[k++] = sa[j];
     }
-    //std::cout<<"tot symbols: "<<freq<<std::endl;
     sa.resize(k);
 
     size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
@@ -132,8 +110,10 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
 
     bool is_maximal, exists_as_rule;
-    size_t i=1, run_bg /*, rem_elms=0, new_phrases=0, existing_phrases=0*/;
-    //int_array<size_t> phrases_sa_ranges(dict.n_phrases, sdsl::bits::hi(dict.dict.size())+1);
+    size_t i=1, run_bg, n_suffixes=0, n_hocc=0;/*, rem_elms=0, new_phrases=0, existing_phrases=0*/;
+
+    dict.hocc_buckets.width(sdsl::bits::hi(dict.t_size)+1);
+    dict.hocc_buckets.resize(INT_CEIL(dict.n_phrases,4));
 
     while(i<sa.size()) {
 
@@ -173,6 +153,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             }while(equal && !limit_a && !limit_b);
 
             if((equal+limit_a+limit_b)==3) {
+
+                //TODO I think this ifelse statement can be simplified a bit
                 if (pos==0 || dict.d_lim[pos - 1]) {
                     ranks[d_lim_rs(pos)] = rank;
                     exists_as_rule = true;
@@ -180,11 +162,13 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 } else {
                     l_sym = dict.dict[pos - 1];
                     if (!is_maximal && prev_l_sym != dummy_sym) {
-                        is_maximal = lcs>1 && (prev_l_sym != l_sym);
+                        is_maximal = (dict.is_suffix(dict.dict[pos]) || lcs>1) && (prev_l_sym != l_sym);
                     }
                 }
-                prev_pos = pos;
                 if (l_sym != dummy_sym) prev_l_sym = l_sym;
+                //
+
+                prev_pos = pos;
 
                 //TODO
                 /*k=pos;
@@ -211,14 +195,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
         if(exists_as_rule || is_maximal) {
 
-            /*if(!exists_as_rule){
-                new_phrases++;
-            }else{
-                existing_phrases++;
-            }*/
-
-            sa[rank] = sa[run_bg]-1;
-
             if((run_end-run_bg+1)>1) {
 
                 //put the phrase in reverse order
@@ -226,6 +202,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 size_t tmp_pos2 = tmp_pos;
                 phrase.clear();
                 while(!dict.d_lim[tmp_pos]) tmp_pos++;
+
                 do{
                     phrase.push_back(dict.dict[tmp_pos--]);
                 }while(tmp_pos>=tmp_pos2);
@@ -238,14 +215,14 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 }
                 std::cout<<""<<std::endl;*/
 
+                n_suffixes += phrase.size()==1;
                 //hash only those phrases that can be proper
                 // suffixes of other phrases
-                assert(phrase.size()>1);
-
+                //assert(phrase.size()>1);
                 //if(phrase.size()>1){
-                    phrase.mask_tail();
-                    auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank);
-                    assert(res.second);
+                phrase.mask_tail();
+                auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank);
+                assert(res.second);
                 //}
 
                 /*std::cout<<sa[run_bg]<<" ";
@@ -259,6 +236,13 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                     sa[j] = 0;
                 }
                 rem_elms+=run_end-run_bg;*/
+                dict.phrases_has_hocc[rank] = true;
+
+                if(n_hocc==dict.hocc_buckets.size()){
+                    auto new_size = size_t(double(n_hocc)*1.15);
+                    dict.hocc_buckets.resize(new_size);
+                }
+                dict.hocc_buckets[n_hocc++] = freq;
             }
 
             /*k=sa[run_bg]-1;
@@ -268,9 +252,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             std::cout<<dict.dict[k]<<" "<<run_bg<<" "<<run_end<<std::endl;*/
             lvl_bwt.push_back(dummy_sym);
             lvl_bwt.push_back(freq);
-            dict.phrases_has_hocc[rank] = (run_end-run_bg+1)>1;
+            sa[rank] = sa[run_bg]-1;
             rank++;
-        }else if(!dict.d_lim[sa[run_bg]-1]){
+        }else if(!dict.d_lim[sa[run_bg]-1] ||
+                  dict.is_suffix(dict.dict[sa[run_bg]-1])){
+            assert(!is_maximal);
             size_t sym = dict.dict[sa[run_bg]-2];
             if(lvl_bwt.size()>2 && lvl_bwt[lvl_bwt.size()-2]==sym){
                 lvl_bwt[lvl_bwt.size()-1] +=freq;
@@ -278,9 +264,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 lvl_bwt.push_back(sym);
                 lvl_bwt.push_back(freq);
             }
-        }else if(dict.is_suffix(dict.dict[sa[run_bg]-1])){
-            lvl_bwt.push_back(dummy_sym);
-            lvl_bwt.push_back(freq);
         }
     }
 
@@ -304,18 +287,24 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         }
         //existing_phrases++;
     }
-    dict.phrases_has_hocc.resize(rank);
-    sa.resize(rank);
-    //TODO shrink to fit sp SA array
 
+
+    sa.resize(rank);
+    dict.phrases_has_hocc.resize(rank);
+    dict.hocc_buckets.resize(n_hocc+1);
+    size_t acc = 0, tmp;
+    for(size_t u=0;u<n_hocc;u++){
+        tmp = dict.hocc_buckets[u];
+        dict.hocc_buckets[u] = acc;
+        acc +=tmp;
+    }
+    dict.hocc_buckets[n_hocc] = acc;
     //comp_dict_int(dict, new_phrases_ht, ranks, rank);
     //TODO just checking
-    //freq=0;
-    //for(size_t u=1;u<lvl_bwt.size();u+=2){
-    //    freq+=lvl_bwt[u];
-    //}
-    //std::cout<<"total number of symbols "<<freq<<std::endl;
-    //std::cout<<h_occ_bv.size()<<std::endl;
+    /*freq=0;
+    for(size_t u=1;u<lvl_bwt.size();u+=2){
+        freq+=lvl_bwt[u];
+    }*/
     //
 
     //assign the ranks to the original phrases
@@ -332,12 +321,24 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     sdsl::util::clear(dict.freqs);
     new_phrases_ht.shrink_databuff();
 
+#ifdef __linux__
+    malloc_trim(0);
+#endif
+
     //TODO this is for testing purposes
     bool found;
     //collapse the full dictionary in the grammar
-    size_t tmp = rules.size();
+    tmp = rules.size();
     for(auto && u : sa) {
+
         pos = u;
+
+        //TODO
+        if(dict.d_lim[pos]){
+            assert(dict.is_suffix(dict.dict[pos]));
+        }
+        //
+
         //extract the greatest proper suffix of the phrase
         // in reverse order
         size_t tmp_pos = pos;
@@ -405,7 +406,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     }
     //
 
-    comp_dict_int(dict, new_phrases_ht, sa);
+    comp_dict_int(dict, new_phrases_ht, sa, dict.dict.size()+n_suffixes);
 
     std::string dict_file = sdsl::cache_file_name("dictionary_"+std::to_string(p_gram.rules_breaks.size()), config);
     sdsl::store_to_file(dict, dict_file);
@@ -760,7 +761,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     auto join_res = join_thread_phrases(mp_table, phrases_files);
 
     size_t psize=0;//<- for the iter stats
-    if(mp_table.size()!=p_gram.last_dict_size){
+    if(mp_table.size()!=p_gram.last_dict_size) {
         size_t width = sdsl::bits::hi(phrase_desc.size())+1;
         size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
         size_t max_sym = p_gram.r-1;
@@ -778,7 +779,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         {
             //create a dictionary from where the ids will be computed
-            dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms, max_freq, phrase_desc);
+            dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms, max_freq, phrase_desc, threads_data[0].ifs.size());
             //std::cout<<"4. ";report_mem_peak();
             //rename phrases according to their lexicographical ranks
             std::cout << "    Assigning identifiers to the phrases" << std::endl;
@@ -834,8 +835,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 new_phrase_desc[val] = phrase_desc[sym];
                 ++it;
             }
-            std::string is_suffix_file = sdsl::cache_file_name("is_suffix_bv_"+std::to_string(p_gram.rules_breaks.size()-1),config);
-            sdsl::store_to_file(phrase_desc, is_suffix_file);
             phrase_desc.swap(new_phrase_desc);
         }
 
