@@ -288,7 +288,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         //existing_phrases++;
     }
 
-
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
     dict.hocc_buckets.resize(n_hocc+1);
@@ -308,7 +307,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     //
 
     //assign the ranks to the original phrases
-    size_t p_len, em_nt;
     size_t j=0;
     for(auto const& ptr : mp_map){
         phrase_map_t::val_type val=0;
@@ -326,8 +324,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 #endif
 
     //TODO this is for testing purposes
-    bool found;
-    //collapse the full dictionary in the grammar
+    /*bool found;
+    size_t p_len, em_nt;
     tmp = rules.size();
     for(auto && u : sa) {
 
@@ -356,10 +354,10 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         //check if the proper suffixes exists as phrases
         found = false;
         while(phrase.size()>1){
-            /*for(size_t u=phrase.size();u-->0;){
-                std::cout<<phrase[u]<<" ";
-            }
-            std::cout<<""<<std::endl;*/
+            //for(size_t u=phrase.size();u-->0;){
+            //    std::cout<<phrase[u]<<" ";
+            //}
+            //std::cout<<""<<std::endl;
             phrase.mask_tail();
             auto res = new_phrases_ht.find(phrase.data(), phrase.n_bits());
             if(res.second){
@@ -403,24 +401,23 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
             rules.push_back(dict.max_sym+em_nt+1);
             r_lim.push_back(true);
         }
-    }
+    }*/
     //
 
     comp_dict_int(dict, new_phrases_ht, sa, dict.dict.size()+n_suffixes);
-
     std::string dict_file = sdsl::cache_file_name("dictionary_"+std::to_string(p_gram.rules_breaks.size()), config);
     sdsl::store_to_file(dict, dict_file);
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
 
     //TODO this is for testing purposes
-    for(size_t u=tmp, x=0;u<rules.size();u++, x++){
+    /*for(size_t u=tmp, x=0;u<rules.size();u++, x++){
         if(dict.dict[x]<dict.alphabet){
             assert(dict.min_sym+dict.dict[x]==rules[u]);
         }else{
             assert(dict.max_sym+(dict.dict[x]-dict.alphabet)+1==rules[u]);
         }
-    }
+    }*/
     //
 }
 

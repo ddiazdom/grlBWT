@@ -88,6 +88,7 @@ struct dictionary {
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
         size_type written_bytes = sdsl::write_member(alphabet, out, child, "alphabet");
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
+        written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
         dict.serialize(out, child);
         phrases_ptr.serialize(out, child);
         phrases_has_hocc.serialize(out, child);
@@ -98,6 +99,7 @@ struct dictionary {
     void load(std::istream& in){
         sdsl::read_member(alphabet, in);
         sdsl::read_member(n_phrases, in);
+        sdsl::read_member(t_size, in);
         dict.load(in);
         phrases_ptr.load(in);
         phrases_has_hocc.load(in);
