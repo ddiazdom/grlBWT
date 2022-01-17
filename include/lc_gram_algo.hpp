@@ -43,10 +43,10 @@ struct dictionary {
     size_t alphabet{};
     size_t n_phrases{};
     size_t t_size{};
+    size_t dict_dummy{};
     vector_t dict;
     vector_t freqs;
     bv_t     d_lim;
-    vector_t phrases_ptr;
     bv_t phrases_has_hocc;
     vector_t hocc_buckets;
     bv_t* desc_bv=nullptr;
@@ -68,7 +68,7 @@ struct dictionary {
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i);
-                assert(key_w.read(ptr,i)==dict[j]);
+                //assert(key_w.read(ptr,i)==dict[j]);
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;
@@ -89,8 +89,8 @@ struct dictionary {
         size_type written_bytes = sdsl::write_member(alphabet, out, child, "alphabet");
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
         written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
+        written_bytes+= sdsl::write_member(dict_dummy, out, child, "dummy_sym");
         dict.serialize(out, child);
-        phrases_ptr.serialize(out, child);
         phrases_has_hocc.serialize(out, child);
         hocc_buckets.serialize(out, child);
         return written_bytes;
@@ -100,8 +100,8 @@ struct dictionary {
         sdsl::read_member(alphabet, in);
         sdsl::read_member(n_phrases, in);
         sdsl::read_member(t_size, in);
+        sdsl::read_member(dict_dummy, in);
         dict.load(in);
-        phrases_ptr.load(in);
         phrases_has_hocc.load(in);
         hocc_buckets.load(in);
     }
@@ -148,7 +148,7 @@ struct parse_functor{
 };
 
 template<template<class, class> class lc_parser_t>
-void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
+size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                     gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);
 template<class parser_t, class out_sym_t=size_t>
 size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,

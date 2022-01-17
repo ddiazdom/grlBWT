@@ -11,22 +11,25 @@
 #include <malloc.h>
 #endif
 
-void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, size_t new_dict_size) {
+void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& new_is_suffix) {
 
     //collapse the full dictionary
     bool found;
-    size_t pos, len, p_len, em_nt, j, new_size=0, dummy_sym = dict.alphabet+s_sa.size()+1;
+    dict.dict_dummy = dict.alphabet+s_sa.size()+1;
+    size_t pos, len, p_len, em_nt, new_size=0;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
-    vector_t new_dict(new_dict_size, 0, sdsl::bits::hi(dummy_sym)+1);
-    vector_t phrases_ptrs(s_sa.size(), 0, sdsl::bits::hi(dict.dict.size()+1));
+    vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
+    //vector_t phrases_ptrs(s_sa.size(), 0, sdsl::bits::hi(dict.dict.size()+1));
 
-    for(size_t u=0;u<s_sa.size();u++) {
-
-        pos = s_sa[u];
+    size_t rank=0;
+    for(auto && u : s_sa) {
+        pos = u;
         //get the greatest phrase's proper suffix in reverse order
         size_t tmp_pos = pos;
         while(!dict.d_lim[pos]) pos++;
         len = pos-tmp_pos+1;
+
+        if(dict.is_suffix(dict.dict[tmp_pos+len-1])) new_is_suffix[rank] = true;
 
         phrase.clear();
         p_len = len;
@@ -35,7 +38,8 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, s
             p_len--;
         }
 
-        //check if the proper suffixes exists as phrases
+
+        //check if the proper suffixes exist as phrases
         found = false;
         while(!phrase.empty()){
             phrase.mask_tail();
@@ -51,8 +55,10 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, s
         }
 
         if(!found) {
-            new_dict[new_size++] = len==1?  dummy_sym : dict.dict[tmp_pos+len-2];
-            new_dict[new_size++] = dict.dict[tmp_pos+len-1];
+            new_dict[new_size++] = dict.dict_dummy;
+            new_dict[new_size++] = dict.is_suffix(dict.dict[tmp_pos+len-1]) ?  dict.dict[tmp_pos+len-1] : dict.dict[tmp_pos+len-2];
+            //new_dict[new_size++] = len==1?  dict.dict_dummy : dict.dict[tmp_pos+len-2];
+            //new_dict[new_size++] = dict.dict[tmp_pos+len-1];
             /*while(!dict.d_lim[tmp_pos]){
                 new_dict[new_size++] = dict.dict[tmp_pos++];
             }
@@ -60,6 +66,7 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, s
         }else{
             new_dict[new_size++] = dict.dict[tmp_pos+p_len-1];
             new_dict[new_size++] = dict.alphabet+em_nt;
+
             /*j = 0;
             while(j<p_len){
                 new_dict[new_size++] = dict.dict[tmp_pos+j];
@@ -67,11 +74,13 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, s
             }
             new_dict[new_size++] = dict.alphabet+em_nt;*/
         }
-        phrases_ptrs[u] = new_size-1;
+        //phrases_ptrs[u] = new_size-1;
+        rank++;
     }
-    new_dict.resize(new_size);
+
+    //new_dict.resize(new_size);
     dict.dict.swap(new_dict);
-    dict.phrases_ptr.swap(phrases_ptrs);
+    //dict.phrases_ptr.swap(phrases_ptrs);
     dict.n_phrases = s_sa.size();
     sdsl::util::clear(dict.d_lim);
 }
@@ -81,7 +90,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     size_t pos, prev_pos, lcs, l_sym, prev_l_sym, dummy_sym = dict.alphabet+1, rank=0, freq;
 
-    std::string lvl_bwt_file = sdsl::cache_file_name("pbwt_par_"+std::to_string(p_gram.rules_breaks.size()), config);
+    std::string lvl_bwt_file = sdsl::cache_file_name("pbwt_lvl_"+std::to_string(p_gram.rules_breaks.size()), config);
     ivb_t lvl_bwt(lvl_bwt_file, std::ios::out);
 
     //remove unnecessary entries from the SA to
@@ -195,6 +204,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 do{
                     phrase.push_back(dict.dict[tmp_pos--]);
                 }while(tmp_pos>=tmp_pos2);
+                //
 
                 //hash the phrase to check then if it is
                 // embedded in another phrase
@@ -274,6 +284,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 lvl_bwt.push_back(freq);
             }
         }
+
         //existing_phrases++;
     }
 
@@ -393,9 +404,13 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     }*/
     //
 
-    comp_dict_int(dict, new_phrases_ht, sa, dict.dict.size()+n_suffixes);
-    std::string dict_file = sdsl::cache_file_name("dictionary_"+std::to_string(p_gram.rules_breaks.size()), config);
+    bv_t new_is_suffix(sa.size(), false);
+    comp_dict_int(dict, new_phrases_ht, sa, new_is_suffix);
+    std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_gram.rules_breaks.size()), config);
+    std::string new_is_suffix_file = sdsl::cache_file_name("new_is_suffix", config);
     sdsl::store_to_file(dict, dict_file);
+    sdsl::store_to_file(new_is_suffix, new_is_suffix_file);
+
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
 
@@ -578,7 +593,7 @@ std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std
 
 
 template<template<class, class> class lc_parser_t>
-void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
+size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                       gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config) {
 
     std::cout<<"Generating the grammar from the text:    "<<std::endl;
@@ -630,6 +645,7 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
 
     sdsl::util::clear(symbol_desc);
 
+    /*
     {//put the compressed string at end
         std::ifstream c_vec(tmp_i_file, std::ifstream::binary);
         c_vec.seekg(0, std::ifstream::end);
@@ -637,23 +653,34 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
         c_vec.seekg(0, std::ifstream::beg);
         auto *buffer = reinterpret_cast<size_t*>(malloc(BUFFER_SIZE));
         size_t read_bytes =0;
-        size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
-        p_gram.c=0;
+        //size_t min_sym = p_gram.rules_breaks.empty() ? 0 : p_gram.r - p_gram.rules_breaks.back();
+        //p_gram.c=0;
+
+        size_t len = tot_bytes/sizeof(size_t);
+        vector_t bwt(len*2, 0, sdsl::bits::hi(len)+1);
+        size_t pos = 0;
         while(read_bytes<tot_bytes){
             c_vec.read((char *) buffer, BUFFER_SIZE);
             read_bytes+=c_vec.gcount();
             assert((c_vec.gcount() % sizeof(size_t))==0);
-            vector_t comp_string(c_vec.gcount()/sizeof(size_t), 0, sdsl::bits::hi(p_gram.rules_breaks.back())+1);
             for(size_t i=0;i<c_vec.gcount()/sizeof(size_t);i++){
-                comp_string[i] = buffer[i];
-                rules.push_back(min_sym+buffer[i]);
-                rules_lim.push_back(false);
-                p_gram.c++;
+
+                if(pos==0 || buffer[i]!=bwt[pos-2]){
+                    bwt[pos++] = buffer[i];
+                    bwt[pos++] = 1;
+                }else{
+                    assert(bwt[pos-2]==buffer[i]);
+                    bwt[pos-1]++;
+                }
+                //rules.push_back(min_sym+buffer[i]);
+                //rules_lim.push_back(false);
+                //p_gram.c++;
             }
-            sdsl::store_to_file(comp_string, sdsl::cache_file_name("bwt_"+std::to_string(p_gram.rules_breaks.size()), config));
         }
-        rules_lim[rules_lim.size() - 1] = true;
-        p_gram.r++;
+        bwt.resize(pos);
+        sdsl::store_to_file(bwt, sdsl::cache_file_name("bwt_lvl_"+std::to_string(iter-2), config));
+        //rules_lim[rules_lim.size() - 1] = true;
+        //p_gram.r++;
         c_vec.close();
         free(buffer);
     }
@@ -665,14 +692,13 @@ void build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
     for(unsigned long i : p_gram.rules_breaks){
         rule_breaks.push_back(rule_breaks.back()+i);
     }
-    std::swap(p_gram.rules_breaks, rule_breaks);
-
-    rules.close();
-    rules_lim.close();
-
-    if(remove(tmp_i_file.c_str())){
-        std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
-    }
+    std::swap(p_gram.rules_breaks, rule_breaks);*/
+    //rules.close();
+    //rules_lim.close();
+    //if(remove(tmp_i_file.c_str())){
+    //    std::cout<<"Error trying to delete file "<<tmp_i_file<<std::endl;
+    //}
+    return iter-2;
 }
 
 template<class parser_t, class out_sym_t>
@@ -808,10 +834,13 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         {
             //keep track of the phrases that have to be rephrased
-            std::cout <<"    Updating symbols status" << std::endl;
-            bv_t new_phrase_desc(p_gram.rules_breaks.back(), false);
+            //std::cout <<"    Updating symbols status" << std::endl;
+            //bv_t new_phrase_desc(p_gram.rules_breaks.back(), false);
+            bv_t new_is_suffix;
+            sdsl::load_from_file(new_is_suffix, sdsl::cache_file_name("new_is_suffix", config));
+
             //phrase_desc.resize(p_gram.r);
-            auto it = mp_table.begin();
+            /*auto it = mp_table.begin();
             auto it_end = mp_table.end();
             size_t sym;
             while (it != it_end) {
@@ -819,9 +848,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 //read the (reversed) last symbol
                 sym = key_w.read(*it, 0);
                 new_phrase_desc[val] = phrase_desc[sym];
+                assert(new_phrase_desc[val]==new_is_suffix[val]);
                 ++it;
-            }
-            phrase_desc.swap(new_phrase_desc);
+            }*/
+            phrase_desc.swap(new_is_suffix);
         }
 
         p_gram.last_dict_size = mp_table.size();
@@ -856,7 +886,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     }
 }
 
-template void build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);
+template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);
 
 template size_t build_lc_gram_int<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
                                            gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,

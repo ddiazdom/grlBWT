@@ -14,7 +14,10 @@
  * @param uncomp_file : original input text
  */
 void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file);
+
 void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round);
+void parse2bwt(sdsl::cache_config& config);
+void infer_bwt(sdsl::cache_config& config, size_t p_round);
 
 /***
  *
