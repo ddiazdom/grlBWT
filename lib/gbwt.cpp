@@ -206,6 +206,12 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         assert(dict.dict[pos-1]==dict.dict_dummy);
     }
 
+    std::cout<<"dictionary: "<<sdsl::size_in_bytes(dict.dict)/1000000<<std::endl;
+    std::cout<<"hocc_buckets: "<<sdsl::size_in_bytes(dict.hocc_buckets)/1000000<<std::endl;
+    std::cout<<"has_hocc: "<<sdsl::size_in_bytes(dict.phrases_has_hocc)/1000000<<std::endl;
+    std::cout<<"hocc_rs: "<<sdsl::size_in_bytes(hocc_rs)/1000000<<std::endl;
+    std::cout<<"hocc: "<<double(sdsl::size_in_bytes(hocc))/1000000<<" "<<hocc.size()<<std::endl;
+
     sdsl::util::clear(dict.dict);
     sdsl::util::clear(dict.hocc_buckets);
     sdsl::util::clear(hocc_rs);
@@ -217,6 +223,7 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         }
     }
     hocc.resize(pos);
+    std::cout<<"hocc: "<<double(sdsl::size_in_bytes(hocc))/1000000<<" after "<<" "<<hocc.size()<<std::endl;
 
 #ifdef __linux__
     malloc_trim(0);
@@ -238,7 +245,6 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     //}
     //bwt_buckets[bwt_buckets.size()-1] = acc;
     //
-
 
     size_t i=0, j=0, k=0, pbwt_freq, new_bwt_size=0;
     pos=0;
