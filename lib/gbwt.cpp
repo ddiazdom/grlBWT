@@ -2,6 +2,10 @@
 // Created by Diaz, Diego on 23.11.2021.
 //
 #include "gbwt.hpp"
+#include "utils.hpp"
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
 void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
 
@@ -158,13 +162,12 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     //assert(dict.t_size+1>=dummy_sym+1);
     //std::cout<<dict.phrases_has_hocc.size()<<" "<<dict.n_phrases<<std::endl;
     assert(dict.phrases_has_hocc.size() == dict.n_phrases);
+    std::cout<<"    Inferring the order of symbols' hidden occurrences"<<std::endl;
     for(size_t i=0;i<bwt.size();i+=2) {
 
         sym = bwt[i];
         freq = bwt[i+1];
-
         //bwt_buckets[sym]+=freq;
-
         if(dict.phrases_has_hocc[sym]){
             rank = hocc_rs(sym);
             ptr = dict.hocc_buckets[rank]*2;
@@ -214,10 +217,12 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         }
     }
     hocc.resize(pos);
+
 #ifdef __linux__
     malloc_trim(0);
 #endif
 
+    std::cout<<"    Merging the sorted lists into the new BWT"<<std::endl;
     std::string pre_bwt_file = sdsl::cache_file_name("pbwt_lvl_"+std::to_string(p_round), config);
     ivb_t pre_bwt(pre_bwt_file, std::ios::in);
 
@@ -300,8 +305,10 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         }
         i+=2;
     }
-    std::cout<<"    Size of the BWT:       "<<new_bwt_size<<std::endl;
-    std::cout<<"    Size run-length rep.:  "<<new_bwt.size()/2<<std::endl;
+    std::cout<<"    Stats:       "<<std::endl;
+    std::cout<<"      BWT size (n):       "<<new_bwt_size<<std::endl;
+    std::cout<<"      Number of runs (r): "<<new_bwt.size()/2<<std::endl;
+    std::cout<<"      r/n:                "<<(double(new_bwt.size())/2)/double(new_bwt_size)<<std::endl;
 
     bwt.close(true);
     pre_bwt.close(true);
@@ -355,7 +362,11 @@ void infer_bwt(sdsl::cache_config& config, size_t p_round){
 
     while(p_round-->0){
         std::cout<<"  Inducing the BWT for parse "<<p_round<<std::endl;
+        auto start = std::chrono::steady_clock::now();
         infer_lvl_bwt(config, p_round);
+        auto end = std::chrono::steady_clock::now();
+        report_time(start, end, 4);
+        report_mem_peak();
     }
 }
 
