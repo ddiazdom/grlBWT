@@ -141,28 +141,69 @@ void extract_rl_syms(ivb_t& bwt, ivb_t& new_bwt, size_t& j, size_t freq, size_t&
     }
 }
 
+void compute_hocc_size(ivb_t& bwt, dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc, vector_t& hocc_buckets){
+
+    size_t sym, ptr, pos, dummy_sym=dict.alphabet+2, left_sym;
+
+    for(size_t i=0;i<bwt.size();i+=2) {
+        sym = bwt[i];
+        if(dict.phrases_has_hocc[sym]){
+            ptr = hocc_rs(sym)*2;
+            if(hocc[ptr]!=dummy_sym){
+                hocc[ptr] = dummy_sym;
+                hocc[ptr+1]++;
+            }
+        }
+
+        pos = 2*sym+1;
+        sym = dict.dict[pos];
+        while(sym>=dict.alphabet){
+            sym -= dict.alphabet;
+            left_sym = dict.dict[pos-1]+1;
+            ptr = hocc_rs(sym)*2;
+            if(hocc[ptr]!=left_sym){
+                hocc[ptr] = left_sym;
+                hocc[ptr+1]++;
+            }
+            pos = 2*sym+1;
+            sym = dict.dict[pos];
+        }
+    }
+
+    size_t acc=0;
+    for(size_t i=0,k=0;i<hocc.size();i+=2,k++){
+        hocc_buckets[k] = acc;
+        acc+=hocc[i+1];
+    }
+    assert(acc<=dict.t_size);
+    hocc_buckets[hocc_buckets.size()-1] = acc;
+    hocc.resize(acc*2);
+    sdsl::util::set_to_value(hocc, 0);
+}
+
 void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
 
     dictionary dict;
     std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_round), config);
     sdsl::load_from_file(dict, dict_file);
+    bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
     std::string prev_bwt_file = sdsl::cache_file_name("bwt_lvl_"+std::to_string(p_round+1), config);
     ivb_t bwt(prev_bwt_file, std::ios::in);
 
-    bv_rs_t hocc_rs(&dict.phrases_has_hocc);
-    vector_t hocc(dict.hocc_buckets[dict.hocc_buckets.size()-1]*2, 0, sdsl::bits::hi(std::max(dict.t_size, dict.alphabet+1))+1);
     size_t sym, left_sym, pos, freq, ptr, rank, dummy_sym = dict.alphabet+1;
 
-    //TODO
-    //vector_t bwt_buckets(dict.n_phrases+1, 0);
+    vector_t hocc(hocc_rs(dict.phrases_has_hocc.size())*2, 0, sdsl::bits::hi(std::max(dummy_sym+1, dict.t_size))+1);
+    vector_t hocc_buckets(hocc_rs(dict.phrases_has_hocc.size())+1, 0, sdsl::bits::hi(dict.t_size)+1);
+    compute_hocc_size(bwt, dict, hocc_rs, hocc, hocc_buckets);
+
+    //vector_t hocc(dict.hocc_buckets[dict.hocc_buckets.size()-1]*2, 0, sdsl::bits::hi(std::max(dict.t_size, dict.alphabet+1))+1);
+
+    //TODO test
+    //vector_t tmp_buckets = hocc_buckets;
     //
 
-    //std::cout<<dict.t_size+1<<" "<<dummy_sym+1<<std::endl;
-    //assert(dict.t_size+1>=dummy_sym+1);
-    //std::cout<<dict.phrases_has_hocc.size()<<" "<<dict.n_phrases<<std::endl;
-    assert(dict.phrases_has_hocc.size() == dict.n_phrases);
-    std::cout<<"    Inferring the order of symbols' hidden occurrences"<<std::endl;
+    std::cout<<"    Soring the hidden symbols of the previous BWT"<<std::endl;
     for(size_t i=0;i<bwt.size();i+=2) {
 
         sym = bwt[i];
@@ -170,15 +211,14 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         //bwt_buckets[sym]+=freq;
         if(dict.phrases_has_hocc[sym]){
             rank = hocc_rs(sym);
-            ptr = dict.hocc_buckets[rank]*2;
+            ptr = hocc_buckets[rank]*2;
 
-            if(ptr>2 && hocc[ptr-2]==(dummy_sym+1)){
+            if(ptr>0 && hocc[ptr-2]==(dummy_sym+1)){
                 hocc[ptr-1] += freq;
             }else{
-                //std::cout<<"sym: "<<sym<<" with freq: "<<freq<<" is transformed to dummy in position ("<<i<<", "<<i+1<<")"<<std::endl;
                 hocc[ptr] = dummy_sym+1;
                 hocc[ptr+1] = freq;
-                dict.hocc_buckets[rank]++;
+                hocc_buckets[rank]++;
             }
         }
 
@@ -190,14 +230,14 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
             assert(left_sym<dict.alphabet && dict.phrases_has_hocc[sym]);
 
             rank = hocc_rs(sym);
-            ptr = dict.hocc_buckets[rank]*2;
+            ptr = hocc_buckets[rank]*2;
 
             if(ptr>0 && hocc[ptr-2]==(left_sym+1)){
                 hocc[ptr-1] += freq;
             }else{
                 hocc[ptr] = left_sym+1;
                 hocc[ptr+1] = freq;
-                dict.hocc_buckets[rank]++;
+                hocc_buckets[rank]++;
             }
             pos = 2*sym+1;
             sym = dict.dict[pos];
@@ -206,14 +246,14 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         assert(dict.dict[pos-1]==dict.dict_dummy);
     }
 
-    std::cout<<"dictionary: "<<sdsl::size_in_bytes(dict.dict)/1000000<<std::endl;
-    std::cout<<"hocc_buckets: "<<sdsl::size_in_bytes(dict.hocc_buckets)/1000000<<std::endl;
-    std::cout<<"has_hocc: "<<sdsl::size_in_bytes(dict.phrases_has_hocc)/1000000<<std::endl;
-    std::cout<<"hocc_rs: "<<sdsl::size_in_bytes(hocc_rs)/1000000<<std::endl;
-    std::cout<<"hocc: "<<double(sdsl::size_in_bytes(hocc))/1000000<<" "<<hocc.size()<<std::endl;
+    std::cout<<"dictionary: "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
+    std::cout<<"hocc_buckets: "<<double(sdsl::size_in_bytes(hocc_buckets))/1000000<<std::endl;
+    std::cout<<"has_hocc: "<<double(sdsl::size_in_bytes(dict.phrases_has_hocc))/1000000<<std::endl;
+    std::cout<<"hocc_rs: "<<double(sdsl::size_in_bytes(hocc_rs))/1000000<<std::endl;
+    std::cout<<"before hocc: "<<double(sdsl::size_in_bytes(hocc))/1000000<<" "<<hocc.size()<<std::endl;
 
     sdsl::util::clear(dict.dict);
-    sdsl::util::clear(dict.hocc_buckets);
+    sdsl::util::clear(hocc_buckets);
     sdsl::util::clear(hocc_rs);
     pos=0;
     for(size_t i=0;i<hocc.size();i+=2){
@@ -223,28 +263,18 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         }
     }
     hocc.resize(pos);
-    std::cout<<"hocc: "<<double(sdsl::size_in_bytes(hocc))/1000000<<" after "<<" "<<hocc.size()<<std::endl;
+    std::cout<<"after hocc: "<<double(sdsl::size_in_bytes(hocc))/1000000<<" "<<hocc.size()<<std::endl;
 
 #ifdef __linux__
     malloc_trim(0);
 #endif
 
-    std::cout<<"    Merging the sorted lists into the new BWT"<<std::endl;
+    std::cout<<"    Assembling the new BWT"<<std::endl;
     std::string pre_bwt_file = sdsl::cache_file_name("pbwt_lvl_"+std::to_string(p_round), config);
     ivb_t pre_bwt(pre_bwt_file, std::ios::in);
 
     std::string new_bwt_file = sdsl::cache_file_name("bwt_lvl_"+std::to_string(p_round), config);
     ivb_t new_bwt(new_bwt_file, std::ios::out);
-
-    //TODO testing
-    //size_t acc=0, tmp;
-    //for(size_t i=0;i<bwt_buckets.size()-1;i++){
-    //    tmp = bwt_buckets[i];
-    //    bwt_buckets[i] = acc;
-    //    acc +=tmp;
-    //}
-    //bwt_buckets[bwt_buckets.size()-1] = acc;
-    //
 
     size_t i=0, j=0, k=0, pbwt_freq, new_bwt_size=0;
     pos=0;
@@ -255,6 +285,9 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         sym = pre_bwt[i];
         pbwt_freq = pre_bwt[i+1];
         //std::cout<<sym<<" "<<pbwt_freq<<std::endl;
+        if(i==2378870){
+            std::cout<<i<<" "<<i+1<<std::endl;
+        }
 
         if(sym==dummy_sym) {
 

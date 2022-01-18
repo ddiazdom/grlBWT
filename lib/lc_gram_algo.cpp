@@ -110,8 +110,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     bool is_maximal, exists_as_rule;
     size_t i=1, run_bg, n_suffixes=0, n_hocc=0;/*, rem_elms=0, new_phrases=0, existing_phrases=0*/;
 
-    dict.hocc_buckets.width(sdsl::bits::hi(dict.t_size)+1);
-    dict.hocc_buckets.resize(INT_CEIL(dict.n_phrases,4));
+    //dict.hocc_buckets.width(sdsl::bits::hi(dict.t_size)+1);
+    //dict.hocc_buckets.resize(INT_CEIL(dict.n_phrases,4));
 
     while(i<sa.size()) {
 
@@ -237,11 +237,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 rem_elms+=run_end-run_bg;*/
                 dict.phrases_has_hocc[rank] = true;
 
-                if(n_hocc==dict.hocc_buckets.size()){
-                    auto new_size = size_t(double(n_hocc)*1.15);
-                    dict.hocc_buckets.resize(new_size);
-                }
-                dict.hocc_buckets[n_hocc++] = freq;
+                //if(n_hocc==dict.hocc_buckets.size()){
+                //    auto new_size = size_t(double(n_hocc)*1.15);
+                //    dict.hocc_buckets.resize(new_size);
+                //}
+                //dict.hocc_buckets[n_hocc++] = freq;
             }
 
             /*k=sa[run_bg]-1;
@@ -290,14 +290,15 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
-    dict.hocc_buckets.resize(n_hocc+1);
-    size_t acc = 0, tmp;
-    for(size_t u=0;u<n_hocc;u++){
-        tmp = dict.hocc_buckets[u];
-        dict.hocc_buckets[u] = acc;
-        acc +=tmp;
-    }
-    dict.hocc_buckets[n_hocc] = acc;
+
+    //dict.hocc_buckets.resize(n_hocc+1);
+    //size_t acc = 0, tmp;
+    //for(size_t u=0;u<n_hocc;u++){
+    //    tmp = dict.hocc_buckets[u];
+    //    dict.hocc_buckets[u] = acc;
+    //    acc +=tmp;
+    //}
+    //dict.hocc_buckets[n_hocc] = acc;
     //comp_dict_int(dict, new_phrases_ht, ranks, rank);
     //TODO just checking
     /*freq=0;

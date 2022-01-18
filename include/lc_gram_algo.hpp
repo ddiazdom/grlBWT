@@ -48,7 +48,7 @@ struct dictionary {
     vector_t freqs;
     bv_t     d_lim;
     bv_t phrases_has_hocc;
-    vector_t hocc_buckets;
+    //vector_t hocc_buckets;
     bv_t* desc_bv=nullptr;
 
     dictionary()=default;
@@ -92,7 +92,7 @@ struct dictionary {
         written_bytes+= sdsl::write_member(dict_dummy, out, child, "dummy_sym");
         dict.serialize(out, child);
         phrases_has_hocc.serialize(out, child);
-        hocc_buckets.serialize(out, child);
+        //hocc_buckets.serialize(out, child);
         return written_bytes;
     }
 
@@ -103,7 +103,7 @@ struct dictionary {
         sdsl::read_member(dict_dummy, in);
         dict.load(in);
         phrases_has_hocc.load(in);
-        hocc_buckets.load(in);
+        //hocc_buckets.load(in);
     }
 };
 
