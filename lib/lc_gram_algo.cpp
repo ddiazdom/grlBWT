@@ -428,8 +428,13 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
                 dictionary &dict, gram_info_t &p_gram, sdsl::cache_config &config) {
 
+    std::cout<<"Suffix induction"<<std::endl;
+    auto start = std::chrono::steady_clock::now();
     vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+1);
     suffix_induction(sa, dict.dict, dict.d_lim, dict.alphabet, config);
+    auto end = std::chrono::steady_clock::now();
+    report_time(start, end, 4);
+
     std::cout<<"Number of phrases : "<<dict.n_phrases<<std::endl;
     std::cout<<"Alphabet : "<<dict.alphabet<<std::endl;
 

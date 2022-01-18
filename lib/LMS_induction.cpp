@@ -65,34 +65,76 @@ void suffix_induction(vector_t& sa, vector_t &dict, bv_t &d_lim, size_t alphabet
 }
 
 void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
-    size_t sym, l_sym, p_sym=buckets.size(), p_l_sym=buckets.size(), buff_pos=0;
+    size_t sym, l_sym, p_sym, p_l_sym, sa_val;
+
+    //vector_t tmp_sa = sa;
+    //vector_t tmp_buckets = buckets;
+
+    size_t buff_pos=0;
     size_t buffer[2048]={0};
 
-    for(auto && pos : sa) {
+    size_t k=0;
+    while(sa[k]==0) k++;
+    buffer[buff_pos++] = sa[k]-1;
+    p_sym = dict[sa[k]-1];
+    p_l_sym = dict[sa[k]-2];
 
-        if(pos<=1  || d_lim[pos-2]) continue;
-
-        sym = dict[pos-1];
-        l_sym = dict[pos-2];
-
-        if(l_sym!=p_l_sym || sym!=p_sym || buff_pos==2048){
-            if(p_l_sym!=buckets.size() && p_l_sym>=p_sym){
-                for(size_t i=buckets[p_l_sym]-buff_pos, j=0;j<buff_pos;i++,j++){
-                    assert(sa[i]==buffer[j]);
+    for(size_t i=k+1;i<sa.size();i++) {
+        sa_val = sa[i];
+        if(sa_val<=1){//sa[i]=0
+            if(buff_pos!=0 && i==buckets[p_l_sym]) {//we reach a position that has not been induced yet
+                for(size_t ind_pos = buckets[p_l_sym], j=0; j<buff_pos;j++,ind_pos++){
+                    sa[ind_pos] = buffer[j];
                 }
+                buckets[p_l_sym]+=buff_pos;
+                buff_pos=0;
+                sa_val = sa[i];
+            }else{
+                continue;
+            }
+        }
+
+        if(sa_val>1 && d_lim[sa_val-2]){
+            continue;
+        }
+
+        sym = dict[sa_val-1];
+        l_sym = dict[sa_val-2];
+        if(l_sym!=p_l_sym || sym!=p_sym || buff_pos==2048){
+            if(p_l_sym>=p_sym && buff_pos!=0){
+                for(size_t ind_pos = buckets[p_l_sym], j=0; j<buff_pos;j++,ind_pos++){
+                    sa[ind_pos] = buffer[j];
+                }
+                buckets[p_l_sym]+=buff_pos;
             }
             buff_pos=0;
         }
-        buffer[buff_pos] = pos-1;
-
-        if(l_sym >= sym){
-            sa[buckets[l_sym]++] = pos-1;
-        }
-
-        buff_pos++;
+        buffer[buff_pos++] = sa_val-1;
         p_sym = sym;
         p_l_sym = l_sym;
     }
+
+    if(p_l_sym>=p_sym){
+        for(size_t ind_pos = buckets[p_l_sym], j=0; j<buff_pos;j++,ind_pos++){
+            sa[ind_pos] = buffer[j];
+        }
+        buckets[p_l_sym]+=buff_pos;
+    }
+
+    //TODO testing
+    /*size_t pos;
+    for(size_t i=0;i<sa.size();i++){
+        pos = sa[i];
+        if(pos<=1  || d_lim[pos-2]) continue;
+        sym = dict[pos-1];
+        l_sym = dict[pos-2];
+        if(l_sym>=sym){
+            sa[buckets[l_sym]++] = pos-1;
+        }
+    }
+    for(size_t i=0;i<sa.size();i++){
+        assert(sa[i]==tmp_sa[i]);
+    }*/
 }
 
 void induce_S_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
