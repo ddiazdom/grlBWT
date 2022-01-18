@@ -18,18 +18,22 @@ add_executable(gbwt
 target_compile_options(gbwt
         PRIVATE
         #-Werror
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-vla-extension -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -msse4.2 #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
 #no-stack-check only for APPLE!!!!!!
 if(APPLE)
-    target_compile_options(gbwt PRIVATE -fno-stack-check)
+    target_compile_options(gbwt PRIVATE -fno-stack-check
+            #-Wno-vla-extension
+            )
 endif()
 
-target_link_libraries(gbwt
-        LINK_PUBLIC
-        pthread ${LIBSDSL_LIBRARIES})
+if(UNIX AND NOT APPLE)
+    target_link_libraries(gbwt LINK_PUBLIC stdc++fs)
+endif()
+
+target_link_libraries(gbwt LINK_PUBLIC pthread ${LIBSDSL_LIBRARIES})
 
 target_include_directories(gbwt
         PRIVATE

@@ -284,7 +284,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
                 lvl_bwt.push_back(freq);
             }
         }
-
         //existing_phrases++;
     }
 
@@ -430,7 +429,14 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
                 dictionary &dict, gram_info_t &p_gram, sdsl::cache_config &config) {
 
     vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+1);
-    suffix_induction(sa, dict.dict, dict.d_lim, dict.alphabet);
+    suffix_induction(sa, dict.dict, dict.d_lim, dict.alphabet, config);
+    std::cout<<"Number of phrases : "<<dict.n_phrases<<std::endl;
+    std::cout<<"Alphabet : "<<dict.alphabet<<std::endl;
+
+    std::cout<<"dict  "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
+    std::cout<<"freqs "<<double(sdsl::size_in_bytes(dict.freqs))/1000000<<std::endl;
+    std::cout<<"sa    "<<double(sdsl::size_in_bytes(sa))/1000000<<std::endl;
+    std::cout<<"has_hocc    "<<double(sdsl::size_in_bytes(dict.phrases_has_hocc))/1000000<<std::endl;
 
     /*bv_rs_t d_lim_rs(&dict.d_lim);
     vector_t ranks(dict.n_phrases, 0, sdsl::bits::hi(dict.n_phrases)+1);
@@ -792,6 +798,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         {
             //create a dictionary from where the ids will be computed
+            std::cout<<" Creating the dictionary from the hash table"<<std::endl;
             dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms, max_freq, phrase_desc, threads_data[0].ifs.size());
             //std::cout<<"4. ";report_mem_peak();
             //rename phrases according to their lexicographical ranks
