@@ -11,29 +11,32 @@ void suffix_induction(vector_t& sa, vector_t &dict, bv_t &d_lim, size_t alphabet
         buckets[sym]++;
     }
 
-    size_t acc=0, tmp, max_freq=0;
+    size_t acc=0, freq, max_freq=0, n_uniq=0;
     for(auto && bucket : buckets){
-        tmp = bucket;
+        freq = bucket;
         bucket = acc;
-        acc +=tmp;
-        if(tmp>max_freq) max_freq = tmp;
+        acc +=freq;
+        if(freq==1) n_uniq++;
+        if(freq>max_freq) max_freq = freq;
     }
+    std::cout<<"There are "<<n_uniq<<" unique symbols "<<(double(n_uniq)/double(buckets.size()))*100<<std::endl;
     buckets[buckets.size()-1] = acc;
     sdsl::store_to_file(buckets, sdsl::cache_file_name("iss_buckets", config));
-
-    vector_t freq(alphabet, 0, sdsl::bits::hi(max_freq)+1);
 
     size_t sym;
     for(size_t i=0;i<dict.size();i++){
         if(d_lim[i]){
             sym = dict[i];
-            sa[buckets[sym+1]-(freq[sym]++)-1] = i+1;
+            //sa[buckets[sym+1]-(freq[sym]++)-1] = i+1;
+            sa[--buckets[sym+1]] = i+1;
         }
     }
+    sdsl::util::clear(buckets);
+    sdsl::load_from_file(buckets, sdsl::cache_file_name("iss_buckets", config));
 
-    sdsl::util::set_to_value(freq, 0);
     induce_L_type(sa, dict, d_lim, buckets);
 
+    sdsl::util::clear(buckets);
     sdsl::load_from_file(buckets, sdsl::cache_file_name("iss_buckets", config));
     for(size_t bck=0;bck<buckets.size()-1;bck++){
         buckets[bck] = buckets[bck+1]-1;
@@ -65,6 +68,7 @@ void suffix_induction(vector_t& sa, vector_t &dict, bv_t &d_lim, size_t alphabet
 }
 
 void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
+    std::cout<<"Inducing L-type"<<std::endl;
     size_t sym, l_sym, p_sym, p_l_sym, sa_val;
 
     //vector_t tmp_sa = sa;
@@ -138,6 +142,7 @@ void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets)
 }
 
 void induce_S_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
+    std::cout<<"Inducing S-type"<<std::endl;
     size_t pos, sym, l_sym;
     for(size_t i=sa.size();i-->0;){
         pos = sa[i];
