@@ -11,24 +11,18 @@ void suffix_induction(vector_t& sa, vector_t &dict, bv_t &d_lim, size_t alphabet
         buckets[sym]++;
     }
 
-    size_t acc=0, freq, max_freq=0, n_uniq=0;
+    size_t acc=0, freq;
     for(auto && bucket : buckets){
         freq = bucket;
         bucket = acc;
         acc +=freq;
-        if(freq==1) n_uniq++;
-        if(freq>max_freq) max_freq = freq;
     }
-    std::cout<<"There are "<<n_uniq<<" unique symbols "<<(double(n_uniq)/double(buckets.size()))*100<<std::endl;
     buckets[buckets.size()-1] = acc;
     sdsl::store_to_file(buckets, sdsl::cache_file_name("iss_buckets", config));
 
-    size_t sym;
     for(size_t i=0;i<dict.size();i++){
         if(d_lim[i]){
-            sym = dict[i];
-            //sa[buckets[sym+1]-(freq[sym]++)-1] = i+1;
-            sa[--buckets[sym+1]] = i+1;
+            sa[--buckets[dict[i]+1]] = i+1;
         }
     }
     sdsl::util::clear(buckets);
@@ -69,12 +63,10 @@ void suffix_induction(vector_t& sa, vector_t &dict, bv_t &d_lim, size_t alphabet
 
 void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
     std::cout<<"Inducing L-type"<<std::endl;
-    size_t sym, l_sym, p_sym, p_l_sym, sa_val;
-
+    //size_t sym, l_sym, p_sym, p_l_sym, sa_val;
     //vector_t tmp_sa = sa;
     //vector_t tmp_buckets = buckets;
-
-    size_t buff_pos=0;
+    /*size_t buff_pos=0;
     size_t buffer[2048]={0};
 
     size_t k=0;
@@ -123,10 +115,9 @@ void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets)
             sa[ind_pos] = buffer[j];
         }
         buckets[p_l_sym]+=buff_pos;
-    }
+    }*/
 
-    //TODO testing
-    /*size_t pos;
+    size_t pos, l_sym, sym, ind_pos;
     for(size_t i=0;i<sa.size();i++){
         pos = sa[i];
         if(pos<=1  || d_lim[pos-2]) continue;
@@ -136,9 +127,6 @@ void induce_L_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets)
             sa[buckets[l_sym]++] = pos-1;
         }
     }
-    for(size_t i=0;i<sa.size();i++){
-        assert(sa[i]==tmp_sa[i]);
-    }*/
 }
 
 void induce_S_type(vector_t& sa, vector_t& dict, bv_t& d_lim, vector_t& buckets){
