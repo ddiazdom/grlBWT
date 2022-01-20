@@ -36,29 +36,40 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
             sa[pos] = sa[pos] & ~1UL;
         }
     }
-
+    sdsl::store_to_file(freqs, sdsl::cache_file_name("f_freqs", config));
     sdsl::util::clear(freqs);
-    induce_L_type(sa, dict, buckets);
 
+    induce_L_type(sa, dict, buckets);
     sdsl::util::clear(buckets);
+
     sdsl::load_from_file(buckets, sdsl::cache_file_name("iss_buckets", config));
+    sdsl::load_from_file(freqs, sdsl::cache_file_name("f_freqs", config));
+    //move the S* symbols to the beginning of the S-buckets
     for(size_t bck=0;bck<buckets.size()-1;bck++){
+        size_t bck_size = buckets[bck+1]-buckets[bck];
+        if(freqs[bck]>0 && bck_size>freqs[bck]){
+            //TODO this only in those buckets where S* are not the only symbols
+            for(size_t j=0, i=freqs[bck]+1;i-->0;j++){
+                sa[buckets[bck]+j] = sa[buckets[bck+1]-i];
+                sa[buckets[bck+1]-i] = 0;
+            }
+        }
         buckets[bck] = buckets[bck+1]-1;
     }
+    sdsl::util::clear(freqs);
 
     induce_S_type(sa, dict, buckets);
 
-    /*if(sa.size()>120991){
-        size_t j = 0;
+    //if(sa.size()==120991){
         for (size_t i=0;i<sa.size();i++) {
             if (sa[i] == 0) {
-                //std::cout << "*" << std::endl;
+                std::cout<<i<<" * " << std::endl;
             } else {
                 bool lcs = sa[i] & 1UL;
                 pos = (sa[i] >> 1U) - 1;
-                if(lcs ||
-                   (i<sa.size()-1 && sa[i+1] & 1UL)){
-                    std::cout << j << " " << pos << " " << lcs << "\t";
+                //if(lcs ||
+                //   (i<sa.size()-1 && sa[i+1] & 1UL)){
+                    std::cout << i << " " << pos << " " << lcs << "\t";
 
                     if (pos == 0 || dict.d_lim[pos - 1]) {
                         std::cout << "$ | ";
@@ -70,20 +81,19 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
                         std::cout << dict.dict[pos++] << " ";
                     }
                     std::cout << dict.dict[pos] << std::endl;
-                }
+                //}
             }
-            j++;
         }
-    }*/
+    //}
 }
 
 void induce_L_type(vector_t &sa, const dictionary& dict, vector_t &buckets) {
     std::cout<<"Inducing L-type"<<std::endl;
 
-    size_t pos, l_sym, bck, ind_pos, p_bck=dict.alphabet+1;
+    size_t pos, l_sym, bck, ind_pos;
     vector_t ind_bck(buckets.size(), 0, sdsl::bits::hi(sa.size())+1);
     bool lcs, first_eq=false;
-    size_t lb=1, next_lb = sa.size();
+    size_t lb=1;
 
     for(size_t i=0;i<sa.size();i++) {
 
@@ -91,43 +101,37 @@ void induce_L_type(vector_t &sa, const dictionary& dict, vector_t &buckets) {
         lcs = pos & 1UL;
         pos>>=1UL;
         if(pos==0) continue;
-
-        bck = dict.dict[pos-1];
-
-        if(bck!=p_bck || i==next_lb || !lcs) {
+        if(!lcs) {
             first_eq = false;
             lb = i+1;
-            assert(!lcs);
         }
+        if(pos==1 || dict.d_lim[pos-2]) continue;
 
-        if(pos==1 || dict.d_lim[pos-2]){
-            p_bck = bck;
-            continue;
-        }
-
+        bck = dict.dict[pos-1];
         l_sym = dict.dict[pos-2];
         if(l_sym>=bck){
             ind_pos = buckets[l_sym]++;
             if(!first_eq && l_sym==bck){
                 first_eq = true;
-                next_lb = ind_pos;
                 lcs = false;
             }
             sa[ind_pos] = (pos-1)<<1UL | (ind_bck[l_sym]>=lb && lcs);
             ind_bck[l_sym] = i+1;
         }
-        p_bck=bck;
     }
 }
 
 void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
+
     std::cout<<"Inducing S-type"<<std::endl;
-    size_t pos, bck, l_sym, ind_pos, p_bck;
+
+    size_t pos, bck, l_sym, ind_pos;
     vector_t ind_bck(buckets.size(), 0, sdsl::bits::hi(sa.size())+1);
     bool lcs, first_eq, new_break, p_lcs=false;
-    size_t rb=sa.size(), prev_rb=0;
+    size_t rb=sa.size();
 
     for(size_t i=sa.size();i-->0;){
+
 
         pos = sa[i];
         lcs = pos & 1UL;
@@ -137,20 +141,18 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
             p_lcs = false;
             continue;
         }
-        bck = dict.dict[pos-1];
 
-        if(bck!=p_bck || i==prev_rb || !p_lcs) {
+        if(!p_lcs) {
             first_eq = false;
             rb = i+1;
-            assert(!p_lcs);
         }
 
-        if(pos==1  || dict.d_lim[pos-2]){
-            p_bck = bck;
+        if(pos==1 || dict.d_lim[pos-2]){
             p_lcs = lcs;
             continue;
         }
 
+        bck = dict.dict[pos-1];
         l_sym = dict.dict[pos-2];
 
         if(l_sym < bck ||
@@ -159,12 +161,8 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
             ind_pos = buckets[l_sym]--;
             sa[ind_pos] = (pos-1)<<1UL | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
 
-            new_break = false;
-            if(!first_eq && l_sym==bck){
-                first_eq = true;
-                prev_rb = ind_pos;
-                new_break = true;
-            }
+            new_break = !first_eq && l_sym==bck;
+            if(new_break) first_eq = true;
 
             if(ind_bck[l_sym]==0 || ind_bck[l_sym]>rb || new_break){
                 sa[ind_pos+1] = sa[ind_pos+1] & ~1UL;
@@ -172,6 +170,5 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
             ind_bck[l_sym] = i+1;
         }
         p_lcs = lcs;
-        p_bck = bck;
     }
 }
