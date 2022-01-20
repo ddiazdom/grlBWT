@@ -234,6 +234,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         if(exists_as_rule || is_maximal) {
 
             if((run_end-run_bg+1)>1) {
+                if(run_bg!=v_test[v_pos].first ||
+                   run_end!=v_test[v_pos].second){
+                    std::cout<<run_bg<<" "<<run_end<<" "<<sa.size()<<std::endl;
+                    std::cout<<v_test[v_pos].first<<" "<<v_test[v_pos].second<<std::endl;
+                }
                 assert(run_bg==v_test[v_pos].first);
                 assert(run_end==v_test[v_pos].second);
                 v_pos++;
@@ -468,7 +473,7 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
     std::cout<<"Suffix induction"<<std::endl;
     auto start = std::chrono::steady_clock::now();
     vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
-    suffix_induction(sa, dict, config);
+    suffix_induction(sa, dict);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 

@@ -7,7 +7,7 @@
 #include "common.h"
 #include "lc_gram_algo.hpp"
 
-void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& config);
+void suffix_induction(vector_t &sa, const dictionary &dict);
 void induce_L_type(vector_t &sa, const dictionary &dict, vector_t &buckets);
 void induce_S_type(vector_t &sa, const dictionary& dict, vector_t &buckets);
 

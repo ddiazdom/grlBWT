@@ -3,7 +3,7 @@
 //
 #include "LMS_induction.h"
 
-void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& config) {
+void suffix_induction(vector_t &sa, const dictionary &dict) {
 
     vector_t buckets(dict.alphabet+1, 0, sdsl::bits::hi(dict.dict.size())+1);
 
@@ -50,8 +50,8 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
 
     induce_S_type(sa, dict, buckets);
 
-    //if(sa.size()==120991){
-        /*for (size_t i=0;i<sa.size();i++) {
+    /*if(sa.size()==42890782){
+        for (size_t i=3842000;i<3843000;i++) {
             if (sa[i] == 0) {
                 std::cout<<i<<" * " << std::endl;
             } else {
@@ -73,8 +73,8 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
                     std::cout << dict.dict[pos] << std::endl;
                 //}
             }
-        }*/
-    //}
+        }
+    }*/
 }
 
 void induce_L_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
@@ -136,12 +136,13 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
             rb = i+1;
         }
 
+        bck = dict.dict[pos-1];
+
         if(pos==1 || dict.d_lim[pos-2]){
             p_lcs = lcs;
             continue;
         }
 
-        bck = dict.dict[pos-1];
         l_sym = dict.dict[pos-2];
 
         if(l_sym < bck ||
@@ -155,6 +156,7 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
 
             if(ind_bck[l_sym]==0 || ind_bck[l_sym]>rb || new_break){
                 sa[ind_pos+1] = sa[ind_pos+1] & ~1UL;
+                if(ind_pos+1==i) lcs=false;
             }
             ind_bck[l_sym] = i+1;
         }
