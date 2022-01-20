@@ -8,7 +8,6 @@
 #include "grammar.hpp"
 #include "common.h"
 #include "lc_parsers.hpp"
-#include "LMS_induction.h"
 
 template<class istream_t,
          class out_sym_t=size_t,

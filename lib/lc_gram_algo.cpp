@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdlib>
 #include "utils.hpp"
+#include "LMS_induction.h"
 #ifdef __linux__
 #include <malloc.h>
 #endif
@@ -98,7 +99,9 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     bv_rs_t d_lim_rs(&dict.d_lim);
     size_t k=0;
     for(size_t j=0;j<sa.size();j++){
-        if(sa[j]!=0) sa[k++] = sa[j];
+        if(sa[j]!=0){
+            sa[k++] = sa[j]>>1UL;
+        }
     }
     sa.resize(k);
 
@@ -430,8 +433,8 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
 
     std::cout<<"Suffix induction"<<std::endl;
     auto start = std::chrono::steady_clock::now();
-    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+1);
-    suffix_induction(sa, dict.dict, dict.d_lim, dict.alphabet, config);
+    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
+    suffix_induction(sa, dict, config);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
