@@ -11,16 +11,16 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
         buckets[sym]++;
     }
 
-    size_t acc=0, freq;
+    size_t acc=0, freq, max_freq=0;
     for(auto && bucket : buckets){
         freq = bucket;
         bucket = acc;
         acc +=freq;
+        if(freq>max_freq) max_freq = freq;
     }
     buckets[buckets.size()-1] = acc;
-    sdsl::store_to_file(buckets, sdsl::cache_file_name("iss_buckets", config));
 
-    vector_t freqs(buckets.size(), 0, sdsl::bits::hi(dict.n_phrases)+1);
+    vector_t freqs(buckets.size(), 0, sdsl::bits::hi(max_freq)+1);
     size_t sym;
     for(size_t i=0;i<dict.dict.size();i++) {
         if(dict.d_lim[i]){
@@ -28,7 +28,6 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
             sa[buckets[sym+1]-1-freqs[sym]++] = ((i+1)<<1UL) | 1UL;
         }
     }
-
     size_t pos;
     for(size_t i=0;i<dict.alphabet;i++){
         if(freqs[i]>0){
@@ -36,32 +35,23 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
             sa[pos] = sa[pos] & ~1UL;
         }
     }
-    sdsl::store_to_file(freqs, sdsl::cache_file_name("f_freqs", config));
     sdsl::util::clear(freqs);
 
     induce_L_type(sa, dict, buckets);
-    sdsl::util::clear(buckets);
 
-    sdsl::load_from_file(buckets, sdsl::cache_file_name("iss_buckets", config));
-    sdsl::load_from_file(freqs, sdsl::cache_file_name("f_freqs", config));
-    //move the S* symbols to the beginning of the S-buckets
+    //move the pointer of every bucket to the last S symbol
     for(size_t bck=0;bck<buckets.size()-1;bck++){
-        size_t bck_size = buckets[bck+1]-buckets[bck];
-        if(freqs[bck]>0 && bck_size>freqs[bck]){
-            //TODO this only in those buckets where S* are not the only symbols
-            for(size_t j=0, i=freqs[bck]+1;i-->0;j++){
-                sa[buckets[bck]+j] = sa[buckets[bck+1]-i];
-                sa[buckets[bck+1]-i] = 0;
-            }
-        }
-        buckets[bck] = buckets[bck+1]-1;
+        size_t ptr = buckets[bck];
+        size_t limit = buckets[bck+1];
+        while(ptr<limit && sa[ptr]==0) ptr++;
+        ptr--;
+        buckets[bck] = ptr;
     }
-    sdsl::util::clear(freqs);
 
     induce_S_type(sa, dict, buckets);
 
     //if(sa.size()==120991){
-        for (size_t i=0;i<sa.size();i++) {
+        /*for (size_t i=0;i<sa.size();i++) {
             if (sa[i] == 0) {
                 std::cout<<i<<" * " << std::endl;
             } else {
@@ -83,11 +73,11 @@ void suffix_induction(vector_t& sa, const dictionary& dict, sdsl::cache_config& 
                     std::cout << dict.dict[pos] << std::endl;
                 //}
             }
-        }
+        }*/
     //}
 }
 
-void induce_L_type(vector_t &sa, const dictionary& dict, vector_t &buckets) {
+void induce_L_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
     std::cout<<"Inducing L-type"<<std::endl;
 
     size_t pos, l_sym, bck, ind_pos;
@@ -130,8 +120,7 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
     bool lcs, first_eq, new_break, p_lcs=false;
     size_t rb=sa.size();
 
-    for(size_t i=sa.size();i-->0;){
-
+    for(size_t i=sa.size();i-->0;) {
 
         pos = sa[i];
         lcs = pos & 1UL;

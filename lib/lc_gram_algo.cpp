@@ -145,10 +145,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     }
     sa.resize(k);
 
-
-
-
-
     size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
     vector_t ranks(dict.n_phrases, 0, width);
     phrase_map_t new_phrases_ht;
@@ -238,9 +234,8 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         if(exists_as_rule || is_maximal) {
 
             if((run_end-run_bg+1)>1) {
-
-                //std::cout<<run_bg<<" "<<run_end<<std::endl;
-                //std::cout<<v_test[v_pos].first<<" "<<v_test[v_pos].second<<"\n"<<std::endl;
+                assert(run_bg==v_test[v_pos].first);
+                assert(run_end==v_test[v_pos].second);
                 v_pos++;
 
                 //put the phrase in reverse order
@@ -256,11 +251,11 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
 
                 //hash the phrase to check then if it is
                 // embedded in another phrase
-                std::cout<<run_bg<<" "<<run_end<<" "<<rank+1+dict.max_sym<<" -> ";
-                for(size_t u=phrase.size();u-->0;){
-                    std::cout<<phrase[u]<<" ";
-                }
-                std::cout<<""<<std::endl;
+                //std::cout<<run_bg<<" "<<run_end<<" "<<rank+1+dict.max_sym<<" -> ";
+                //for(size_t u=phrase.size();u-->0;){
+                //    std::cout<<phrase[u]<<" ";
+                //}
+                //std::cout<<""<<std::endl;
 
                 //hash only those phrases that can be proper
                 // suffixes of other phrases
