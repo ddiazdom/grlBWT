@@ -216,16 +216,9 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
     sdsl::util::clear(dict.freqs);
-    new_phrases_ht.shrink_databuff();
-
-    size_t j=0;
-    for(auto const& ptr : mp_map){
-        phrase_map_t::val_type val=0;
-        mp_map.get_value_from(ptr, val);
-        val = ranks[j++];
-        mp_map.insert_value_at(ptr, val);
-    }
+    sdsl::store_to_file(ranks, sdsl::cache_file_name("phr_ranks", config));
     sdsl::util::clear(ranks);
+    new_phrases_ht.shrink_databuff();
 
 #ifdef __linux__
     malloc_trim(0);
@@ -368,7 +361,6 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
         for(size_t j=run_bg;j<=run_end;j++){
             freq+=dict.freqs[d_lim_rs(sa[j]-1)];
         }
-
 
         if(exists_as_rule || is_maximal) {
 
@@ -998,6 +990,19 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             std::cout << "    Assigning identifiers to the phrases" << std::endl;
             assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
             //std::cout<<"5. ";report_mem_peak();
+        }
+
+        {
+            size_t j=0;
+            vector_t ranks;
+            sdsl::load_from_file(ranks, sdsl::cache_file_name("phr_ranks", config));
+            for(auto const& ptr : mp_table){
+                phrase_map_t::val_type val=0;
+                mp_table.get_value_from(ptr, val);
+                val = ranks[j++];
+                mp_table.insert_value_at(ptr, val);
+            }
+            sdsl::util::clear(ranks);
         }
 
         //reload the hash table
