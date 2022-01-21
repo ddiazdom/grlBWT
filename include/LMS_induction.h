@@ -7,8 +7,11 @@
 #include "common.h"
 #include "lc_gram_algo.hpp"
 
+template <class value_type>
 void suffix_induction(vector_t &sa, const dictionary &dict);
+template <class value_type>
 void induce_L_type(vector_t &sa, const dictionary &dict, vector_t &buckets);
+template <class value_type>
 void induce_S_type(vector_t &sa, const dictionary& dict, vector_t &buckets);
 
 #endif //LPG_COMPRESSOR_LMS_INDUCTION_H

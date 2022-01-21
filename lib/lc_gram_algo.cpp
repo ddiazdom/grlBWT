@@ -65,7 +65,6 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, b
         }else{
             new_dict[new_size++] = dict.dict[tmp_pos+p_len-1];
             new_dict[new_size++] = dict.alphabet+em_nt;
-
             /*j = 0;
             while(j<p_len){
                 new_dict[new_size++] = dict.dict[tmp_pos+j];
@@ -76,10 +75,43 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, b
         //phrases_ptrs[u] = new_size-1;
         rank++;
     }
-
-    //new_dict.resize(new_size);
     dict.dict.swap(new_dict);
-    //dict.phrases_ptr.swap(phrases_ptrs);
+    dict.n_phrases = s_sa.size();
+    sdsl::util::clear(dict.d_lim);
+}
+
+void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa) {
+    dict.dict_dummy = dict.alphabet+s_sa.size()+1;
+    size_t pos, em_nt, new_size=0;
+    string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
+    vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
+
+    size_t mask= (1 << (dict.dict.width()-1));
+    for(auto && u : s_sa) {
+        pos = u;
+
+        while(!(dict.dict[pos] & mask) && !dict.d_lim[pos]) pos++;
+
+        if(dict.d_lim[pos]){
+            new_dict[new_size++] = dict.dict_dummy;
+            new_dict[new_size++] = dict.is_suffix(dict.dict[pos]) ?  dict.dict[pos] : dict.dict[pos-1];
+        }else{
+            assert(dict.dict[pos] & mask);
+            size_t tmp_pos = pos;
+            while(!dict.d_lim[pos]) pos++;
+            phrase.clear();
+            while(pos>=tmp_pos){
+                phrase.push_back(dict.dict[pos--]);
+            }
+            auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
+            assert(res.second);
+            em_nt = 0;
+            phrases_ht.get_value_from(res.first, em_nt);
+            new_dict[new_size++] = dict.dict[tmp_pos-1];
+            new_dict[new_size++] = dict.alphabet+em_nt;
+        }
+    }
+    dict.dict.swap(new_dict);
     dict.n_phrases = s_sa.size();
     sdsl::util::clear(dict.d_lim);
 }
@@ -181,12 +213,16 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
     malloc_trim(0);
 #endif
 
+    auto start = std::chrono::steady_clock::now();
     bv_t new_is_suffix(sa.size(), false);
     comp_dict_int(dict, new_phrases_ht, sa, new_is_suffix);
     std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_round), config);
     std::string new_is_suffix_file = sdsl::cache_file_name("new_is_suffix", config);
     sdsl::store_to_file(dict, dict_file);
     sdsl::store_to_file(new_is_suffix, new_is_suffix_file);
+    auto end = std::chrono::steady_clock::now();
+    std::cout<<"Time for constructing the dictionary"<<std::endl;
+    report_time(start, end, 4);
 
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
@@ -531,7 +567,19 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
     std::cout<<"Suffix induction"<<std::endl;
     auto start = std::chrono::steady_clock::now();
     vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
-    suffix_induction(sa, dict);
+
+    uint8_t width = sdsl::bits::hi(dict.dict.size())+1;
+
+    if(width<=8){
+        suffix_induction<uint8_t>(sa, dict);
+    }else if(width<=16){
+        suffix_induction<uint16_t>(sa, dict);
+    }else if(width<=32){
+        suffix_induction<uint32_t>(sa, dict);
+    }else{
+        suffix_induction<uint64_t>(sa, dict);
+    }
+
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
@@ -564,7 +612,11 @@ void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim,
     }*/
 
     //compress_dictionary(dict, sa, p_gram, r_lim, r, mp_map, config);
+    start = std::chrono::steady_clock::now();
     compress_dictionary_v2(dict, sa, mp_map, p_gram, config);
+    end = std::chrono::steady_clock::now();
+    std::cout<<"Sort and compress dictionary"<<std::endl;
+    report_time(start, end, 4);
 
     //assign the ranks
     /*size_t j=0;

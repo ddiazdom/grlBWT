@@ -3,24 +3,25 @@
 //
 #include "LMS_induction.h"
 
+template <class value_type>
 void suffix_induction(vector_t &sa, const dictionary &dict) {
 
-    vector_t buckets(dict.alphabet+1, 0, sdsl::bits::hi(dict.dict.size())+1);
+    auto * buckets = (value_type *) calloc((dict.alphabet+1), sizeof(value_type));
 
     for(auto && sym : dict.dict){
         buckets[sym]++;
     }
 
     size_t acc=0, freq, max_freq=0;
-    for(auto && bucket : buckets){
-        freq = bucket;
-        bucket = acc;
+    for(size_t i=0;i<dict.alphabet;i++){
+        freq = buckets[i];
+        buckets[i] = acc;
         acc +=freq;
         if(freq>max_freq) max_freq = freq;
     }
-    buckets[buckets.size()-1] = acc;
+    buckets[dict.alphabet] = acc;
 
-    vector_t freqs(buckets.size(), 0, sdsl::bits::hi(max_freq)+1);
+    vector_t freqs(dict.alphabet+1, 0, sdsl::bits::hi(max_freq)+1);
     size_t sym;
     for(size_t i=0;i<dict.dict.size();i++) {
         if(dict.d_lim[i]){
@@ -37,10 +38,10 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     }
     sdsl::util::clear(freqs);
 
-    induce_L_type(sa, dict, buckets);
+    induce_L_type<value_type>(sa, dict, buckets);
 
     //move the pointer of every bucket to the last S symbol
-    for(size_t bck=0;bck<buckets.size()-1;bck++){
+    for(size_t bck=0;bck<dict.alphabet;bck++){
         size_t ptr = buckets[bck];
         size_t limit = buckets[bck+1];
         while(ptr<limit && sa[ptr]==0) ptr++;
@@ -48,7 +49,9 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
         buckets[bck] = ptr;
     }
 
-    induce_S_type(sa, dict, buckets);
+    induce_S_type<value_type>(sa, dict, buckets);
+
+    free(buckets);
 
     /*if(sa.size()==42890782){
         for (size_t i=3842000;i<3843000;i++) {
@@ -77,11 +80,12 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     }*/
 }
 
-void induce_L_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
+template <class value_type>
+void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
     std::cout<<"Inducing L-type"<<std::endl;
 
     size_t pos, l_sym, bck, ind_pos;
-    vector_t ind_bck(buckets.size(), 0, sdsl::bits::hi(sa.size())+1);
+    vector_t ind_bck(dict.alphabet+1, 0, sdsl::bits::hi(sa.size())+1);
     bool lcs, first_eq=false;
     size_t lb=1;
 
@@ -111,12 +115,13 @@ void induce_L_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
     }
 }
 
-void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
+template <class value_type>
+void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
 
     std::cout<<"Inducing S-type"<<std::endl;
 
     size_t pos, bck, l_sym, ind_pos;
-    vector_t ind_bck(buckets.size(), 0, sdsl::bits::hi(sa.size())+1);
+    vector_t ind_bck(dict.alphabet+1, 0, sdsl::bits::hi(sa.size())+1);
     bool lcs, first_eq, new_break, p_lcs=false;
     size_t rb=sa.size();
 
@@ -163,3 +168,8 @@ void induce_S_type(vector_t &sa, const dictionary &dict, vector_t &buckets) {
         p_lcs = lcs;
     }
 }
+
+template void suffix_induction<uint8_t>(vector_t &sa, const dictionary &dict);
+template void suffix_induction<uint16_t>(vector_t &sa, const dictionary &dict);
+template void suffix_induction<uint32_t>(vector_t &sa, const dictionary &dict);
+template void suffix_induction<uint64_t>(vector_t &sa, const dictionary &dict);

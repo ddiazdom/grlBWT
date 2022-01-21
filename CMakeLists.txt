@@ -18,7 +18,7 @@ add_executable(gbwt
 target_compile_options(gbwt
         PRIVATE
         #-Werror
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -msse4.2 #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
