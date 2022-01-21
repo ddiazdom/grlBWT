@@ -24,6 +24,8 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, b
     size_t rank=0;
     for(auto && u : s_sa) {
         pos = u;
+
+
         //get the greatest phrase's proper suffix in reverse order
         size_t tmp_pos = pos;
         while(!dict.d_lim[pos]) pos++;
@@ -56,6 +58,7 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, b
         if(!found) {
             new_dict[new_size++] = dict.dict_dummy;
             new_dict[new_size++] = dict.is_suffix(dict.dict[tmp_pos+len-1]) ?  dict.dict[tmp_pos+len-1] : dict.dict[tmp_pos+len-2];
+            //std::cout<<pos<<" "<<dict.dict_dummy<<" "<<dict.dict[tmp_pos+len-2]<<" "<<dict.dict[tmp_pos+len-1]<<" "<<dict.is_suffix(dict.dict[tmp_pos+len-1])<<std::endl;
             //new_dict[new_size++] = len==1?  dict.dict_dummy : dict.dict[tmp_pos+len-2];
             //new_dict[new_size++] = dict.dict[tmp_pos+len-1];
             /*while(!dict.d_lim[tmp_pos]){
@@ -80,36 +83,43 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, b
     sdsl::util::clear(dict.d_lim);
 }
 
-void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa) {
+void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks) {
     dict.dict_dummy = dict.alphabet+s_sa.size()+1;
-    size_t pos, em_nt, new_size=0;
+    size_t pos, em_nt, new_size=0, sym;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
     vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
-    size_t mask= (1 << (dict.dict.width()-1));
+    size_t rank=0;
     for(auto && u : s_sa) {
         pos = u;
 
-        while(!(dict.dict[pos] & mask) && !dict.d_lim[pos]) pos++;
-
         if(dict.d_lim[pos]){
             new_dict[new_size++] = dict.dict_dummy;
-            new_dict[new_size++] = dict.is_suffix(dict.dict[pos]) ?  dict.dict[pos] : dict.dict[pos-1];
+            new_dict[new_size++] = dict.dict[pos];
         }else{
-            assert(dict.dict[pos] & mask);
-            size_t tmp_pos = pos;
-            while(!dict.d_lim[pos]) pos++;
-            phrase.clear();
-            while(pos>=tmp_pos){
-                phrase.push_back(dict.dict[pos--]);
+            pos++;
+            while(!phr_marks[pos] && !dict.d_lim[pos]) pos++;
+            if(phr_marks[pos]){
+                size_t tmp_pos = pos;
+                while(!dict.d_lim[pos]) pos++;
+                phrase.clear();
+                while(pos>=tmp_pos){
+                    phrase.push_back(dict.dict[pos--]);
+                }
+                phrase.mask_tail();
+                auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
+                assert(res.second);
+                em_nt = 0;
+                phrases_ht.get_value_from(res.first, em_nt);
+                new_dict[new_size++] = dict.dict[tmp_pos-1];
+                new_dict[new_size++] = dict.alphabet+em_nt;
+            }else{
+                sym = dict.dict[pos];
+                new_dict[new_size++] = dict.dict_dummy;
+                new_dict[new_size++] = dict.is_suffix(sym) ? sym : dict.dict[pos-1];
             }
-            auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
-            assert(res.second);
-            em_nt = 0;
-            phrases_ht.get_value_from(res.first, em_nt);
-            new_dict[new_size++] = dict.dict[tmp_pos-1];
-            new_dict[new_size++] = dict.alphabet+em_nt;
         }
+        rank++;
     }
     dict.dict.swap(new_dict);
     dict.n_phrases = s_sa.size();
@@ -130,6 +140,10 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
 
     size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
     vector_t ranks(dict.n_phrases, 0, width);
+
+    //TODO test
+    bv_t phr_marks(dict.dict.size(), false);
+    //
 
     while(u<sa.size()) {
         d_pos = (sa[u]>>1UL) - 1;
@@ -176,6 +190,10 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
                     auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank);
                     assert(res.second);
                     dict.phrases_has_hocc[rank] = true;
+
+                    for(size_t j=bg_pos;j<u;j++){
+                        phr_marks[(sa[j]>>1UL)-1] = true;
+                    }
                 }
 
                 lvl_bwt.push_back(dummy_sym);
@@ -213,16 +231,33 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
     malloc_trim(0);
 #endif
 
+    //TODO testing
     auto start = std::chrono::steady_clock::now();
+    dictionary tmp_dict = dict;
+    comp_dict_int_v2(tmp_dict, new_phrases_ht, sa, phr_marks);
+    auto end = std::chrono::steady_clock::now();
+    std::cout<<"Build dict. new version"<<std::endl;
+    report_time(start, end, 4);
+    //
+
+    start = std::chrono::steady_clock::now();
     bv_t new_is_suffix(sa.size(), false);
     comp_dict_int(dict, new_phrases_ht, sa, new_is_suffix);
+    end = std::chrono::steady_clock::now();
+    std::cout<<"Build dict. old version"<<std::endl;
+    report_time(start, end, 4);
+
+    for(size_t i=0;i<dict.dict.size();i++){
+        if(dict.dict[i]!=tmp_dict.dict[i]){
+            std::cout<<i/2<<" -> "<<dict.dict[i]<<" "<<tmp_dict.dict[i]<<" "<<dict.dict.size()<<std::endl;
+        }
+        assert(dict.dict[i]==tmp_dict.dict[i]);
+    }
+
     std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_round), config);
     std::string new_is_suffix_file = sdsl::cache_file_name("new_is_suffix", config);
     sdsl::store_to_file(dict, dict_file);
     sdsl::store_to_file(new_is_suffix, new_is_suffix_file);
-    auto end = std::chrono::steady_clock::now();
-    std::cout<<"Time for constructing the dictionary"<<std::endl;
-    report_time(start, end, 4);
 
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
