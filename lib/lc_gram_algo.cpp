@@ -964,7 +964,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         //store the data to file
         mp_table.store_data_to_file("test_ht");
-        mp_table.load_data_from_file("test_ht");
 
         //temporal unload of the hash table (not the data)
         std::string st_table = sdsl::cache_file_name("ht_data", config);
