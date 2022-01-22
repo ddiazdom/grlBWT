@@ -12,7 +12,7 @@
 #include <malloc.h>
 #endif
 
-void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& new_is_suffix) {
+void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa) {
 
     //collapse the full dictionary
     bool found;
@@ -30,8 +30,6 @@ void comp_dict_int(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, b
         size_t tmp_pos = pos;
         while(!dict.d_lim[pos]) pos++;
         len = pos-tmp_pos+1;
-
-        if(dict.is_suffix(dict.dict[tmp_pos+len-1])) new_is_suffix[rank] = true;
 
         phrase.clear();
         p_len = len;
@@ -226,32 +224,23 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
 
     //TODO testing
     auto start = std::chrono::steady_clock::now();
-    dictionary tmp_dict = dict;
-    comp_dict_int_v2(tmp_dict, new_phrases_ht, sa, phr_marks);
+    comp_dict_int_v2(dict, new_phrases_ht, sa, phr_marks);
     auto end = std::chrono::steady_clock::now();
     std::cout<<"Build dict. new version"<<std::endl;
     report_time(start, end, 4);
     //
 
-    start = std::chrono::steady_clock::now();
-    bv_t new_is_suffix(sa.size(), false);
-    comp_dict_int(dict, new_phrases_ht, sa, new_is_suffix);
+    /*start = std::chrono::steady_clock::now();
+    comp_dict_int(dict, new_phrases_ht, sa);
     end = std::chrono::steady_clock::now();
     std::cout<<"Build dict. old version"<<std::endl;
     report_time(start, end, 4);
-
     for(size_t i=0;i<dict.dict.size();i++){
-        if(dict.dict[i]!=tmp_dict.dict[i]){
-            std::cout<<i/2<<" -> "<<dict.dict[i]<<" "<<tmp_dict.dict[i]<<" "<<dict.dict.size()<<std::endl;
-        }
         assert(dict.dict[i]==tmp_dict.dict[i]);
-    }
+    }*/
 
     std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_round), config);
-    std::string new_is_suffix_file = sdsl::cache_file_name("new_is_suffix", config);
     sdsl::store_to_file(dict, dict_file);
-    sdsl::store_to_file(new_is_suffix, new_is_suffix_file);
-
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
 
@@ -568,12 +557,9 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     }*/
     //
 
-    bv_t new_is_suffix(sa.size(), false);
-    comp_dict_int(dict, new_phrases_ht, sa, new_is_suffix);
+    comp_dict_int(dict, new_phrases_ht, sa);
     std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_gram.rules_breaks.size()), config);
-    std::string new_is_suffix_file = sdsl::cache_file_name("new_is_suffix", config);
     sdsl::store_to_file(dict, dict_file);
-    sdsl::store_to_file(new_is_suffix, new_is_suffix_file);
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
 
@@ -976,6 +962,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         const bitstream<ht_buff_t>& stream = mp_table.get_data();
         key_wrapper key_w{width, mp_table.description_bits(), stream};
 
+        //store the data to file
+        mp_table.store_data_to_file("test_ht");
+        mp_table.load_data_from_file("test_ht");
+
         //temporal unload of the hash table (not the data)
         std::string st_table = sdsl::cache_file_name("ht_data", config);
         mp_table.unload_table(st_table);
@@ -1041,12 +1031,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         {
             //keep track of the phrases that have to be rephrased
             //std::cout <<"    Updating symbols status" << std::endl;
-            //bv_t new_phrase_desc(p_gram.rules_breaks.back(), false);
-            bv_t new_is_suffix;
-            sdsl::load_from_file(new_is_suffix, sdsl::cache_file_name("new_is_suffix", config));
-
-            //phrase_desc.resize(p_gram.r);
-            /*auto it = mp_table.begin();
+            bv_t new_phrase_desc(p_gram.rules_breaks.back(), false);
+            auto it = mp_table.begin();
             auto it_end = mp_table.end();
             size_t sym;
             while (it != it_end) {
@@ -1054,10 +1040,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
                 //read the (reversed) last symbol
                 sym = key_w.read(*it, 0);
                 new_phrase_desc[val] = phrase_desc[sym];
-                assert(new_phrase_desc[val]==new_is_suffix[val]);
                 ++it;
-            }*/
-            phrase_desc.swap(new_is_suffix);
+            }
+            phrase_desc.swap(new_phrase_desc);
         }
 
         p_gram.last_dict_size = mp_table.size();

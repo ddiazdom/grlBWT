@@ -775,7 +775,7 @@ public:
         return file;
     }
 
-    /*void store_data_to_file(const std::string& output){
+    void store_data_to_file(const std::string& output){
         assert(!static_buffer);
         std::filebuf fb;
         fb.open(output, std::ios::out | std::ios::binary);
@@ -786,23 +786,18 @@ public:
         table = nullptr;
         data.serialize(ofs, nullptr, "data_stream");
         free(data.stream);
+        data.stream = nullptr;
         fb.close();
     }
 
     void load_data_from_file(const std::string& input){
-        assert(table== nullptr);
+        assert(table==nullptr && !static_buffer);
         std::ifstream ifs(input, std::ios_base::binary);
-
-        ifs.seekg (0, std::ifstream::end);
-        size_t tot_bytes = ifs.tellg();
-        ifs.seekg (0, std::ifstream::beg);
-
-        table = reinterpret_cast<size_t*>(malloc(tot_bytes));
-        n_buckets = tot_bytes/sizeof(size_t);
-        ifs.read(reinterpret_cast<char *>(table), tot_bytes);
+        table = reinterpret_cast<size_t*>(malloc(n_buckets*sizeof(size_t)));
+        ifs.read(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
         data.load(ifs);
         ifs.close();
-    }*/
+    }
 
     size_t data_bytes() const {
         return (data.stream_size*stream_t::word_bits)/8;

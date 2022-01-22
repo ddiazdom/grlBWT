@@ -66,7 +66,6 @@ struct dictionary {
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i);
-                //assert(key_w.read(ptr,i)==dict[j]);
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;

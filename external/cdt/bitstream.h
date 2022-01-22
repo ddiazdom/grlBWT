@@ -186,7 +186,7 @@ struct bitstream{
     size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
         out.write((char *)&stream_size, sizeof(size_t));
-        out.write((char *)&stream, sizeof(word_t)*stream_size);
+        out.write((char *)stream, sizeof(word_t)*stream_size);
         size_t written_bytes = sizeof(size_t) + (sizeof(word_t)*stream_size);
         sdsl::structure_tree::add_size(child, written_bytes);
         return written_bytes;
@@ -194,12 +194,9 @@ struct bitstream{
 
     void load(std::istream &in){
         in.read((char *)&stream_size, sizeof(size_t));
-        if(stream!=nullptr){
-            in.read((char *)stream, sizeof(word_t)*stream_size);
-        }else{
-            std::cout<<"Stream is not allocated"<<std::endl;
-            exit(1);
-        }
+        assert(stream== nullptr);
+        stream = (word_t *) malloc(sizeof(word_t)*stream_size);
+        in.read((char *)stream, sizeof(word_t)*stream_size);
     }
 };
 

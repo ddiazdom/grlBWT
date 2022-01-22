@@ -127,6 +127,10 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
 
     for(size_t i=sa.size();i-->0;) {
 
+        /*if(i==42886494){
+            std::cout<<"holaa"<<std::endl;
+        }*/
+
         pos = sa[i];
         lcs = pos & 1UL;
         pos>>=1UL;
@@ -154,6 +158,11 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
            (l_sym==bck && i >= buckets[bck])){
 
             ind_pos = buckets[l_sym]--;
+
+            /*if(sa[ind_pos]!=ind_bck[l_sym] && ind_bck[l_sym]!=0){
+                std::cout<<"holaaa "<<ind_pos<<" "<<ind_bck[l_sym]<<" "<<sa[ind_pos]<<" "<<l_sym<<" "<<bck<<std::endl;
+            }*/
+
             sa[ind_pos] = (pos-1)<<1UL | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
 
             new_break = !first_eq && l_sym==bck;
@@ -163,6 +172,13 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
                 sa[ind_pos+1] = sa[ind_pos+1] & ~1UL;
                 if(ind_pos+1==i) lcs=false;
             }
+
+            /*if(ind_pos>0 && sa[ind_pos-1]==0){
+                sa[ind_pos-1] = i+1;
+                if(ind_pos-1==33639079){
+                    std::cout<<ind_pos-1<<" val:"<<sa[33639079]<<" idx:"<<i<<std::endl;
+                }
+            }*/
             ind_bck[l_sym] = i+1;
         }
         p_lcs = lcs;
