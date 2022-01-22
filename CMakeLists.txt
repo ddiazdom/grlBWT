@@ -18,15 +18,13 @@ add_executable(gbwt
 target_compile_options(gbwt
         PRIVATE
         #-Werror
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic #-msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
 #no-stack-check only for APPLE!!!!!!
 if(APPLE)
-    target_compile_options(gbwt PRIVATE -fno-stack-check
-            -Wno-vla-extension
-            )
+    target_compile_options(gbwt PRIVATE -fno-stack-check -Wno-vla-extension)
 endif()
 
 if(UNIX AND NOT APPLE)

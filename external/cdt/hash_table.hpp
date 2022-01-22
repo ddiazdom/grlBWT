@@ -12,6 +12,9 @@
 #include "../xxHash-dev/xxhash.h"
 #include "bitstream.h"
 #include "prime_generator.hpp"
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
 template<class ht_type>
 class bit_hash_table_iterator{
@@ -782,16 +785,12 @@ public:
         std::ostream ofs(&fb);
         ofs.write(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
         ofs.tellp();
-        free(table);
-        table = nullptr;
         data.serialize(ofs, nullptr, "data_stream");
-        free(data.stream);
-        data.stream = nullptr;
         fb.close();
     }
 
     void load_data_from_file(const std::string& input){
-        assert(table==nullptr && !static_buffer);
+        assert(table==nullptr && data.stream== nullptr && !static_buffer);
         std::ifstream ifs(input, std::ios_base::binary);
         table = reinterpret_cast<size_t*>(malloc(n_buckets*sizeof(size_t)));
         ifs.read(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
@@ -803,16 +802,23 @@ public:
         return (data.stream_size*stream_t::word_bits)/8;
     }
 
-    void unload_table(const std::string& output) {
-        std::ofstream ofs(output, std::ios_base::binary);
-        ofs.write(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
-        ofs.tellp();
+    void destroy_table() {
         free(table);
         table = nullptr;
-        ofs.close();
+#ifdef __linux__
+        malloc_trim(0);
+#endif
     }
 
-    void load_table(const std::string& input) {
+    void destroy_data() {
+        free(data.stream);
+        data.stream = nullptr;
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+    }
+
+    /*void load_table(const std::string& input) {
         assert(table== nullptr);
         std::ifstream ifs(input, std::ios_base::binary);
 
@@ -824,6 +830,6 @@ public:
         n_buckets = tot_bytes/sizeof(size_t);
         ifs.read(reinterpret_cast<char *>(table), tot_bytes);
         ifs.close();
-    }
+    }*/
 };
 #endif //LMS_COMPRESSOR_SE_HASH_TABLE_H

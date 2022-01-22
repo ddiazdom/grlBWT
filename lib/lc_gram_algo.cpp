@@ -963,22 +963,32 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         key_wrapper key_w{width, mp_table.description_bits(), stream};
 
         //store the data to file
-        mp_table.store_data_to_file("test_ht");
+        std::string ht_file = sdsl::cache_file_name("ht_data", config);
+        mp_table.store_data_to_file(ht_file);
 
         //temporal unload of the hash table (not the data)
-        std::string st_table = sdsl::cache_file_name("ht_data", config);
-        mp_table.unload_table(st_table);
-        //std::cout<<"3. ";report_mem_peak();
+        mp_table.destroy_table();
+        std::cout<<"3. ";report_mem_peak();
 
         {
             //create a dictionary from where the ids will be computed
             std::cout<<" Creating the dictionary from the hash table"<<std::endl;
             dictionary dict(mp_table, min_sym, max_sym, key_w, dict_syms, max_freq, phrase_desc, threads_data[0].ifs.size());
-            //std::cout<<"4. ";report_mem_peak();
+            mp_table.destroy_data();
+
+            std::cout<<"4. ";report_mem_peak();
             //rename phrases according to their lexicographical ranks
             std::cout << "    Assigning identifiers to the phrases" << std::endl;
             assign_ids(mp_table, rules, rules_lim, dict, p_gram, config);
-            //std::cout<<"5. ";report_mem_peak();
+            std::cout<<"5. ";report_mem_peak();
+        }
+
+        //reload the hash table
+        mp_table.load_data_from_file(ht_file);
+        if(remove(ht_file.c_str())){
+            std::cout<<"Error trying to remove temporal file"<<std::endl;
+            std::cout<<"Aborting"<<std::endl;
+            exit(1);
         }
 
         {
@@ -994,13 +1004,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             sdsl::util::clear(ranks);
         }
 
-        //reload the hash table
-        mp_table.load_table(st_table);
-        if(remove(st_table.c_str())){
-            std::cout<<"Error trying to remove temporal file"<<std::endl;
-            std::cout<<"Aborting"<<std::endl;
-            exit(1);
-        }
 
         std::cout<<"    Creating the parse of the text"<<std::endl;
         {//store the phrases into a new file
