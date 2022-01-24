@@ -788,9 +788,13 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
         rules.push_back(i);
         rules_lim.push_back(true);
     }
+
+    size_t max_freq=0;
     for(auto const& pair : p_gram.sym_map){
         rules[pair.first] = pair.first;
+        if(pair.second>max_freq) max_freq = pair.second;
     }
+    std::cout<<"Max freq "<<max_freq<<std::endl;
 
     size_t iter=1;
     size_t rem_phrases;
@@ -957,6 +961,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         size_t max_sym = p_gram.r-1;
         size_t dict_syms = join_res.first/width;
         size_t max_freq = join_res.second;
+        std::cout<<"Max freq "<<max_freq<<std::endl;
 
         //p_gram.rules_breaks.push_back(mp_table.size());
         const bitstream<ht_buff_t>& stream = mp_table.get_data();
