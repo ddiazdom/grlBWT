@@ -6,6 +6,7 @@
 #define GBWT_BWT_IO_H
 #include <iostream>
 #include <fstream>
+#include <unistd.h>
 
 class bwt_array{
     char * buffer;
@@ -29,6 +30,9 @@ public:
     void read_run(size_t id, size_t& sym, size_t& freq) const {
     }
 
+    void update_freq(size_t id, size_t& freq) const {
+    }
+
     [[nodiscard]] inline size_t size() const {
         return n_bytes/bpr;
     }
@@ -38,7 +42,7 @@ public:
     }
 };
 
-class bwt_buff_reader{
+class bwt_buff_reader {
 
     char * buffer =nullptr;
     char * sec_buffer;
@@ -54,8 +58,11 @@ class bwt_buff_reader{
 
 public:
 
-    explicit bwt_buff_reader(const std::string& input_file, size_t buff_size= 1024 * 1024){
-        ifs = std::ifstream(input_file, std::ifstream::binary);
+    explicit bwt_buff_reader(const std::string& input_file, size_t buff_size=1024 * 1024){
+        ifs.rdbuf()->pubsetbuf(nullptr, 0);
+        ifs.open(input_file, std::ifstream::binary);
+        assert(ifs.good());
+
         buffer = (char *)malloc(buff_size);
         ifs.read((char *)&sb, sizeof(size_t));
         ifs.read((char *)&fb, sizeof(size_t));
@@ -128,24 +135,198 @@ class bwt_buff_writer {
     size_t block_bg=0; //start of the current block
     size_t tot_runs =0; //total number of runs in the file
     size_t buffer_size=0; //size of the buffer
+    size_t offset = sizeof(size_t)*2;//the first offset bytes store the values for fb and sb
+    std::string file;
     std::ofstream ofs;
+    std::ifstream ifs;
+    bool modified=false;
+    std::function<size_t(size_t, size_t)> sub = [](size_t a, size_t b){ return a-b;};
+    std::function<size_t(size_t, size_t)> add = [](size_t a, size_t b){ return a+b;};
 
+private:
+
+    inline void mod_freq(size_t idx, size_t new_freq, std::function<size_t(size_t, size_t)>& op) {
+
+        size_t start = (idx*bpr)+sb;
+        size_t end = start + fb-1;
+        size_t buff_start = (start & (buffer_size - 1));
+        size_t freq=0;
+
+        if(start<block_bg || (block_bg + buffer_size) <= end) {
+
+            size_t b_start = start/buffer_size;
+            size_t b_end = end/buffer_size;
+
+            if(modified){
+                write_block(buffer_size);
+            }
+
+            if(b_start<b_end){
+                size_t new_block_bg = (start/buffer_size)*buffer_size;
+                if(new_block_bg!=block_bg){
+                    block_bg = new_block_bg;
+                    read_block();
+                }
+
+                //retrieve the frequency
+                size_t left = buffer_size-buff_start;
+                memcpy(&freq, buffer + buff_start, left);
+
+                block_bg = (end/buffer_size)*buffer_size;
+                read_block();
+                auto *ptr = (char *) &freq;
+                memcpy(ptr + left, buffer, (fb-left));
+                freq=op(freq, new_freq);
+
+                //store the updated frequency
+                block_bg = (start/buffer_size)*buffer_size;
+                read_block();
+                memcpy(buffer + buff_start, &freq, left);
+                write_block(buffer_size);
+                block_bg =  (end/buffer_size)*buffer_size;
+                read_block();
+
+                ptr = (char *) &freq;
+                memcpy(buffer, ptr+left ,(fb-left));
+                modified = true;
+                return;
+            }else{
+                block_bg = (end/buffer_size)*buffer_size;
+                read_block();
+            }
+        }
+        memcpy(&freq, buffer+buff_start, fb);
+        freq=op(freq, new_freq);
+        memcpy(buffer+buff_start, &freq,  fb);
+        modified = true;
+    }
+
+    inline void write(size_t idx, uint8_t off1, uint8_t off2, size_t new_val) {
+
+        size_t start = (idx*bpr)+off1;
+        size_t end = start + off2-1;
+        size_t buff_start = (start & (buffer_size - 1));
+
+        if(start<block_bg || (block_bg + buffer_size) <= end) {
+
+            size_t b_start = start/buffer_size;
+            size_t b_end = end/buffer_size;
+
+            if(modified){
+                write_block(buffer_size);
+            }
+
+            if(b_start<b_end){
+
+                size_t new_block_bg = (start/buffer_size)*buffer_size;
+                if(new_block_bg!=block_bg){
+                    block_bg = new_block_bg;
+                    read_block();
+                }
+
+                size_t left = buffer_size-buff_start;
+                memcpy(buffer + buff_start, &new_val, left);
+                write_block(buffer_size);
+                block_bg =  (end/buffer_size)*buffer_size;
+                read_block();
+
+                auto *ptr = (char *) &new_val;
+                memcpy(buffer, ptr+left ,(off2-left));
+                modified = true;
+                return;
+            }else{
+                block_bg = (end/buffer_size)*buffer_size;
+                read_block();
+            }
+        }
+        memcpy(buffer+buff_start, &new_val,  off2);
+        modified = true;
+    }
+
+    inline size_t read(size_t idx, uint8_t off1, uint8_t off2) {
+
+        size_t start = (idx*bpr)+off1;
+        size_t end = start + off2-1;
+        size_t buff_start = (start & (buffer_size - 1));
+        size_t val=0;
+
+        if(start<block_bg || (block_bg + buffer_size) <= end) {
+
+            size_t b_start = start/buffer_size;
+            size_t b_end = end/buffer_size;
+
+            if(modified){
+                write_block(buffer_size);
+            }
+
+            if(b_start<b_end){
+                size_t new_block_bg = (start/buffer_size)*buffer_size;
+                if(new_block_bg!=block_bg){
+                    block_bg = new_block_bg;
+                    read_block();
+                }
+
+                size_t left = buffer_size-buff_start;
+                memcpy(&val, buffer + buff_start, left);
+                block_bg = (end/buffer_size)*buffer_size;
+                read_block();
+                auto *ptr = (char *)&val;
+                memcpy(ptr + left, buffer, (off2-left));
+                return val;
+            }else{
+                block_bg = (end/buffer_size)*buffer_size;
+                read_block();
+            }
+        }
+        memcpy(&val, buffer+buff_start, off2);
+        return val;
+    }
+
+    void write_block(size_t n_bytes){
+        ofs.seekp((std::streamoff)(offset+block_bg));
+        ofs.write((char*) buffer, (std::streamsize) n_bytes);
+        //TODO caveat: it might produce desynchronization with the ifs in some platforms (OSx)
+        // if I don't flush the ofs buffer. However, flusing the buffer is expensive.
+        // Maybe I should define an if macro here.
+        ofs.flush();
+        assert(ofs.good());
+        modified=false;
+    }
+
+    void read_block(){
+        assert(!modified);
+        ifs.seekg((std::streamoff)(offset+block_bg));
+        ifs.read((char*) buffer, (std::streamsize)buffer_size);
+        if(ifs.gcount()<(std::streamsize)buffer_size){
+            ifs.clear();
+        }
+        assert(ifs.good());
+        modified=false;
+    }
 public:
 
-    explicit bwt_buff_writer(const std::string& input_file, uint8_t _sb, uint8_t _fb, size_t buff_size= 1024 * 1024){
+    explicit bwt_buff_writer(const std::string& input_file, uint8_t _sb, uint8_t _fb, size_t buff_size=1024 * 1024){
 
-        ofs.open(input_file, std::ios::binary);
+        file = input_file;
+        ofs.rdbuf()->pubsetbuf(nullptr, 0);
+        ifs.rdbuf()->pubsetbuf(nullptr, 0);
+
+        ofs.open(file, std::ios::binary);
         assert(ofs.good());
+
+        ifs.open(file,  std::ios::binary);
+        assert(ifs.good());
 
         buffer_size = buff_size;
         buffer = (char *)malloc(buffer_size);
+        memset(buffer, 0, buffer_size);
+
         sb = _sb;
         fb = _fb;
         bpr = sb+fb;
         sec_buff = (char *)malloc(bpr);
         ofs.write((char *)&sb, sizeof(size_t));
         ofs.write((char *)&fb, sizeof(size_t));
-
         block_bg=0;
     }
 
@@ -154,39 +335,95 @@ public:
         size_t start = (tot_runs*bpr);
         size_t end = start + bpr-1;
         size_t buff_start = (start & (buffer_size - 1));
+        tot_runs++;
 
-        if(start>=block_bg && (block_bg + buffer_size) <= end){
+        if(start<block_bg || (block_bg + buffer_size) <= end){
+            if(modified){
+                write_block(buffer_size);
+            }
+
             size_t b_start = start/buffer_size;
             size_t b_end = end/buffer_size;
+
             if(b_start<b_end) {
-                size_t left = buffer_size - buff_start;
+                size_t new_block_bg = (start/buffer_size)*buffer_size;
+                if(new_block_bg!=block_bg){
+                    block_bg = new_block_bg;
+                    read_block();
+                }
+
                 memcpy(sec_buff, &sym, sb);
                 memcpy(sec_buff + sb, &freq, fb);
+                size_t left = buffer_size - buff_start;
                 memcpy(buffer+buff_start, sec_buff, left);
-                ofs.write((char *) buffer, (std::streamsize) buffer_size);
+                write_block(buffer_size);
+
                 block_bg = (end/buffer_size)*buffer_size;
                 memcpy(buffer, sec_buff+left, bpr-left);
-                tot_runs++;
+                modified = true;
                 return;
             }else{
-                ofs.write((char *) buffer, (std::streamsize) buffer_size);
                 block_bg = (end/buffer_size)*buffer_size;
+                read_block();
             }
         }
         memcpy(buffer+buff_start, &sym, sb);
         memcpy(buffer+buff_start+sb, &freq, fb);
-        tot_runs++;
+        modified=true;
+    }
+
+    inline void inc_freq(size_t idx, size_t val){
+        mod_freq(idx, val, add);
+    }
+
+    inline void inc_freq_last(size_t val){
+        mod_freq(tot_runs-1, val, add);
+    }
+
+    inline void dec_freq(size_t idx, size_t val){
+        mod_freq(idx, val, sub);
+    }
+
+    inline size_t read_sym(size_t idx) {
+        assert(idx<tot_runs);
+        return read(idx, 0, sb);
+    }
+
+    inline size_t read_freq(size_t idx) {
+        assert(idx<tot_runs);
+        return read(idx, sb, fb);
+    }
+
+    inline void write_sym(size_t idx, size_t& new_sym) {
+        assert(idx<tot_runs);
+        write(idx, 0, sb, new_sym);
+    }
+
+    inline void write_freq(size_t idx, size_t& new_freq) {
+        assert(idx<tot_runs);
+        write(idx, sb, fb, new_freq);
+    }
+
+    inline size_t size() const {
+        return tot_runs;
+    }
+
+    inline size_t last_sym() {
+        return read_sym(tot_runs-1);
+    }
+
+    inline size_t last_freq() {
+        return read_freq(tot_runs-1);
     }
 
     void close(){
+        if(modified) write_block(buffer_size);
+        ofs.close();
+        ifs.close();
+        auto length = offset + (tot_runs*bpr);
+        truncate(file.c_str(), (off_t)length);
+
         if(buffer!= nullptr){
-            size_t start = (tot_runs*bpr);
-            size_t buff_start = (start & (buffer_size - 1));
-            if(buff_start!=0){
-                ofs.write((char *) buffer, (std::streamsize) buff_start);
-            }else{
-                ofs.write((char *) buffer, (std::streamsize) buffer_size);
-            }
             free(buffer);
             buffer = nullptr;
         }
@@ -194,7 +431,6 @@ public:
             free(sec_buff);
             sec_buff = nullptr;
         }
-        if(ofs.is_open()) ofs.close();
     }
 };
 

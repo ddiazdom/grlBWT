@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include "utils.hpp"
 #include "LMS_induction.h"
+#include "bwt_io.h"
 #ifdef __linux__
 #include <malloc.h>
 #endif
@@ -134,14 +135,20 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
     bv_rs_t d_lim_rs(&dict.d_lim);
     std::string lvl_bwt_file = sdsl::cache_file_name("pbwt_lvl_"+std::to_string(p_round), config);
     ivb_t lvl_bwt(lvl_bwt_file, std::ios::out);
+
+    //TODO new way
+    std::string pre_bwt_file = sdsl::cache_file_name("pre_bwt_lvl_"+std::to_string(p_round), config);
+    size_t sb = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
+    size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
+    bwt_buff_writer pre_bwt(pre_bwt_file, sb, fb);
+    //
+
     phrase_map_t new_phrases_ht;
 
     size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
     vector_t ranks(dict.n_phrases, 0, width);
 
-    //TODO test
     bv_t phr_marks(dict.dict.size(), false);
-    //
 
     while(u<sa.size()) {
         d_pos = (sa[u]>>1UL) - 1;
@@ -196,19 +203,45 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
 
                 lvl_bwt.push_back(dummy_sym);
                 lvl_bwt.push_back(freq);
+
+                //TODO new way
+                pre_bwt.push_back(dummy_sym, freq);
+                //
+
                 sa[rank] = f_sa_pos;
                 rank++;
             }else{
                 l_sym = dict.dict[f_sa_pos-1];
+
+                //TODO new way
+                if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
+                    pre_bwt.inc_freq_last(freq);
+                }else{
+                    pre_bwt.push_back(l_sym, freq);
+                }
+                //
+
                 if(lvl_bwt.size()>2 && lvl_bwt[lvl_bwt.size()-2]==l_sym){
                     lvl_bwt[lvl_bwt.size()-1] +=freq;
                 }else{
                     lvl_bwt.push_back(l_sym);
                     lvl_bwt.push_back(freq);
                 }
+
+                //TODO testing
+                if(lvl_bwt[lvl_bwt.size()-2]!=pre_bwt.last_sym() ||
+                   lvl_bwt[lvl_bwt.size()-1]!=pre_bwt.last_freq()){
+                    std::cout<<pre_bwt.size()<<" "<<lvl_bwt.size()/2<<std::endl;
+                    std::cout<<lvl_bwt[lvl_bwt.size()-2]<<" "<<pre_bwt.last_sym()<<std::endl;
+                    std::cout<<lvl_bwt[lvl_bwt.size()-1]<<" "<<pre_bwt.last_freq()<<std::endl;
+                }
+                assert(lvl_bwt[lvl_bwt.size()-2]==pre_bwt.last_sym());
+                assert(lvl_bwt[lvl_bwt.size()-1]==pre_bwt.last_freq());
+                //
             }
         }
     }
+    pre_bwt.close();
 
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
@@ -1008,7 +1041,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             }
             sdsl::util::clear(ranks);
         }
-
 
         std::cout<<"    Creating the parse of the text"<<std::endl;
         {//store the phrases into a new file
