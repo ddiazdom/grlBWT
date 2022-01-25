@@ -609,7 +609,7 @@ public:
 
     inline void shrink_databuff() {
         assert(!static_buffer);
-        size_t new_size = INT_CEIL(next_av_bit, stream_t::word_bits);
+        size_t new_size = INT_CEIL(next_av_bit, stream_t::word_bits)+1;
         data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_size*sizeof(buffer_t)));
         data.stream_size = new_size;
     }
