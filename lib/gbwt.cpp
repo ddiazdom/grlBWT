@@ -126,8 +126,9 @@ void extract_rl_syms(ivb_t& bwt, ivb_t& new_bwt, bwt_buff_writer& bwt_buff, bwt_
         sym = bwt[j];
         tmp_freq = bwt[j+1];
 
-        s = bwt_buff.read_sym(j/2);
-        tf = bwt_buff.read_freq(j/2);
+        bwt_buff.read_run(j/2, s, tf);
+        assert(s==sym);
+        assert(tf==tmp_freq);
 
         if(tmp_freq<=freq){
             freq-=tmp_freq;
@@ -136,7 +137,7 @@ void extract_rl_syms(ivb_t& bwt, ivb_t& new_bwt, bwt_buff_writer& bwt_buff, bwt_
             bwt[j+1]-=freq;
 
             //TODO new way
-            bwt_buff.dec_freq(j+1, freq);
+            bwt_buff.dec_freq(j/2, freq);
             //
 
             tmp_freq = std::exchange(freq, 0);
@@ -169,14 +170,15 @@ size_t compute_hocc_size(ivb_t& bwt, dictionary& dict, bv_rs_t& hocc_rs, vector_
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
     //
 
-    size_t sym, pos, dummy_sym=dict.alphabet+2, left_sym, freq, al_b, fr_b, bps;
+    size_t sym, pos, dummy_sym=dict.alphabet+2, left_sym, freq=0, al_b, fr_b, bps;
     al_b = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
     fr_b = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
     bps = al_b + fr_b;
     size_t tot_bytes = bps * hocc_rs(dict.phrases_has_hocc.size());
     auto * hocc_counts = (char *)malloc(tot_bytes);
-    char * ptr;
     memset(hocc_counts, 0, tot_bytes);
+
+    char * ptr;
 
     for(size_t i=0;i<bwt.size();i+=2) {
         sym = bwt[i];
@@ -342,7 +344,7 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
 
     while(i<p_bwt.size()) {
 
-        p_bwt.read(i, sym, pbwt_freq);
+        p_bwt.read_run(i, sym, pbwt_freq);
 
         if(sym==(dummy_sym-1)) {
 
@@ -497,7 +499,7 @@ void parse2bwt(sdsl::cache_config& config, size_t p_round){
     size_t sym, freq;
     bwt_buff_reader bwt_i_buff(bwt_lev_file);
     for(size_t i=0;i<bwt.size();i+=2){
-        bwt_i_buff.read(i/2, sym, freq);
+        bwt_i_buff.read_run(i/2, sym, freq);
         assert(bwt[i]==sym);
         assert(bwt[i+1]==freq);
     }
