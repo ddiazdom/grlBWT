@@ -8,86 +8,6 @@
 #include <malloc.h>
 #endif
 
-void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file) {
-
-    sdsl::int_vector<> r;
-    bv_t r_lim;
-    sdsl::load_from_file(r, p_gram.rules_file);
-    sdsl::load_from_file(r_lim, p_gram.rules_lim_file);
-    bv_t::select_1_type r_lim_ss;
-    sdsl::util::init_support(r_lim_ss, &r_lim);
-
-    std::cout<<"  Checking the grammar produces the exact input string"<<std::endl;
-    std::cout<<"    This step is optional and for debugging purposes"<<std::endl;
-    std::cout<<"    Terminals:              "<<(size_t)p_gram.sigma<<std::endl;
-    std::cout<<"    Number of nonterminals: "<<p_gram.r-p_gram.sigma<<std::endl;
-    std::cout<<"    Compressed string:      "<<p_gram.c<<std::endl;
-
-    std::vector<size_t> tmp_decomp;
-
-    i_file_stream<uint8_t> if_stream(uncomp_file, BUFFER_SIZE);
-
-    size_t start, end;
-    std::stack<std::pair<size_t, uint8_t>> stack;
-
-    size_t f = r_lim_ss(p_gram.r - 1) + 1;
-    size_t l = r_lim_ss(p_gram.r);
-    size_t idx = 0;
-
-
-    for(size_t i=f; i <= l; i++){
-        //std::cout<<i-f<<" "<<l-f<<std::endl;
-        tmp_decomp.clear();
-        stack.emplace(r[i], 1);
-        assert(stack.size()<=if_stream.size());
-
-        while(!stack.empty()){
-
-            auto curr_sym = stack.top() ;
-            stack.pop();
-
-            if(curr_sym.first==0){
-                start = 0;
-            }else{
-                start = r_lim_ss(curr_sym.first)+1;
-            }
-
-            end = r_lim_ss(curr_sym.first+1);
-
-            if(r[start] == curr_sym.first){
-                //std::cout<<idx<<" "<<p_gram.sym_map[curr_sym.first]<<" "<<(char)if_stream.read(idx)<<std::endl;
-                //if(p_gram.sym_map[curr_sym.first]!=if_stream.read(idx)){
-                //    std::cout<<f<<" "<<i<<" "<<i-f<<std::endl;
-                //}
-                assert(p_gram.sym_map[curr_sym.first]==if_stream.read(idx));
-                idx++;
-            }else{
-                //std::cout<<curr_sym.first<<" -> ";
-                 uint8_t is_sp;
-                 uint8_t is_first;
-                 if(curr_sym.second!=0){
-                     for(size_t j=end+1; j-->start;){
-                         is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
-                         is_first = j==start && curr_sym.second & 1UL;
-                         stack.emplace(r[j], is_first | (is_sp<<1UL));
-                     }
-                 }else{
-                     for(size_t j=end; j>start;j--){
-                         is_sp =  j==end && p_gram.parsing_level(r[j])>p_gram.parsing_level(r[j-1]);
-                         stack.emplace(r[j], is_sp<<1UL);
-                     }
-                 }
-
-                 //for(size_t j=start; j<=end;j++){
-                 //    std::cout<<r[j]<<", "<<p_gram.parsing_level(r[j])<<" ";
-                //}
-                //std::cout<<""<<std::endl;
-            }
-        }
-    }
-    std::cout<<"\tGrammar is correct!!"<<std::endl;
-}
-
 alpha_t get_alphabet(std::string &i_file) {
 
     std::cout <<"Reading input file:" << std::endl;
@@ -159,6 +79,7 @@ void extract_rl_syms(ivb_t& bwt, ivb_t& new_bwt, bwt_buff_writer& bwt_buff, bwt_
             new_bwt_buff.push_back(sym, tmp_freq);
         }
         //
+        assert(new_bwt[new_bwt.size()-2]==new_bwt_buff.last_sym());
     }
 }
 
@@ -220,7 +141,6 @@ size_t compute_hocc_size(ivb_t& bwt, dictionary& dict, bv_rs_t& hocc_rs, vector_
         acc+=freq;
         ptr+=bps;
     }
-    std::cout<<"Este es el acc "<<acc<<std::endl;
     assert(acc<=dict.t_size);
     hocc_buckets[hocc_buckets.size()-1] = acc;
     free(hocc_counts);
@@ -265,6 +185,8 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
 
         sym = bwt[i];
         freq = bwt[i+1];
+        assert(s==sym);
+        assert(f==freq);
 
         if(dict.phrases_has_hocc[sym]){
             rank = hocc_rs(sym);
@@ -306,8 +228,11 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
             pos = 2*sym+1;
             sym = dict.dict[pos];
         }
+
         bwt[i] =  sym;
         bwt_buff.write_sym(i/2, sym);
+
+        assert(bwt[i]==bwt_buff.read_sym(i/2));
         assert(dict.dict[pos-1]==dict.dict_dummy);
     }
 
@@ -331,6 +256,10 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     ivb_t new_bwt(new_bwt_file, std::ios::out);
 
     std::string new_bwt_f = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round), config);
+
+    if(dict.alphabet<dict.p_alpha_size){
+        al_b = INT_CEIL(sdsl::bits::hi(dict.p_alpha_size+2)+1, 8);
+    }
     bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, al_b, fr_b);
 
     std::string p_bwt_file = sdsl::cache_file_name("pre_bwt_lev_"+std::to_string(p_round), config);
@@ -390,6 +319,7 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
                         } else {
                             new_bwt_buff.push_back(sym, freq);
                         }
+                        assert(new_bwt[new_bwt.size()-2]==new_bwt_buff.last_sym());
                         //
                     }
                     new_bwt_size+=freq;
@@ -415,6 +345,7 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
                 new_bwt_buff.push_back(sym, pbwt_freq);
             }
             //
+            assert(new_bwt[new_bwt.size()-2]==new_bwt_buff.last_sym());
             new_bwt_size+=pbwt_freq;
         }
         i++;
@@ -540,16 +471,8 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
 
     std::string rules_file = sdsl::cache_file_name("m_rules", config);
     std::string rules_len_file = sdsl::cache_file_name("rules_len", config);
-    gram_info_t p_gram(rules_file, rules_len_file);
-    p_gram.sigma = alphabet.size();
-    p_gram.last_dict_size = p_gram.sigma;
-    for(auto & sym : alphabet){
-        p_gram.sym_map[sym.first] = sym.first;
-    }
-    p_gram.max_tsym = alphabet.back().first;
-    p_gram.r = p_gram.max_tsym + 1;
 
-    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, p_gram, alphabet, config);
+    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, alphabet, config);
     infer_bwt(config, p_rounds);
     //check_plain_grammar(p_gram, i_file);
 }

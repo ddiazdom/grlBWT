@@ -9,7 +9,6 @@ find_package(LibSDSL REQUIRED)
 add_executable(gbwt
         main.cpp
         external/xxHash-dev/xxhash.c
-        lib/grammar.cpp
         lib/gbwt.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
@@ -18,7 +17,7 @@ add_executable(gbwt
 target_compile_options(gbwt
         PRIVATE
         #-Werror
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic #-msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 

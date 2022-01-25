@@ -5,7 +5,6 @@
 #ifndef LG_COMPRESSOR_LMS_ALGO_H
 #define LG_COMPRESSOR_LMS_ALGO_H
 
-#include "grammar.hpp"
 #include "common.h"
 #include "lc_parsers.hpp"
 
@@ -35,33 +34,40 @@ struct parse_data_t {
     };
 };
 
+struct parsing_info{
+    size_t lms_phrases=0;
+    size_t tot_phrases=0;
+    size_t p_round=0;
+    std::vector<size_t> alphabets;
+};
+
 struct dictionary {
     typedef size_t size_type;
-    size_t min_sym{};
-    size_t max_sym{};
-    size_t alphabet{};
-    size_t n_phrases{};
-    size_t t_size{};
-    size_t dict_dummy{};
-    vector_t dict;
-    vector_t freqs;
+    size_t alphabet{};       //alphabet of the dictionary
+    size_t p_alpha_size{};   //size of the previous alphabet
+    size_t n_phrases{};      //number of LMS phrases in the dictionary
+    size_t t_size{};         //size of the text from the dictionary was generated
+    size_t dict_dummy{};     //dummy symbol for the dictionary
+    vector_t dict;           //phrase sequences
+    vector_t freqs;          //frequency of every dictionary phrase in the original text
     bv_t     d_lim;
-    bv_t phrases_has_hocc;
+    bv_t phrases_has_hocc;   //mark the phrases with hidden occurrences
     bv_t* desc_bv=nullptr;
 
     dictionary()=default;
-    dictionary(phrase_map_t &mp_map, size_t _min_sym, size_t _max_sym,
-               key_wrapper &key_w, size_t dict_syms, size_t max_freq,
-               bv_t& is_suffix_bv, size_t _t_size): min_sym(_min_sym),
-                                                    max_sym(_max_sym),
-                                                    alphabet(max_sym-min_sym+1),
-                                                    n_phrases(mp_map.size()),
-                                                    t_size(_t_size),
-                                                    dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
-                                                    freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
-                                                    d_lim(dict_syms, false),
-                                                    phrases_has_hocc(dict.size(), false),
-                                                    desc_bv(&is_suffix_bv){
+    dictionary(phrase_map_t &mp_map, size_t dict_syms,
+               size_t max_freq, bv_t& is_suffix_bv,
+               size_t _t_size, size_t _p_alph_size): alphabet(is_suffix_bv.size()),
+                                                     p_alpha_size(_p_alph_size),
+                                                     n_phrases(mp_map.size()),
+                                                     t_size(_t_size),
+                                                     dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
+                                                     freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
+                                                     d_lim(dict_syms, false),
+                                                     phrases_has_hocc(dict.size(), false),
+                                                     desc_bv(&is_suffix_bv){
+
+        key_wrapper key_w{dict.width(), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
@@ -84,6 +90,7 @@ struct dictionary {
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const{
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
         size_type written_bytes = sdsl::write_member(alphabet, out, child, "alphabet");
+        written_bytes+= sdsl::write_member(p_alpha_size, out, child, "p_alpha_size");
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
         written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
         written_bytes+= sdsl::write_member(dict_dummy, out, child, "dummy_sym");
@@ -94,6 +101,7 @@ struct dictionary {
 
     void load(std::istream& in){
         sdsl::read_member(alphabet, in);
+        sdsl::read_member(p_alpha_size, in);
         sdsl::read_member(n_phrases, in);
         sdsl::read_member(t_size, in);
         sdsl::read_member(dict_dummy, in);
@@ -143,18 +151,14 @@ struct parse_functor{
 };
 
 template<template<class, class> class lc_parser_t>
-size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
-                    gram_info_t &p_gram, alpha_t alphabet, sdsl::cache_config &config);
+size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, alpha_t& alphabet, sdsl::cache_config &config);
 template<class parser_t, class out_sym_t=size_t>
 size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                         gram_info_t &p_gram, ivb_t &rules, bvb_t &rules_lim,
-                         bv_t &phrase_desc, sdsl::cache_config &config);
-void join_parse_chunks(const std::string &output_file,
-                       std::vector<std::string> &chunk_files);
+                         parsing_info &p_info, bv_t &phrase_desc, sdsl::cache_config &config);
+void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files);
 std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
 
-void assign_ids(phrase_map_t &mp_map, ivb_t &r, bvb_t &r_lim, dictionary &dict, gram_info_t &p_gram,
-                sdsl::cache_config &config);
+size_t assign_ids(dictionary &dict, parsing_info &p_info, sdsl::cache_config &config);
 
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H
