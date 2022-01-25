@@ -339,10 +339,15 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, a
     bv_t symbol_desc(alphabet.back().first+1,false);
     symbol_desc[alphabet[0].first] = true;
 
+    parsing_info p_info;
+    for(auto const& pair : alphabet){
+        if(p_info.max_sym_freq<pair.second){
+            p_info.max_sym_freq = pair.second;
+        }
+    }
+
     size_t iter=1;
     size_t rem_phrases;
-    parsing_info p_info;
-    p_info.alphabets.push_back(0);
 
     typedef lc_parser_t<i_file_stream<uint8_t>, string_t> byte_parser_t;
     typedef lc_parser_t<i_file_stream<size_t>, string_t> int_parser_t;
@@ -451,7 +456,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             //create a dictionary from where the ids will be computed
             std::cout<<"    Creating the dictionary from the hash table"<<std::endl;
             dictionary dict(mp_table, dict_syms, max_freq, phrase_desc,
-                            threads_data[0].ifs.size(), p_info.alphabets.back());
+                            threads_data[0].ifs.size(), p_info.prev_alph,
+                            p_info.max_sym_freq);
             mp_table.destroy_data();
 
             //rename phrases according to their lexicographical ranks
@@ -519,10 +525,11 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                 new_phrase_desc[val] = phrase_desc[sym];
                 ++it;
             }
-            p_info.alphabets.push_back(phrase_desc.size());
+            p_info.prev_alph = phrase_desc.size();
             phrase_desc.swap(new_phrase_desc);
         }
 
+        p_info.max_sym_freq = max_freq;
         p_info.lms_phrases = mp_table.size();
         p_info.tot_phrases = tot_phrases;
         p_info.p_round++;

@@ -35,10 +35,11 @@ struct parse_data_t {
 };
 
 struct parsing_info{
-    size_t lms_phrases=0;
-    size_t tot_phrases=0;
-    size_t p_round=0;
-    std::vector<size_t> alphabets;
+    size_t lms_phrases=0; //number of LMS phrases in the current parsing round
+    size_t tot_phrases=0; //total number of phrases generated in the current parsing round
+    size_t p_round=0; //parsing round
+    size_t prev_alph=0; //size of the alphabet in the previous parsing round
+    size_t max_sym_freq=0; // most repeated symbol in the input text of the round
 };
 
 struct dictionary {
@@ -47,8 +48,9 @@ struct dictionary {
     size_t p_alpha_size{};   //size of the previous alphabet
     size_t n_phrases{};      //number of LMS phrases in the dictionary
     size_t t_size{};         //size of the text from the dictionary was generated
+    size_t max_sym_freq{};   //maximum symbol frequency in the parse from which the dictionary was created
     size_t dict_dummy{};     //dummy symbol for the dictionary
-    vector_t dict;           //phrase sequences
+    vector_t dict;           //list of phrases in the dictionary
     vector_t freqs;          //frequency of every dictionary phrase in the original text
     bv_t     d_lim;
     bv_t phrases_has_hocc;   //mark the phrases with hidden occurrences
@@ -56,16 +58,17 @@ struct dictionary {
 
     dictionary()=default;
     dictionary(phrase_map_t &mp_map, size_t dict_syms,
-               size_t max_freq, bv_t& is_suffix_bv,
-               size_t _t_size, size_t _p_alph_size): alphabet(is_suffix_bv.size()),
-                                                     p_alpha_size(_p_alph_size),
-                                                     n_phrases(mp_map.size()),
-                                                     t_size(_t_size),
-                                                     dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
-                                                     freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
-                                                     d_lim(dict_syms, false),
-                                                     phrases_has_hocc(dict.size(), false),
-                                                     desc_bv(&is_suffix_bv){
+               size_t max_freq, bv_t& is_suffix_bv, size_t _t_size,
+               size_t _p_alph_size, size_t _max_sym_freq): alphabet(is_suffix_bv.size()),
+                                                           p_alpha_size(_p_alph_size),
+                                                           n_phrases(mp_map.size()),
+                                                           t_size(_t_size),
+                                                           max_sym_freq(_max_sym_freq),
+                                                           dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
+                                                           freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
+                                                           d_lim(dict_syms, false),
+                                                           phrases_has_hocc(dict.size(), false),
+                                                           desc_bv(&is_suffix_bv){
 
         key_wrapper key_w{dict.width(), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
@@ -93,6 +96,7 @@ struct dictionary {
         written_bytes+= sdsl::write_member(p_alpha_size, out, child, "p_alpha_size");
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
         written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
+        written_bytes+= sdsl::write_member(max_sym_freq, out, child, "max_sym_freq");
         written_bytes+= sdsl::write_member(dict_dummy, out, child, "dummy_sym");
         dict.serialize(out, child);
         phrases_has_hocc.serialize(out, child);
@@ -104,6 +108,7 @@ struct dictionary {
         sdsl::read_member(p_alpha_size, in);
         sdsl::read_member(n_phrases, in);
         sdsl::read_member(t_size, in);
+        sdsl::read_member(max_sym_freq, in);
         sdsl::read_member(dict_dummy, in);
         dict.load(in);
         phrases_has_hocc.load(in);
