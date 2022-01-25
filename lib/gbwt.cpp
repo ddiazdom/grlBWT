@@ -305,7 +305,6 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     std::cout<<"      bytes per run:      "<<bps<<std::endl;
     std::cout<<"        sym bytes:        "<<al_b<<std::endl;
     std::cout<<"        freq bytes:       "<<fr_b<<std::endl;
-    std::cout<<"      Est. number of runs:"<<n_runs<<std::endl;
     free(hocc);
 }
 
