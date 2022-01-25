@@ -133,14 +133,12 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
     size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
-    std::string lvl_bwt_file = sdsl::cache_file_name("pbwt_lvl_"+std::to_string(p_round), config);
-    ivb_t lvl_bwt(lvl_bwt_file, std::ios::out);
 
     //TODO new way
-    std::string pre_bwt_file = sdsl::cache_file_name("pre_bwt_lvl_"+std::to_string(p_round), config);
+    std::string pre_bwt_file = sdsl::cache_file_name("pre_bwt_lev_"+std::to_string(p_round), config);
     size_t sb = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
-    bwt_buff_writer pre_bwt(pre_bwt_file, sb, fb);
+    bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
     //
 
     phrase_map_t new_phrases_ht;
@@ -201,43 +199,16 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
                     }
                 }
 
-                lvl_bwt.push_back(dummy_sym);
-                lvl_bwt.push_back(freq);
-
-                //TODO new way
                 pre_bwt.push_back(dummy_sym, freq);
-                //
-
                 sa[rank] = f_sa_pos;
                 rank++;
             }else{
                 l_sym = dict.dict[f_sa_pos-1];
-
-                //TODO new way
                 if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(freq);
                 }else{
                     pre_bwt.push_back(l_sym, freq);
                 }
-                //
-
-                if(lvl_bwt.size()>2 && lvl_bwt[lvl_bwt.size()-2]==l_sym){
-                    lvl_bwt[lvl_bwt.size()-1] +=freq;
-                }else{
-                    lvl_bwt.push_back(l_sym);
-                    lvl_bwt.push_back(freq);
-                }
-
-                //TODO testing
-                if(lvl_bwt[lvl_bwt.size()-2]!=pre_bwt.last_sym() ||
-                   lvl_bwt[lvl_bwt.size()-1]!=pre_bwt.last_freq()){
-                    std::cout<<pre_bwt.size()<<" "<<lvl_bwt.size()/2<<std::endl;
-                    std::cout<<lvl_bwt[lvl_bwt.size()-2]<<" "<<pre_bwt.last_sym()<<std::endl;
-                    std::cout<<lvl_bwt[lvl_bwt.size()-1]<<" "<<pre_bwt.last_freq()<<std::endl;
-                }
-                assert(lvl_bwt[lvl_bwt.size()-2]==pre_bwt.last_sym());
-                assert(lvl_bwt[lvl_bwt.size()-1]==pre_bwt.last_freq());
-                //
             }
         }
     }

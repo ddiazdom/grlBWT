@@ -56,6 +56,15 @@ class bwt_buff_reader {
     size_t offset =sizeof(size_t)*2;
     std::ifstream ifs;
 
+    void read_block(){
+        ifs.seekg((std::streamoff)(offset+block_bg));
+        ifs.read((char*) buffer, (std::streamsize)buffer_size);
+        if(ifs.gcount()<(std::streamsize)buffer_size){
+            ifs.clear();
+        }
+        assert(ifs.good());
+    }
+
 public:
 
     explicit bwt_buff_reader(const std::string& input_file, size_t buff_size=1024 * 1024){
@@ -78,7 +87,43 @@ public:
         ifs.read(buffer, (std::streamsize) buffer_size);
     }
 
+    inline size_t read_sym(size_t i) {
+        assert(i<tot_runs);
+        size_t sym = 0;
+        size_t start = (i*bpr);
+        size_t end = start + sb-1;
+        size_t buff_start = (start & (buffer_size-1));
+
+        if(start<block_bg || (block_bg+buffer_size)<=end) {
+
+            size_t b_start = start / buffer_size;
+            size_t b_end = end / buffer_size;
+
+            if (b_start < b_end) {
+                size_t new_block_bg = (start/buffer_size)*buffer_size;
+                if(new_block_bg!=block_bg){
+                    block_bg = new_block_bg;
+                    read_block();
+                }
+
+                size_t left = buffer_size-buff_start;
+                auto *ptr = (char *)&sym;
+                memcpy(ptr, buffer + buff_start, left);
+                block_bg = (end / buffer_size) * buffer_size;
+                read_block();
+                memcpy(ptr+left, buffer, bpr-left);
+                return sym;
+            }else{
+                block_bg = (end / buffer_size) * buffer_size;
+                read_block();
+            }
+        }
+        memcpy(&sym, buffer+buff_start, sb);
+        return sym;
+    }
+
     inline void read(size_t i, size_t& sym, size_t& freq) {
+
         assert(i<tot_runs);
         sym = 0;
         freq = 0;
@@ -118,10 +163,16 @@ public:
         if(buffer!= nullptr){
             free(buffer);
             buffer = nullptr;
+        }
+        if(sec_buffer!= nullptr){
             free(sec_buffer);
             sec_buffer = nullptr;
         }
         if(ifs.is_open()) ifs.close();
+    }
+
+    ~bwt_buff_reader(){
+        close();
     }
 };
 
@@ -136,6 +187,8 @@ class bwt_buff_writer {
     size_t tot_runs =0; //total number of runs in the file
     size_t buffer_size=0; //size of the buffer
     size_t offset = sizeof(size_t)*2;//the first offset bytes store the values for fb and sb
+    size_t l_sym={}; //symbol of the last run
+    size_t l_acc_sym={}; //symbol of the last accessed run
     std::string file;
     std::ofstream ofs;
     std::ifstream ifs;
@@ -271,6 +324,7 @@ private:
                 block_bg = (end/buffer_size)*buffer_size;
                 read_block();
                 auto *ptr = (char *)&val;
+                assert(left<off2);
                 memcpy(ptr + left, buffer, (off2-left));
                 return val;
             }else{
@@ -278,7 +332,7 @@ private:
                 read_block();
             }
         }
-        memcpy(&val, buffer+buff_start, off2);
+        memcpy((char *)&val, buffer+buff_start, off2);
         return val;
     }
 
@@ -305,13 +359,12 @@ private:
     }
 public:
 
-    explicit bwt_buff_writer(const std::string& input_file, uint8_t _sb, uint8_t _fb, size_t buff_size=1024 * 1024){
+    explicit bwt_buff_writer(const std::string& input_file, std::ios::openmode mode=std::ios::out,
+                             uint8_t _sb=8, uint8_t _fb=8, size_t buff_size=1024 * 1024){
 
         file = input_file;
-        ofs.rdbuf()->pubsetbuf(nullptr, 0);
-        ifs.rdbuf()->pubsetbuf(nullptr, 0);
 
-        ofs.open(file, std::ios::binary);
+        ofs.open(file, mode | std::ios::out | std::ios::binary);
         assert(ofs.good());
 
         ifs.open(file,  std::ios::binary);
@@ -321,21 +374,37 @@ public:
         buffer = (char *)malloc(buffer_size);
         memset(buffer, 0, buffer_size);
 
-        sb = _sb;
-        fb = _fb;
-        bpr = sb+fb;
+        if(mode==std::ios::out){
+            sb = _sb;
+            fb = _fb;
+            ofs.write((char *)&sb, sizeof(size_t));
+            ofs.write((char *)&fb, sizeof(size_t));
+            bpr = sb+fb;
+        }else{
+            ifs.read((char *)&sb, sizeof(size_t));
+            ifs.read((char *)&fb, sizeof(size_t));
+            bpr = sb+fb;
+
+            ifs.seekg (0, std::ifstream::end);
+            tot_runs = ifs.tellg();
+            tot_runs = (tot_runs-offset)/bpr;
+            read_block();
+        }
         sec_buff = (char *)malloc(bpr);
-        ofs.write((char *)&sb, sizeof(size_t));
-        ofs.write((char *)&fb, sizeof(size_t));
-        block_bg=0;
     }
 
-    inline void push_back(size_t& sym, size_t& freq) {
+    ~bwt_buff_writer(){
+        close();
+    };
+
+    inline void push_back(size_t sym, size_t freq) {
 
         size_t start = (tot_runs*bpr);
         size_t end = start + bpr-1;
         size_t buff_start = (start & (buffer_size - 1));
         tot_runs++;
+        l_sym = sym;
+        l_acc_sym = sym;
 
         if(start<block_bg || (block_bg + buffer_size) <= end){
             if(modified){
@@ -386,7 +455,8 @@ public:
 
     inline size_t read_sym(size_t idx) {
         assert(idx<tot_runs);
-        return read(idx, 0, sb);
+        l_acc_sym = read(idx, 0, sb);
+        return l_acc_sym;
     }
 
     inline size_t read_freq(size_t idx) {
@@ -408,8 +478,12 @@ public:
         return tot_runs;
     }
 
-    inline size_t last_sym() {
-        return read_sym(tot_runs-1);
+    inline size_t last_sym() const {
+        return l_sym;
+    }
+
+    inline size_t last_acc_sym() const {
+        return l_acc_sym;
     }
 
     inline size_t last_freq() {
@@ -418,10 +492,13 @@ public:
 
     void close(){
         if(modified) write_block(buffer_size);
-        ofs.close();
-        ifs.close();
-        auto length = offset + (tot_runs*bpr);
-        truncate(file.c_str(), (off_t)length);
+
+        if(ofs.is_open() || ifs.is_open()){
+            ofs.close();
+            ifs.close();
+            auto length = offset + (tot_runs*bpr);
+            truncate(file.c_str(), (off_t)length);
+        }
 
         if(buffer!= nullptr){
             free(buffer);
@@ -431,7 +508,8 @@ public:
             free(sec_buff);
             sec_buff = nullptr;
         }
-    }
+    };
+
 };
 
 #endif //GBWT_BWT_IO_H
