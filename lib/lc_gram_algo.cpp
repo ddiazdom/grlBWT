@@ -243,7 +243,7 @@ void compress_dictionary_v2(dictionary &dict, vector_t &sa, phrase_map_t &mp_map
         assert(dict.dict[i]==tmp_dict.dict[i]);
     }*/
 
-    std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_round), config);
+    std::string dict_file = sdsl::cache_file_name("dict_lev_"+std::to_string(p_round), config);
     sdsl::store_to_file(dict, dict_file);
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
@@ -562,7 +562,7 @@ void compress_dictionary(dictionary &dict, vector_t &sa, gram_info_t &p_gram,
     //
 
     comp_dict_int(dict, new_phrases_ht, sa);
-    std::string dict_file = sdsl::cache_file_name("dict_lvl_"+std::to_string(p_gram.rules_breaks.size()), config);
+    std::string dict_file = sdsl::cache_file_name("dict_lev_"+std::to_string(p_gram.rules_breaks.size()), config);
     sdsl::store_to_file(dict, dict_file);
     p_gram.rules_breaks.push_back(sa.size());
     p_gram.r += sa.size();
