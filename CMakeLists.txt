@@ -9,7 +9,6 @@ find_package(LibSDSL REQUIRED)
 add_executable(gbwt
         main.cpp
         external/xxHash-dev/xxhash.c
-        lib/grammar.cpp
         lib/gbwt.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
@@ -17,16 +16,24 @@ add_executable(gbwt
 
 target_compile_options(gbwt
         PRIVATE
-        #-Werror
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic #-msse4.2 -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
-#no-stack-check only for APPLE!!!!!!
-if(APPLE)
-    target_compile_options(gbwt PRIVATE -fno-stack-check -Wno-vla-extension)
+# this extra flags only applies to clang compilers
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
+    target_compile_options(gbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
 endif()
 
+# there seems to be problem with the msse4.2 compiler flag and the new Apple chips
+if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
+    target_compile_options(gbwt PUBLIC -msse4.2)
+else()
+    message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+endif()
+
+#for the file system functionality on Linux
 if(UNIX AND NOT APPLE)
     target_link_libraries(gbwt LINK_PUBLIC stdc++fs)
 endif()

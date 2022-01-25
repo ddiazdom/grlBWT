@@ -8,40 +8,6 @@
 #include <fstream>
 #include <unistd.h>
 
-class bwt_array{
-    char * buffer;
-    uint8_t sb;
-    uint8_t fb;
-    uint8_t bpr;
-    size_t n_bytes;
-
-public:
-
-    bwt_array(uint8_t _sb, uint8_t _fb, size_t capacity) : sb(_sb),
-                                                           fb(_fb),
-                                                           bpr(sb+fb),
-                                                           n_bytes(capacity*bpr) {
-        buffer = (char *)malloc(n_bytes);
-    }
-
-    void write_run(size_t id, size_t sym, size_t freq){
-    }
-
-    void read_run(size_t id, size_t& sym, size_t& freq) const {
-    }
-
-    void update_freq(size_t id, size_t& freq) const {
-    }
-
-    [[nodiscard]] inline size_t size() const {
-        return n_bytes/bpr;
-    }
-
-    ~bwt_array(){
-        free(buffer);
-    }
-};
-
 class bwt_buff_reader {
 
     char * buffer =nullptr;
@@ -516,12 +482,12 @@ public:
         return read(idx, sb, fb);
     }
 
-    inline void write_sym(size_t idx, size_t& new_sym) {
+    inline void write_sym(size_t idx, size_t new_sym) {
         assert(idx<tot_runs);
         write(idx, 0, sb, new_sym);
     }
 
-    inline void write_freq(size_t idx, size_t& new_freq) {
+    inline void write_freq(size_t idx, size_t new_freq) {
         assert(idx<tot_runs);
         write(idx, sb, fb, new_freq);
     }

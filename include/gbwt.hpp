@@ -7,14 +7,6 @@
 
 #include "lc_gram_algo.hpp"
 
-//this source code is for debugging
-/***
- * check if the grammar is correct
- * @param g_file : file with the plain grammar
- * @param uncomp_file : original input text
- */
-void check_plain_grammar(gram_info_t& p_gram, std::string& uncomp_file);
-
 size_t compute_hocc_size(ivb_t& bwt, dictionary& dict, bv_rs_t& hocc_rs,
                          vector_t& hocc_buckets, size_t p_round, sdsl::cache_config & config);
 void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round);
