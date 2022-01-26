@@ -65,6 +65,9 @@ int main(int argc, char** argv) {
 
     if(args.output_file.empty()){
         args.output_file = std::filesystem::path(args.input_file).filename();
+    }
+
+    if(std::filesystem::path(args.output_file).extension()!=".rl_bwt"){
         args.output_file += ".rl_bwt";
     }
 

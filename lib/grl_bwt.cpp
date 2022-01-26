@@ -215,10 +215,9 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
 #endif
     std::cout<<"    Assembling the new BWT"<<std::endl;
     std::string new_bwt_f = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round), config);
-    if(dict.alphabet<dict.p_alpha_size){
-        al_b = INT_CEIL(sdsl::bits::hi(dict.p_alpha_size+2)+1, 8);
-    }
-    bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, al_b, fr_b);
+
+    uint8_t new_al_b = INT_CEIL(sdsl::bits::hi(std::max(dict.alphabet, dict.p_alpha_size)+2)+1, 8);
+    bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, fr_b);
 
     std::string p_bwt_file = sdsl::cache_file_name("pre_bwt_lev_"+std::to_string(p_round), config);
     bwt_buff_reader p_bwt(p_bwt_file);
