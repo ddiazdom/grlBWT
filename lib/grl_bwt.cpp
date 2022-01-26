@@ -323,9 +323,13 @@ void parse2bwt(sdsl::cache_config& config, size_t p_round) {
 
     size_t len = tot_bytes/sizeof(size_t);
 
-    std::string bwt_lev_file = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round), config);
-    size_t sb = INT_CEIL(sdsl::bits::hi(len)+1, 8);
+    std::string dict_file = sdsl::cache_file_name("dict_lev_"+std::to_string(p_round-1), config);
+    dictionary dict;
+    sdsl::load_from_file(dict, dict_file);
+    size_t sb = INT_CEIL(sdsl::bits::hi(std::max(dict.n_phrases, dict.alphabet))+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(len)+1, 8);
+
+    std::string bwt_lev_file = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round), config);
     bwt_buff_writer bwt_buff(bwt_lev_file, std::ios::out, sb, fb);
 
     while(read_bytes<tot_bytes){
@@ -348,8 +352,14 @@ void parse2bwt(sdsl::cache_config& config, size_t p_round) {
     if(remove(parse_file.c_str())){
         std::cout<<"Error trying to delete file "<<parse_file<<std::endl;
     }
-    std::cout<<"    Size of the BWT:       "<<len<<std::endl;
-    std::cout<<"    Size run-length rep.:  "<<bwt_buff.size()<<std::endl;
+
+    std::cout<<"    Stats:       "<<std::endl;
+    std::cout<<"      BWT size (n):       "<<len<<std::endl;
+    std::cout<<"      Number of runs (r): "<<bwt_buff.size()<<std::endl;
+    std::cout<<"      n/r:                "<<double(len)/double(bwt_buff.size())<<std::endl;
+    std::cout<<"      Bytes per run:      "<<(sb+fb)<<std::endl;
+    std::cout<<"        Bytes per symbol: "<<sb<<std::endl;
+    std::cout<<"        Bytes per freq.:  "<<fb<<std::endl;
 }
 
 void infer_bwt(sdsl::cache_config& config, size_t p_round){

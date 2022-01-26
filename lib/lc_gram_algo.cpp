@@ -474,6 +474,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         }
 
         {
+            bv_t new_phrase_desc(tot_phrases, false);
+            key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
+
             size_t j=0;
             vector_t ranks;
             std::string ranks_file = sdsl::cache_file_name("phr_ranks", config);
@@ -483,8 +486,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                 mp_table.get_value_from(ptr, val);
                 val = ranks[j++];
                 mp_table.insert_value_at(ptr, val);
+                new_phrase_desc[val] = phrase_desc[key_w.read(ptr, 0)];
             }
-            sdsl::util::clear(ranks);
+            std::string suffix_file = sdsl::cache_file_name("suffix_file", config);
+            sdsl::store_to_file(new_phrase_desc, suffix_file);
         }
 
         std::cout<<"    Creating the parse of the text"<<std::endl;
@@ -513,10 +518,12 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
 
         {
             //keep track of the phrases that have to be rephrased
-            key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
-            bv_t new_phrase_desc(tot_phrases, false);
+            //key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
 
-            auto it = mp_table.begin();
+            std::string suffix_file = sdsl::cache_file_name("suffix_file", config);
+            bv_t new_phrase_desc;
+            sdsl::load_from_file(new_phrase_desc, suffix_file);
+            /*auto it = mp_table.begin();
             auto it_end = mp_table.end();
             size_t sym;
             while (it != it_end) {
@@ -525,7 +532,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                 sym = key_w.read(*it, 0);
                 new_phrase_desc[val] = phrase_desc[sym];
                 ++it;
-            }
+            }*/
             p_info.prev_alph = phrase_desc.size();
             phrase_desc.swap(new_phrase_desc);
         }

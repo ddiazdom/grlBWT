@@ -48,6 +48,7 @@ public:
         sec_buff = (char *) malloc(bpr);
         memset(sec_buff, 0, bpr);
 
+
         ifs.seekg (0, std::ifstream::end);
         tot_runs = ifs.tellg();
         tot_runs = (tot_runs-offset)/bpr;
@@ -171,6 +172,8 @@ class bwt_buff_writer {
     size_t offset = sizeof(size_t)*2;//the first offset bytes store the values for fb and sb
     size_t l_sym=0; //symbol of the last run
     size_t l_acc_sym=0; //symbol of the last accessed run
+    size_t max_sym=0;
+    size_t max_freq=0;
     std::string file;
     std::ofstream ofs;
     std::ifstream ifs;
@@ -212,6 +215,7 @@ private:
                 auto *ptr = (char *) &freq;
                 memcpy(ptr + left, buffer, (fb-left));
                 freq=op(freq, new_freq);
+                assert(freq<=max_freq);
 
                 //store the updated frequency
                 block_bg = (start/buffer_size)*buffer_size;
@@ -232,6 +236,7 @@ private:
         }
         memcpy(&freq, buffer+buff_start, fb);
         freq=op(freq, new_freq);
+        assert(freq<=max_freq);
         memcpy(buffer+buff_start, &freq,  fb);
         modified = true;
     }
@@ -376,13 +381,16 @@ public:
 
         sec_buff = (char *)malloc(bpr);
         memset(sec_buff, 0, bpr);
+
+        max_freq = (1UL << (fb*8)) - 1;
+        max_sym = (1UL << (sb*8)) - 1;
     }
 
     ~bwt_buff_writer(){
         close();
     };
 
-    inline void read_run(size_t i, size_t& sym, size_t& freq){
+    inline void read_run(size_t i, size_t& sym, size_t& freq) {
 
         assert(i<tot_runs);
         sym = 0;
@@ -426,6 +434,8 @@ public:
     }
 
     inline void push_back(size_t sym, size_t freq) {
+
+        assert(sym<=max_sym && freq<=max_freq);
 
         size_t start = (tot_runs*bpr);
         size_t end = start + bpr-1;
@@ -491,12 +501,12 @@ public:
     }
 
     inline void write_sym(size_t idx, size_t new_sym) {
-        assert(idx<tot_runs);
+        assert(idx<tot_runs && new_sym<=max_sym);
         write(idx, 0, sb, new_sym);
     }
 
     inline void write_freq(size_t idx, size_t new_freq) {
-        assert(idx<tot_runs);
+        assert(idx<tot_runs && new_freq<=max_freq);
         write(idx, sb, fb, new_freq);
     }
 
