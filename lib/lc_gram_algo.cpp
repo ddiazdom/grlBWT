@@ -476,7 +476,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         {
             size_t j=0;
             vector_t ranks;
-            sdsl::load_from_file(ranks, sdsl::cache_file_name("phr_ranks", config));
+            std::string ranks_file = sdsl::cache_file_name("phr_ranks", config);
+            sdsl::load_from_file(ranks, ranks_file);
             for(auto const& ptr : mp_table){
                 phrase_map_t::val_type val=0;
                 mp_table.get_value_from(ptr, val);

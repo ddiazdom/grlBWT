@@ -247,9 +247,6 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
                         memcpy(&freq, hocc_ptr+al_b, fr_b);
                     }
 
-                    if(sym==0){
-                        std::cout<<(hocc_ptr==last)<<" "<<bps<<" "<<fr_b<<" "<<al_b<<std::endl;
-                    }
                     assert(sym>0);
 
                     if(freq<=pbwt_freq){
@@ -294,17 +291,21 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
         i++;
     }
 
-    p_bwt.close();
-    bwt_buff.close();
+    p_bwt.close(true);
+    bwt_buff.close(true);
     new_bwt_buff.close();
+
+    if(remove(dict_file.c_str())){
+        std::cout<<"Error trying to remove file "<<dict_file<<std::endl;
+    }
 
     std::cout<<"    Stats:       "<<std::endl;
     std::cout<<"      BWT size (n):       "<<new_bwt_size<<std::endl;
     std::cout<<"      Number of runs (r): "<<new_bwt_buff.size()<<std::endl;
     std::cout<<"      n/r:                "<<double(new_bwt_size)/double(new_bwt_buff.size())<<std::endl;
-    std::cout<<"      bytes per run:      "<<bps<<std::endl;
-    std::cout<<"        sym bytes:        "<<al_b<<std::endl;
-    std::cout<<"        freq bytes:       "<<fr_b<<std::endl;
+    std::cout<<"      Bytes per run:      "<<bps<<std::endl;
+    std::cout<<"        Bytes per symbol: "<<al_b<<std::endl;
+    std::cout<<"        Bytes per freq.:  "<<fr_b<<std::endl;
     free(hocc);
 }
 
@@ -377,5 +378,6 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
 
     size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, alphabet, config);
     infer_bwt(config, p_rounds);
+    std::filesystem::remove_all(tmp_folder);
 }
 

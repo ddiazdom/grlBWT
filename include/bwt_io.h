@@ -21,6 +21,7 @@ class bwt_buff_reader {
     size_t buffer_size=0; //size of the buffer
     size_t offset =sizeof(size_t)*2;
     std::ifstream ifs;
+    std::string file;
 
     void read_block(){
         ifs.seekg((std::streamoff)(offset+block_bg));
@@ -34,8 +35,8 @@ class bwt_buff_reader {
 public:
 
     explicit bwt_buff_reader(const std::string& input_file, size_t buff_size=1024 * 1024){
-        ifs.rdbuf()->pubsetbuf(nullptr, 0);
-        ifs.open(input_file, std::ifstream::binary);
+        file = input_file;
+        ifs.open(file, std::ifstream::binary);
         assert(ifs.good());
 
         buffer = (char *)malloc(buff_size);
@@ -133,7 +134,8 @@ public:
        return tot_runs;
     }
 
-    void close(){
+    void close(bool del_file=false){
+
         if(buffer!= nullptr){
             free(buffer);
             buffer = nullptr;
@@ -143,6 +145,12 @@ public:
             sec_buff = nullptr;
         }
         if(ifs.is_open()) ifs.close();
+
+        if(del_file){
+            if(remove(file.c_str())){
+                std::cout<<"Error trying to remove the file"<<std::endl;
+            }
+        }
     }
 
     ~bwt_buff_reader(){
@@ -508,7 +516,7 @@ public:
         return read_freq(tot_runs-1);
     }
 
-    void close(){
+    void close(bool del_file=false){
         if(modified) write_block(buffer_size);
 
         if(ofs.is_open() || ifs.is_open()){
@@ -526,6 +534,12 @@ public:
         if(sec_buff!= nullptr){
             free(sec_buff);
             sec_buff = nullptr;
+        }
+
+        if(del_file){
+            if(remove(file.c_str())){
+                std::cout<<"Error trying to remove the file"<<std::endl;
+            }
         }
     };
 };
