@@ -507,7 +507,7 @@ public:
                 bck_offset = (table[idx] & 0xFFFFFFFFFFFul);
                 bck_dist = table[idx] >> 44UL;
 
-                if(!inserted && equal(key, key_bits , bck_offset-1)){
+                if(!inserted && bck_dist==dist && equal(key, key_bits , bck_offset-1)){
                     return {bck_offset-1, false};
                 }else if(bck_dist<dist){ //steal to the rich
 
@@ -654,6 +654,37 @@ public:
             while(i<=max_bck_dist && table[idx]!=0){
                 offset = (table[idx] & 0xFFFFFFFFFFFul);
                 if(equal(key, key_bits, offset-1)){
+                    return {offset - 1, true};
+                }
+                idx = (idx+1) & (n_buckets - 1);
+                i++;
+            }
+            return {0, false};
+        }
+    }
+
+    inline std::pair<size_t, bool> new_find(const void* key, size_t key_bits) const {
+
+        size_t hash;
+        if constexpr(short_key){
+            hash = (*(reinterpret_cast<const size_t*>(key))) & ((1UL<<key_bits)-1UL);
+        }else{
+            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        }
+
+        size_t idx = hash & (n_buckets - 1);
+
+        if(table[idx]==0){
+            return {0, false};
+        }else{
+            size_t offset, i=0, bck_dist;
+            while(i<=max_bck_dist && table[idx]!=0){
+                bck_dist = (table[idx] >> 44U);
+                if(bck_dist<i){
+                    return {0, false};
+                }
+                offset = (table[idx] & 0xFFFFFFFFFFFul);
+                if(i==bck_dist && equal(key, key_bits, offset-1)){
                     return {offset - 1, true};
                 }
                 idx = (idx+1) & (n_buckets - 1);

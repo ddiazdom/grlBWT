@@ -142,7 +142,11 @@ struct parse_functor{
     void operator()(parse_data_t& data, parser_t& parser){
         auto task = [&](string_t& phrase){
             phrase.mask_tail();
-            auto res = data.m_map.find(phrase.data(), phrase.n_bits());
+
+            //auto res = data.m_map.find(phrase.data(), phrase.n_bits());
+            auto res = data.m_map.new_find(phrase.data(), phrase.n_bits());
+            //assert(res.second==res2.second);
+
             assert(res.second);
             size_t id = 0;
             data.m_map.get_value_from(res.first, id);

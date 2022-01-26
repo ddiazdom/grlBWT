@@ -37,8 +37,12 @@ void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa
                     phrase.push_back(dict.dict[pos--]);
                 }
                 phrase.mask_tail();
-                auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
+
+                auto res = phrases_ht.new_find(phrase.data(), phrase.n_bits());
                 assert(res.second);
+                //auto res2 = phrases_ht.new_find(phrase.data(), phrase.n_bits());
+                //assert(res.second==res2.second);
+
                 em_nt = 0;
                 phrases_ht.get_value_from(res.first, em_nt);
                 new_dict[new_size++] = dict.dict[tmp_pos-1];

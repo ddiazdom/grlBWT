@@ -12,6 +12,7 @@ struct arguments{
     size_t n_threads{};
     float hbuff_frac=0.5;
     bool ver=false;
+    std::string version= "0.0.1";
 };
 
 class MyFormatter : public CLI::Formatter {
@@ -42,9 +43,9 @@ static void parse_app(CLI::App& app, struct arguments& args){
             check(CLI::Range(0.0,1.0))->default_val(0.15);
     app.add_option("-T,--tmp",
                       args.tmp_dir,
-                      "Temporal folder (def. /tmp/gbwt_tmp.xxxx)")->
+                      "Temporal folder (def. /tmp/grl_bwt_tmp.xxxx)")->
             check(CLI::ExistingDirectory)->default_val("/tmp");
-    app.add_flag("-V,--version",
+    app.add_flag("-v,--version",
                  args.ver, "Print the software version and exit");
 
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
@@ -54,12 +55,16 @@ int main(int argc, char** argv) {
 
     arguments args;
 
-    CLI::App app("Grammar-based construction of the BWT");
+    CLI::App app("Repetition-aware BWT construction");
     parse_app(app, args);
 
     CLI11_PARSE(app, argc, argv);
+    if(args.ver){
+        std::cout<<args.version<<std::endl;
+        exit(0);
+    }
 
-    std::string tmp_folder = create_temp_folder(args.tmp_dir, "gbwt_tmp");
+    std::string tmp_folder = create_temp_folder(args.tmp_dir, "grl_bwt_tmp");
     std::cout << "Input file:        "<<args.input_file<<std::endl;
     std::cout << "Temporal folder:   "<<tmp_folder<<std::endl;
 
