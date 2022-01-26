@@ -1,20 +1,22 @@
 cmake_minimum_required(VERSION 3.7)
-project(gBWT)
+
+project(grl-BWT)
+
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 
 find_package(LibSDSL REQUIRED)
 
-add_executable(gbwt
+add_executable(grlbwt
         main.cpp
         external/xxHash-dev/xxhash.c
-        lib/gbwt.cpp
+        lib/grl_bwt.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
         lib/LMS_induction.cpp)
 
-target_compile_options(gbwt
+target_compile_options(grlbwt
         PRIVATE
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
@@ -23,24 +25,24 @@ target_compile_options(gbwt
 # this extra flags only applies to clang compilers
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
-    target_compile_options(gbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
+    target_compile_options(grlbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
 endif()
 
 # there seems to be problem with the msse4.2 compiler flag and the new Apple chips
 if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
-    target_compile_options(gbwt PUBLIC -msse4.2)
+    target_compile_options(grlbwt PUBLIC -msse4.2)
 else()
     message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
 
 #for the file system functionality on Linux
 if(UNIX AND NOT APPLE)
-    target_link_libraries(gbwt LINK_PUBLIC stdc++fs)
+    target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
 endif()
 
-target_link_libraries(gbwt LINK_PUBLIC pthread ${LIBSDSL_LIBRARIES})
+target_link_libraries(grlbwt LINK_PUBLIC pthread ${LIBSDSL_LIBRARIES})
 
-target_include_directories(gbwt
+target_include_directories(grlbwt
         PRIVATE
         external
         ${LIBSDSL_INCLUDE_DIRS}

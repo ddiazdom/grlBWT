@@ -1,9 +1,10 @@
 //
 // Created by Diaz, Diego on 23.11.2021.
 //
-#include "gbwt.hpp"
+#include "grl_bwt.hpp"
 #include "utils.hpp"
 #include "bwt_io.h"
+#include <filesystem>
 #ifdef __linux__
 #include <malloc.h>
 #endif
@@ -367,7 +368,7 @@ void infer_bwt(sdsl::cache_config& config, size_t p_round){
     }
 }
 
-void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac) {
+void grl_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac) {
 
     auto alphabet = get_alphabet(i_file);
     size_t n_chars = 0;
@@ -378,6 +379,10 @@ void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folde
 
     size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, alphabet, config);
     infer_bwt(config, p_rounds);
+
+    std::string bwt_file = sdsl::cache_file_name("bwt_lev_0", config);
+    std::filesystem::rename(bwt_file, o_file);
     std::filesystem::remove_all(tmp_folder);
+    std::cout<<"The resulting BWT was stored in "<<o_file<<std::endl;
 }
 

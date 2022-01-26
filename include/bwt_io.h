@@ -523,7 +523,8 @@ public:
             ofs.close();
             ifs.close();
             auto length = offset + (tot_runs*bpr);
-            truncate(file.c_str(), (off_t)length);
+            auto res = truncate(file.c_str(), (off_t)length);
+            assert(res==0);
         }
 
         if(buffer!= nullptr){

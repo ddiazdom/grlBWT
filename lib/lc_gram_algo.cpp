@@ -331,7 +331,7 @@ template<template<class, class> class lc_parser_t>
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, alpha_t& alphabet,
                      sdsl::cache_config &config) {
 
-    std::cout<<"Generating the grammar from the text:    "<<std::endl;
+    std::cout<<"Parsing the text:    "<<std::endl;
     std::string output_file = sdsl::cache_file_name("tmp_output", config);
     std::string tmp_i_file = sdsl::cache_file_name("tmp_input", config);
 

@@ -19,8 +19,7 @@ void infer_bwt(sdsl::cache_config& config, size_t p_round);
  * @param n_threads : number of working threads
  * @param hbuff_size : buffer size for the hashing step
  */
-void g_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac);
-
+void grl_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac);
 alpha_t get_alphabet(std::string &i_file);
 
 #endif //LPG_COMPRESSOR_GRAMMAR_BUILD_HPP

@@ -2,7 +2,7 @@
 
 #include "external/CLI11.hpp"
 #include "utils.hpp"
-#include "gbwt.hpp"
+#include "grl_bwt.hpp"
 
 struct arguments{
     std::string input_file;
@@ -65,9 +65,10 @@ int main(int argc, char** argv) {
 
     if(args.output_file.empty()){
         args.output_file = std::filesystem::path(args.input_file).filename();
-        args.output_file += ".gram";
+        args.output_file += ".rl_bwt";
     }
-    g_bwt_algo(args.input_file, args.output_file, tmp_folder, args.n_threads, args.hbuff_frac);
+
+    grl_bwt_algo(args.input_file, args.output_file, tmp_folder, args.n_threads, args.hbuff_frac);
 
     return 0;
 }
