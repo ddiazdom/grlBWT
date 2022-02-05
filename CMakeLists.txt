@@ -48,6 +48,27 @@ target_include_directories(grlbwt
         ${LIBSDSL_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/include)
 
+add_executable(print_seqs scripts/print_seqs.cpp)
+
+target_link_libraries(print_seqs
+        LINK_PUBLIC
+        pthread ${LIBSDSL_LIBRARIES})
+
+target_include_directories(print_seqs
+        PRIVATE
+        ${LIBSDSL_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/include)
+
+
+add_executable(stats scripts/stats.cpp)
+target_link_libraries(stats
+        LINK_PUBLIC
+        pthread ${LIBSDSL_LIBRARIES})
+
+target_include_directories(stats
+        PRIVATE
+        ${LIBSDSL_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/include)
 #add_executable(tr
 #        include/bwt_io.h
 #        test_readers.cpp)
