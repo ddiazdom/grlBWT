@@ -7,6 +7,9 @@
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
+#include <functional>
+#include <cstring>
+#include <cassert>
 
 class bwt_buff_reader {
 
