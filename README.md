@@ -9,6 +9,7 @@ computations, thus decreasing computing time too.
 
 1. [SDSL-lite](https://github.com/simongog/sdsl-lite)
 2. [xxHash](https://github.com/Cyan4973/xxHash)
+3. [CLI11](https://github.com/CLIUtils/CLI11)
 
 ## Prerequisites
 
