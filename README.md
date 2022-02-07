@@ -64,8 +64,7 @@ We will put a source to cite soon.
 
 ## Bugs
 
-This tool still contains experimental code, so it is probably that you will find bugs. Please report it in this
-repository.
+This tool still contains experimental code, so you will probably find bugs. Please report it in this repository.
 
 ## Author
 
