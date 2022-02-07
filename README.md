@@ -1,7 +1,7 @@
 ## grlBWT : Efficient construction of the BWT using string compression
 
 This repository contains the implementation of **grlBWT**, a linear-time semi-external algorithm for building the BCR BWT
-of a string collection. The novelty of grl-BWT is that it resorts to compression to maintain the intermediate data of
+of a string collection. The novelty of grlBWT is that it resorts to compression to maintain the intermediate data of
 the BWT construction in compact form. The compact format used by grl-BWT reduces working memory and avoids redundant
 computations, thus decreasing computing time too.
 
