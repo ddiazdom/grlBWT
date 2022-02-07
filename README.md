@@ -1,9 +1,12 @@
 
-## A grammar self-index based on LMS substrings
+## grl-BWT : Efficient construction of the BWT using string compression 
 
-
-A grammar self-index of a text $T$ (Claude et al. 2012) consists of a grammar $\mathcal{G}$ that only produces $T$ and a geometric data structure that indexes the string cuts of the right-hand sides of $\mathcal{G}$'s m_rules. This representation uses space proportional to $G$, the size of the grammar, which is small when the text is repetitive. However, the index is slow for pattern matching; it finds the $occ$ occurrences of a pattern $P[1..m]$ in $O((m^{2}+occ)\log G)$ time. The most expensive part is a set of binary searches for the different cuts $P[1..j]P[j+1..m]$ in the geometric data structure. Christiansen et al. (2019) solved this problem by building a locally consistent grammar that only searches for $O(\log m)$ cuts of $P$. Their representation, however, requires significant extra space (tough still in $O(G)$) to store a set of permutations for the nonterminal symbols. In this work, we propose another locally consistent grammar that builds on the idea of LMS substrings (Nong et al. 2009). Our grammar also requires to try $O(\log m)$ cuts when searching for $P$, but it does not need to store permutations. 
-As a result, we obtain a self-index that searches in time $O((m\log m+occ) \log G)$ and is of practical size. Our experiments showed that our index is faster than previous grammar-indexes at the price of increasing the space by a 1.8x factor on average. Other experimental results showed that our data structure becomes convenient when the patterns to search for are long.
+This repository contains the implementation of grl-BWT, a linear-time
+semi-external algorithm for building the BCR BWT of a string collection.
+The novelty of grl-BWT is that it resorts to compression to maintain the
+intermediate data of the BWT construction in compact form. The compact
+format used by grl-BWT reduces working memory and avoids redundant computations,
+thus decreasing computing time too.
 
 ## Third-party libraries
 
@@ -12,14 +15,12 @@ As a result, we obtain a self-index that searches in time $O((m\log m+occ) \log 
 
 ## Prerequisites
 
-1. C++ >= 14
+1. C++ >= 17 
 2. CMake >= 3.7
 3. SDSL-lite
 
-The xxHash library is already included in the source files. We include a CMake module that will search for
-the local installation of the SDSL-library. No need to indicate the path during the compilation.
-
-** Important **: You must overwrite some original files from the sdsl-lib library with the ones in the sdsl-files folder.
+The xxHash library is already included in the source files. We include a CMake module that will search for the local
+installation of the SDSL-library. No need to indicate the path during the compilation.
 
 ## Installation
 
@@ -33,16 +34,29 @@ cmake ..
 make
 ```
 
-## Creating the index
+## Computing the BCR BWT 
 ```
-./lpg index tests/sample_file.txt
-```
-
-## Search for a pattern
-
-```
-./lpg search sample_file.txt.idx -F pattern_list.txt -p "test pattern"
+./grlBWT input_file.txt -o output_bcr_bwt
 ```
 
-The variable **sample_file.txt.idx** is the index created in the previous step and **pattern_list.txt** is a plain text file with a list of patterns separated by a new line
+For the moment, grlBWT only supports input files in one-string-per-line format.
+We plan to expand to FASTA/Q files for genomic collections.
 
+## Output
+
+Our tool outputs the BCR BWT as a run-length compressed array. Concretely, it produces a sequence of equal-symbol runs
+encoded as pairs (a,l), where a is the run symbol and l is its length. To reduce the space, we represent the run symbols
+and the run lengths using cells of different widths. The width for the symbols is the smallest number of bytes that fits
+the alphabet. On the other hand, the width for the lengths is the smallest number of bytes that fits the length of the
+longest equal-symbol run in the BCR BWT.
+
+We plan to write a parser in the future to produce the BCR BWT in plain format. 
+
+## Multithreading
+
+Our algorithm has a hashing step that supports multithreading to some extent. If you want to use it, pass the parameter
+-t to the execution of grlBWT.
+
+## Printing the original text
+
+If you want to print the original strings, please use the print_seqs
