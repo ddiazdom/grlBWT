@@ -30,10 +30,10 @@ cmake ..
 make
 ```
 
-## Computing the BCR BWT
+## Example execution
 
 ```
-./grlBWT input_file.txt -o output_bcr_bwt
+./grlbwt ../tests/sample_file.txt
 ```
 
 For the moment, grlBWT only supports input files in one-string-per-line format. We plan to expand to FASTA/Q files for
@@ -42,21 +42,27 @@ genomic collections.
 ## Output
 
 Our tool outputs the BCR BWT as a run-length compressed array. Concretely, it produces a sequence of equal-symbol runs
-encoded as pairs (a,l), where a is the run symbol and l is its length. We represent the run symbols and the run lengths
-using cells of different widths to reduce space usage. The width for the symbols is the smallest number of bytes that
-fits the alphabet. On the other hand, the width for the lengths is the smallest number of bytes that fits the length of
-the longest equal-symbol run in the BCR BWT.
+encoded as pairs (*a*,*l*), where *a* is the run symbol and *l* is its length. We represent the run symbols and the run
+lengths using cells of different widths to reduce space usage. The width for the symbols is the smallest number of bytes
+that fits the alphabet. On the other hand, the width for the lengths is the smallest number of bytes that fits the
+length of the longest equal-symbol run in the BCR BWT.
 
 We plan to write a parser in the future to produce the BCR BWT in plain format.
+
+## Printing the original text
+
+If you want to print the original strings, please use the *print_seqs* binary:
+
+```
+./print_seqss sample_file.txt.rl_bwt 10
+```
+
+This command will print the first 10 strings of the original file used in example execution above.
 
 ## Multithreading
 
 Our algorithm has a hashing step that supports multithreading to some extent. If you want to use it, pass the parameter
 -t to the execution of grlBWT.
-
-## Printing the original text
-
-If you want to print the original strings, please use the print_seqs binary.
 
 ## How to cite
 
