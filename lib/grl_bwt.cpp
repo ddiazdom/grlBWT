@@ -8,37 +8,6 @@
 #include <malloc.h>
 #endif
 
-alpha_t get_alphabet(std::string &i_file) {
-
-    std::cout <<"Reading input file:" << std::endl;
-
-    //TODO this can be done in parallel if the input is too big
-    size_t alph_frq[256] = {0};
-    alpha_t alphabet;
-
-    i_file_stream<uint8_t> if_stream(i_file, BUFFER_SIZE);
-    for (size_t i = 0; i < if_stream.tot_cells; i++) {
-        alph_frq[if_stream.read(i)]++;
-    }
-
-    for (size_t i = 0; i < 256; i++) {
-        if (alph_frq[i] > 0) alphabet.emplace_back(i, alph_frq[i]);
-    }
-
-    std::cout<<"  Number of characters: "<< if_stream.size() << std::endl;
-    std::cout<<"  Number of strings:    "<< alphabet[0].second << std::endl;
-    std::cout<<"  Alphabet:             "<< alphabet.size() << std::endl;
-    std::cout<<"  Smallest symbol:      "<< (int) alphabet[0].first << std::endl;
-    std::cout<<"  Greatest symbol:      "<< (int) alphabet.back().first << std::endl;
-
-    if (if_stream.read(if_stream.size() - 1) != alphabet[0].first) {
-        std::cout << "Error: sep. symbol " << alphabet[0].first << " differs from last symbol in file "
-                  << if_stream.read(if_stream.size() - 1) << std::endl;
-        exit(1);
-    }
-    return alphabet;
-}
-
 //extract freq symbols from bwt[j] onwards and put them in new_bwt
 void extract_rl_syms(bwt_buff_writer& bwt_buff, bwt_buff_writer& new_bwt_buff, size_t& j, size_t freq){
 
@@ -360,7 +329,7 @@ void parse2bwt(tmp_workspace& ws, size_t p_round) {
     std::cout<<"        Bytes per freq.:  "<<fb<<std::endl;
 }
 
-void infer_bwt(tmp_workspace& ws, size_t p_round){
+void ind_phase(tmp_workspace& ws, size_t p_round){
     std::cout<<"Inferring the BWT"<<std::endl;
 
     std::cout<<"  Computing the BWT for parse "<<p_round<<std::endl;
@@ -382,7 +351,7 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_w
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
 
     size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
-    infer_bwt(tmp_ws, p_rounds);
+    ind_phase(tmp_ws, p_rounds);
 
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     std::cout<<"The resulting BWT was stored in "<<o_file<<std::endl;
