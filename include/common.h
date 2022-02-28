@@ -21,6 +21,7 @@ typedef bit_hash_table<size_t>                  phrase_map_t;
 typedef typename phrase_map_t::buff_t           ht_buff_t;
 typedef std::vector<std::pair<uint8_t, size_t>> alpha_t;
 
+
 // the phrases are stored in a bit-compressed hash table:
 // this wrapper reinterprets the bits back as phrases
 struct key_wrapper{
