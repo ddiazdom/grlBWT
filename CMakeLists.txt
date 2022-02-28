@@ -21,7 +21,7 @@ add_executable(grlbwt
 target_compile_options(grlbwt
         PRIVATE
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic
-        #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
@@ -61,7 +61,6 @@ target_include_directories(print_seqs
         PRIVATE
         ${LIBSDSL_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/include)
-
 
 add_executable(stats scripts/stats.cpp)
 target_link_libraries(stats

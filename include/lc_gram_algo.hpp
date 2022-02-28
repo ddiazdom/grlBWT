@@ -160,6 +160,8 @@ struct parse_functor{
     };
 };
 
+void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
+                 phrase_map_t& new_phrases_ht, tmp_workspace& ws);
 template<template<class, class> class lc_parser_t>
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws);
 template<class parser_t, class out_sym_t=size_t>

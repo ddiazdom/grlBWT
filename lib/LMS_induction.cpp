@@ -52,37 +52,10 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     induce_S_type<value_type>(sa, dict, buckets);
 
     free(buckets);
-
-    /*if(sa.size()==42890782){
-        for (size_t i=3842000;i<3843000;i++) {
-            if (sa[i] == 0) {
-                std::cout<<i<<" * " << std::endl;
-            } else {
-                bool lcs = sa[i] & 1UL;
-                pos = (sa[i] >> 1U) - 1;
-                //if(lcs ||
-                //   (i<sa.size()-1 && sa[i+1] & 1UL)){
-                    std::cout << i << " " << pos << " " << lcs << "\t";
-
-                    if (pos == 0 || dict.d_lim[pos - 1]) {
-                        std::cout << "$ | ";
-                    } else {
-                        std::cout << dict.dict[pos - 1] << " | ";
-                    }
-
-                    while (!dict.d_lim[pos]) {
-                        std::cout << dict.dict[pos++] << " ";
-                    }
-                    std::cout << dict.dict[pos] << std::endl;
-                //}
-            }
-        }
-    }*/
 }
 
 template <class value_type>
 void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
-    std::cout<<"Inducing L-type"<<std::endl;
 
     size_t pos, l_sym, bck, ind_pos;
     vector_t ind_bck(dict.alphabet+1, 0, sdsl::bits::hi(sa.size())+1);
@@ -117,8 +90,6 @@ void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
 
 template <class value_type>
 void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
-
-    std::cout<<"Inducing S-type"<<std::endl;
 
     size_t pos, bck, l_sym, ind_pos;
     vector_t ind_bck(dict.alphabet+1, 0, sdsl::bits::hi(sa.size())+1);
