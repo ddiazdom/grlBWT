@@ -13,7 +13,7 @@
 #include <malloc.h>
 #endif
 
-void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks) {
+void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks) {
     dict.dict_dummy = dict.alphabet+s_sa.size()+1;
     size_t pos, em_nt, new_size=0, sym;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
@@ -40,8 +40,6 @@ void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa
 
                 auto res = phrases_ht.new_find(phrase.data(), phrase.n_bits());
                 assert(res.second);
-                //auto res2 = phrases_ht.new_find(phrase.data(), phrase.n_bits());
-                //assert(res.second==res2.second);
 
                 em_nt = 0;
                 phrases_ht.get_value_from(res.first, em_nt);
@@ -60,16 +58,15 @@ void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa
     sdsl::util::clear(dict.d_lim);
 }
 
-size_t compress_dictionary_v2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_workspace& ws) {
+size_t get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_workspace& ws) {
 
-    size_t p_round = p_info.p_round;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
-    std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_round));
+    std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
     size_t sb = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
@@ -160,16 +157,16 @@ size_t compress_dictionary_v2(dictionary &dict, vector_t &sa, parsing_info& p_in
 #endif
 
     auto start = std::chrono::steady_clock::now();
-    comp_dict_int_v2(dict, new_phrases_ht, sa, phr_marks);
+    dict2gram(dict, new_phrases_ht, sa, phr_marks);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
-    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_round));
+    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
     sdsl::store_to_file(dict, dict_file);
     return sa.size();
 }
 
-size_t assign_ids(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
     std::cout<<"Suffix induction"<<std::endl;
     auto start = std::chrono::steady_clock::now();
@@ -186,20 +183,18 @@ size_t assign_ids(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
     }else{
         suffix_induction<uint64_t>(sa, dict);
     }
-
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
-    std::cout<<"Number of phrases : "<<dict.n_phrases<<std::endl;
+    /*std::cout<<"Number of phrases : "<<dict.n_phrases<<std::endl;
     std::cout<<"Alphabet :          "<<dict.alphabet<<std::endl;
-
     std::cout<<"dict  "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
     std::cout<<"freqs "<<double(sdsl::size_in_bytes(dict.freqs))/1000000<<std::endl;
     std::cout<<"sa    "<<double(sdsl::size_in_bytes(sa))/1000000<<std::endl;
-    std::cout<<"has_hocc    "<<double(sdsl::size_in_bytes(dict.phrases_has_hocc))/1000000<<std::endl;
+    std::cout<<"has_hocc    "<<double(sdsl::size_in_bytes(dict.phrases_has_hocc))/1000000<<std::endl;*/
 
     start = std::chrono::steady_clock::now();
-    size_t new_number_of_phrases = compress_dictionary_v2(dict, sa, p_info, ws);
+    size_t new_number_of_phrases = get_pre_bwt(dict, sa, p_info, ws);
     end = std::chrono::steady_clock::now();
     std::cout<<"Sort and compress dictionary"<<std::endl;
     report_time(start, end, 4);
@@ -332,20 +327,20 @@ std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std
 
 
 template<template<class, class> class lc_parser_t>
-size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, alpha_t& alphabet, tmp_workspace &ws) {
+size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
 
     std::cout<<"Parsing the text:    "<<std::endl;
     std::string output_file = ws.get_file("tmp_output");
     std::string tmp_i_file = ws.get_file("tmp_input");
 
     // mark which symbols represent string boundaries
-    bv_t symbol_desc(alphabet.back().first+1,false);
-    symbol_desc[alphabet[0].first] = true;
+    bv_t symbol_desc(str_coll.alphabet.back()+1,false);
+    symbol_desc[str_coll.alphabet[0]] = true;
 
     parsing_info p_info;
-    for(auto const& pair : alphabet){
-        if(p_info.max_sym_freq<pair.second){
-            p_info.max_sym_freq = pair.second;
+    for(unsigned long sym_freq : str_coll.sym_freqs){
+        if(p_info.max_sym_freq<sym_freq){
+            p_info.max_sym_freq = sym_freq;
         }
     }
 
@@ -465,7 +460,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
 
             //rename phrases according to their lexicographical ranks
             std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
-            tot_phrases = assign_ids(dict, p_info, ws);
+            tot_phrases = process_dictionary(dict, p_info, ws);
         }
 
         //reload the hash table
@@ -577,7 +572,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     }
 }
 
-template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, alpha_t& alphabet, tmp_workspace &ws);
+template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws);
 
 template size_t build_lc_gram_int<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
                                                                                  parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
