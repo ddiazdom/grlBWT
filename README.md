@@ -38,8 +38,9 @@ make
 ./grlbwt ../tests/sample_file.txt
 ```
 
-For the moment, grlBWT only supports input files in one-string-per-line format. We plan to expand to FASTA/Q files for
-genomic collections.
+Our tool currently supports string collections in one-string-per-line format or the classical FASTA and FASTQ formats.
+It also handles gzipped inputs. In principle, grlBWT automatically detects the format. However,
+we have not tested the automatic detection functionality exhaustively yet.
 
 ## Output
 
