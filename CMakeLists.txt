@@ -14,11 +14,14 @@ add_executable(grlbwt
         lib/grl_bwt.cpp
         lib/lc_gram_algo.cpp
         lib/utils.cpp
-        lib/LMS_induction.cpp)
+        lib/LMS_induction.cpp
+        lib/fastx_handler.cpp
+        lib/dna_string.cpp)
 
 target_compile_options(grlbwt
         PRIVATE
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic
+        #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
@@ -40,7 +43,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC pthread ${LIBSDSL_LIBRARIES})
+target_link_libraries(grlbwt LINK_PUBLIC z pthread ${LIBSDSL_LIBRARIES})
 
 target_include_directories(grlbwt
         PRIVATE

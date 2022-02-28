@@ -2,7 +2,6 @@
 // Created by Diaz, Diego on 23.11.2021.
 //
 #include "grl_bwt.hpp"
-#include "utils.hpp"
 #include "bwt_io.h"
 #include <filesystem>
 #ifdef __linux__
@@ -66,9 +65,9 @@ void extract_rl_syms(bwt_buff_writer& bwt_buff, bwt_buff_writer& new_bwt_buff, s
 }
 
 size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buckets,
-                         size_t p_round, sdsl::cache_config & config){
+                         size_t p_round, tmp_workspace & ws){
 
-    std::string prev_bwt_f = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round+1), config);
+    std::string prev_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round+1));
     bwt_buff_reader bwt_buff(prev_bwt_f);
 
     size_t sym, pos, dummy_sym=dict.alphabet+2, left_sym, freq=0, al_b, fr_b, bps;
@@ -127,10 +126,10 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
     return acc;
 }
 
-void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
+void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 
     dictionary dict;
-    std::string dict_file = sdsl::cache_file_name("dict_lev_"+std::to_string(p_round), config);
+    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_round));
     sdsl::load_from_file(dict, dict_file);
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
@@ -138,7 +137,7 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
 
     std::cout<<"    Computing the number of induced symbols"<<std::endl;
     vector_t hocc_buckets(hocc_rs(dict.phrases_has_hocc.size())+1, 0, sdsl::bits::hi(dict.t_size)+1);
-    size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, config);
+    size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
 
     size_t al_b = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
     size_t fr_b = INT_CEIL(sdsl::bits::hi(dict.max_sym_freq)+1,8);
@@ -148,7 +147,7 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     memset(hocc, 0, n_runs*bps);
     char *hocc_ptr;
 
-    std::string prev_bwt_f = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round+1), config);
+    std::string prev_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round+1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
 
     std::cout<<"    Performing the induction from the previous BWT"<<std::endl;
@@ -214,12 +213,12 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     malloc_trim(0);
 #endif
     std::cout<<"    Assembling the new BWT"<<std::endl;
-    std::string new_bwt_f = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round), config);
+    std::string new_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round));
 
     uint8_t new_al_b = INT_CEIL(sdsl::bits::hi(std::max(dict.alphabet, dict.p_alpha_size)+2)+1, 8);
     bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, fr_b);
 
-    std::string p_bwt_file = sdsl::cache_file_name("pre_bwt_lev_"+std::to_string(p_round), config);
+    std::string p_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_round));
     bwt_buff_reader p_bwt(p_bwt_file);
 
     size_t i=0, j=0, pbwt_freq, new_bwt_size=0;
@@ -309,9 +308,9 @@ void infer_lvl_bwt(sdsl::cache_config& config, size_t p_round) {
     free(hocc);
 }
 
-void parse2bwt(sdsl::cache_config& config, size_t p_round) {
+void parse2bwt(tmp_workspace& ws, size_t p_round) {
 
-    std::string parse_file = sdsl::cache_file_name("tmp_input", config);
+    std::string parse_file = ws.get_file("tmp_input");
     std::ifstream c_vec(parse_file, std::ifstream::binary);
     c_vec.seekg(0, std::ifstream::end);
     size_t tot_bytes = c_vec.tellg();
@@ -322,13 +321,13 @@ void parse2bwt(sdsl::cache_config& config, size_t p_round) {
 
     size_t len = tot_bytes/sizeof(size_t);
 
-    std::string dict_file = sdsl::cache_file_name("dict_lev_"+std::to_string(p_round-1), config);
+    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_round-1));
     dictionary dict;
     sdsl::load_from_file(dict, dict_file);
     size_t sb = INT_CEIL(sdsl::bits::hi(std::max(dict.n_phrases, dict.alphabet))+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(len)+1, 8);
 
-    std::string bwt_lev_file = sdsl::cache_file_name("bwt_lev_"+std::to_string(p_round), config);
+    std::string bwt_lev_file = ws.get_file("bwt_lev_"+std::to_string(p_round));
     bwt_buff_writer bwt_buff(bwt_lev_file, std::ios::out, sb, fb);
 
     while(read_bytes<tot_bytes){
@@ -361,37 +360,35 @@ void parse2bwt(sdsl::cache_config& config, size_t p_round) {
     std::cout<<"        Bytes per freq.:  "<<fb<<std::endl;
 }
 
-void infer_bwt(sdsl::cache_config& config, size_t p_round){
+void infer_bwt(tmp_workspace& ws, size_t p_round){
     std::cout<<"Inferring the BWT"<<std::endl;
 
     std::cout<<"  Computing the BWT for parse "<<p_round<<std::endl;
-    parse2bwt(config, p_round);
+    parse2bwt(ws, p_round);
 
     while(p_round-->0){
         std::cout<<"  Inducing the BWT for parse "<<p_round<<std::endl;
         auto start = std::chrono::steady_clock::now();
-        infer_lvl_bwt(config, p_round);
+        infer_lvl_bwt(ws, p_round);
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 4);
         report_mem_peak();
     }
 }
 
-void grl_bwt_algo(std::string &i_file, std::string& o_file, std::string& tmp_folder, size_t n_threads, float hbuff_frac) {
+void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_ws, size_t n_threads,
+                  str_collection& str_coll, float hbuff_frac) {
 
     auto alphabet = get_alphabet(i_file);
     size_t n_chars = 0;
     for (auto const &sym : alphabet) n_chars += sym.second;
+
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(n_chars) * hbuff_frac)));
 
-    sdsl::cache_config config(false, tmp_folder);
+    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, alphabet, tmp_ws);
+    infer_bwt(tmp_ws, p_rounds);
 
-    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, alphabet, config);
-    infer_bwt(config, p_rounds);
-
-    std::string bwt_file = sdsl::cache_file_name("bwt_lev_0", config);
-    std::filesystem::rename(bwt_file, o_file);
-    std::filesystem::remove_all(tmp_folder);
+    std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     std::cout<<"The resulting BWT was stored in "<<o_file<<std::endl;
 }
 
