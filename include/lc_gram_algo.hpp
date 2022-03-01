@@ -35,6 +35,12 @@ struct parse_data_t {
     };
 };
 
+struct hp_data{
+    size_t n_vars=0; //number of variants for the canonical phrase
+    size_t rank=0;  //rank of the canonical phrase in the hash table
+    size_t freq=0; // accumulated frequency of the phrase variants in the text
+};
+
 struct parsing_info{
     size_t lms_phrases=0; //number of LMS phrases in the current parsing round
     size_t tot_phrases=0; //total number of phrases generated in the current parsing round
@@ -160,16 +166,18 @@ struct parse_functor{
     };
 };
 
+void collapse_homopolymers(phrase_map_t& orig_map, size_t alphabet);
+
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws);
 void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
                  phrase_map_t& new_phrases_ht, tmp_workspace& ws);
 template<template<class, class> class lc_parser_t>
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
-                     str_collection& str_coll, tmp_workspace &ws);
+                     str_collection& str_coll, bool hp_comp, tmp_workspace &ws);
 template<class parser_t, class out_sym_t=size_t>
-size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                         parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
+size_t parsing_round(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
+                     parsing_info &p_info, bv_t &phrase_desc, bool hp_comp, tmp_workspace &ws);
 void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files);
 std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
 

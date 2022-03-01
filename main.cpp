@@ -14,6 +14,7 @@ struct arguments{
     float hbuff_frac=0.5;
     bool ver=false;
     bool rev_comp=false;
+    bool hp_comp=false;
     std::string version= "0.0.1";
 };
 
@@ -30,27 +31,14 @@ static void parse_app(CLI::App& app, struct arguments& args){
     fmt->column_width(23);
     app.formatter(fmt);
 
-    app.add_option("TEXT",
-                      args.input_file,
-                      "Input file in one-string-per-line or FASTA/Q format"
-                      " (automatically detected)")->check(CLI::ExistingFile)->required();
-    app.add_option("-o,--output-file",
-                      args.output_file,
-                      "Output file")->type_name("");
-    app.add_option("-t,--threads",
-                      args.n_threads,
-                      "Maximum number of working threads")->default_val(1);
-    app.add_option("-f,--hbuff",
-                      args.hbuff_frac,
-                      "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->
-            check(CLI::Range(0.0,1.0))->default_val(0.15);
-    app.add_option("-T,--tmp",
-                      args.tmp_dir,
-                      "Temporary folder (def. /tmp/grl.bwt.xxxx)")->
-            check(CLI::ExistingDirectory)->default_val("/tmp");
-    app.add_flag("-v,--version",
-                 args.ver, "Print the software version and exit");
+    app.add_option("TEXT", args.input_file, "Input file in one-string-per-line or FASTA/Q format (automatically detected)")->check(CLI::ExistingFile)->required();
+    app.add_option("-o,--output-file", args.output_file, "Output file")->type_name("");
+    app.add_option("-t,--threads", args.n_threads, "Maximum number of working threads")->default_val(1);
+    app.add_option("-f,--hbuff", args.hbuff_frac, "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->check(CLI::Range(0.0,1.0))->default_val(0.15);
+    app.add_option("-T,--tmp", args.tmp_dir, "Temporary folder (def. /tmp/grl.bwt.xxxx)")->check(CLI::ExistingDirectory)->default_val("/tmp");
     app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
+    app.add_flag("-P,--run-length", args.hp_comp, "Collapse the equal-symbol runs of TEXT");
+    app.add_flag("-v,--version", args.ver, "Print the software version and exit");
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
 
@@ -103,6 +91,6 @@ int main(int argc, char** argv) {
     std::cout<<"Number of characters : "<<str_coll.n_char<<std::endl;
 
     grl_bwt_algo(input_collection, args.output_file, tmp_ws, args.n_threads,
-                 str_coll, args.hbuff_frac);
+                 str_coll, args.hp_comp, args.hbuff_frac);
     return 0;
 }

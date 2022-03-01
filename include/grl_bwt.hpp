@@ -20,5 +20,5 @@ void ind_phase(tmp_workspace& ws, size_t p_round);
  * @param hbuff_size : buffer size for the hashing step
  */
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace & tmp_ws,
-                  size_t n_threads, str_collection& str_coll, float hbuff_frac);
+                  size_t n_threads, str_collection& str_coll, bool hp_comp, float hbuff_frac);
 #endif //GRLBWT_HPP
