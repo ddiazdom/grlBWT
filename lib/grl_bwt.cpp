@@ -346,11 +346,11 @@ void ind_phase(tmp_workspace& ws, size_t p_round){
 }
 
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_ws, size_t n_threads,
-                  str_collection& str_coll, float hbuff_frac) {
+                  str_collection& str_coll, bool hp_comp, float hbuff_frac) {
 
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
 
-    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
+    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, str_coll, hp_comp, tmp_ws);
     ind_phase(tmp_ws, p_rounds);
 
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);

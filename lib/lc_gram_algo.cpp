@@ -321,7 +321,7 @@ std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std
 
 
 template<template<class, class> class lc_parser_t>
-size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
+size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, bool hp_comp, tmp_workspace &ws) {
 
     std::cout<<"Parsing the text:    "<<std::endl;
     std::string output_file = ws.get_file("tmp_output");
@@ -346,16 +346,16 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
 
     std::cout<<"  Parsing round "<<iter++<<std::endl;
     auto start = std::chrono::steady_clock::now();
-    rem_phrases = build_lc_gram_int<byte_parser_t>(i_file, tmp_i_file, n_threads, hbuff_size,
-                                                   p_info, symbol_desc, ws);
+    rem_phrases = parsing_round<byte_parser_t>(i_file, tmp_i_file, n_threads, hbuff_size,
+                                               p_info, symbol_desc, hp_comp, ws);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
     while (rem_phrases > 0) {
         start = std::chrono::steady_clock::now();
         std::cout<<"  Parsing round "<<iter++<<std::endl;
-        rem_phrases = build_lc_gram_int<int_parser_t>(tmp_i_file, output_file, n_threads,
-                                                      hbuff_size, p_info, symbol_desc, ws);
+        rem_phrases = parsing_round<int_parser_t>(tmp_i_file, output_file, n_threads,
+                                                  hbuff_size, p_info, symbol_desc, hp_comp, ws);
         end = std::chrono::steady_clock::now();
 
         report_time(start, end,4);
@@ -368,8 +368,8 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
 }
 
 template<class parser_t, class out_sym_t>
-size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                       parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws) {
+size_t parsing_round(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
+                     parsing_info &p_info, bv_t &phrase_desc, bool hp_comp, tmp_workspace &ws) {
 
 #ifdef __linux__
     malloc_trim(0);
@@ -447,6 +447,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         {
             //create a dictionary from where the ids will be computed
             std::cout<<"    Creating the dictionary from the hash table"<<std::endl;
+            if(hp_comp && p_info.p_round==0){
+                collapse_homopolymers(mp_table, phrase_desc.size());
+            }
+
             dictionary dict(mp_table, dict_syms, max_freq, phrase_desc,
                             threads_data[0].ifs.size(), p_info.prev_alph,
                             p_info.max_sym_freq);
@@ -510,20 +514,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         {
             //keep track of the phrases that have to be rephrased
             //key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
-
             std::string suffix_file = ws.get_file("suffix_file");
             bv_t new_phrase_desc;
             sdsl::load_from_file(new_phrase_desc, suffix_file);
-            /*auto it = mp_table.begin();
-            auto it_end = mp_table.end();
-            size_t sym;
-            while (it != it_end) {
-                auto val = it.value();
-                //read the (reversed) last symbol
-                sym = key_w.read(*it, 0);
-                new_phrase_desc[val] = phrase_desc[sym];
-                ++it;
-            }*/
             p_info.prev_alph = phrase_desc.size();
             phrase_desc.swap(new_phrase_desc);
         }
@@ -565,10 +558,154 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     }
 }
 
-template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws);
+void collapse_homopolymers(phrase_map_t& orig_map, size_t alphabet){
 
-template size_t build_lc_gram_int<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                                                                 parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    size_t width = sdsl::bits::hi(alphabet)+1;
+    key_wrapper key_w{width, orig_map.description_bits(), orig_map.get_data()};
+    size_t p_sym, sym, len, max_len=0, tot_syms=0, tot_rl_syms=0, rank=0, freq=0, max_freq=0;
 
-template size_t build_lc_gram_int<lms_parsing<i_file_stream<size_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                                                                parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    string_t phrase(2, width);
+    hp_data hp_d;
+    bit_hash_table<hp_data> rl_map(0, "", 0.8);
+
+    for (auto const &ptr : orig_map) {
+        p_sym = key_w.read(ptr, 0);
+        len=1;
+        phrase.clear();
+        for(size_t i=1;i<key_w.size(ptr);i++){
+            sym = key_w.read(ptr, i);
+            if(p_sym!=sym){
+                phrase.push_back(p_sym);
+                if(len>max_len) max_len = len;
+                len=0;
+            }
+            len++;
+            p_sym = sym;
+        }
+        phrase.push_back(p_sym);
+        phrase.mask_tail();
+        tot_syms +=key_w.size(ptr);
+
+        freq =0;
+        orig_map.get_value_from(ptr, freq);
+
+        hp_d.rank = rank;
+        hp_d.n_vars = 1;
+        hp_d.freq = freq;
+
+        auto res = rl_map.insert(phrase.data(), phrase.n_bits(), hp_d);
+        if(!res.second){
+            rl_map.get_value_from(res.first, hp_d);
+            hp_d.n_vars++;
+            hp_d.freq+=freq;
+            if(hp_d.freq>max_freq) max_freq = hp_d.freq;
+            rl_map.insert_value_at(res.first, hp_d);
+        }else{
+            tot_rl_syms+=phrase.size();
+            rank++;
+        }
+    }
+
+    vector_t phrase_ptrs(rl_map.size(), sdsl::bits::hi(tot_rl_syms)+1);
+    vector_t len_ptrs(rl_map.size(), sdsl::bits::hi(tot_syms)+1);
+    vector_t lengths(tot_syms, sdsl::bits::hi(max_len)+1);
+
+    size_t tmp=0, j=0, tmp2=0;
+    key_wrapper key_w2{width, rl_map.description_bits(), rl_map.get_data()};
+    for (auto const &ptr : rl_map) {
+        rl_map.get_value_from(ptr, hp_d);
+        len_ptrs[j] = tmp;
+        phrase_ptrs[j] = tmp2;
+        tmp+=key_w2.size(ptr)*hp_d.n_vars;
+        tmp2+=key_w2.size(ptr);
+        j++;
+    }
+
+    string_t phrase_lengths(2, sdsl::bits::hi(max_len)+1);
+    bv_t is_hp(tot_rl_syms, false);
+    for (auto const &ptr : orig_map) {
+        p_sym = key_w.read(ptr, 0);
+        len=1;
+        phrase.clear();
+        phrase_lengths.clear();
+        for(size_t i=1;i<key_w.size(ptr);i++){
+            sym = key_w.read(ptr, i);
+            if(p_sym!=sym){
+                phrase.push_back(p_sym);
+                phrase_lengths.push_back(len);
+                if(len>max_len) max_len = len;
+                len=0;
+            }
+            len++;
+            p_sym = sym;
+        }
+        phrase.push_back(p_sym);
+        phrase_lengths.push_back(len);
+        phrase.mask_tail();
+
+        auto res = rl_map.find(phrase.data(), phrase.n_bits());
+        assert(res.second);
+        rl_map.get_value_from(res.first, hp_d);
+
+        for(size_t u=len_ptrs[hp_d.rank],k=0;k<phrase.size();k++,u++){
+            lengths[u] = phrase_lengths[k];
+            if(phrase_lengths[k]>1){
+                is_hp[phrase_ptrs[hp_d.rank]+k] = true;
+            }
+        }
+        len_ptrs[hp_d.rank]+=phrase.size();
+    }
+
+    tmp = len_ptrs[0];
+    len_ptrs[0] = 0;
+    for(size_t i=1;i<len_ptrs.size();i++){
+        tmp2 = len_ptrs[i];
+        len_ptrs[i] = tmp;
+        tmp = tmp2;
+    }
+
+    dictionary rl_dict;
+    rl_dict.alphabet = alphabet;
+    rl_dict.dict = vector_t(tot_rl_syms, 0, sdsl::bits::hi(alphabet)+1);
+    rl_dict.freqs = vector_t(rl_map.size(), sdsl::bits::hi(max_freq)+1);
+    rl_dict.d_lim = bv_t(tot_rl_syms, false);
+    rl_dict.phrases_has_hocc = bv_t(tot_rl_syms, false);
+    rl_dict.n_phrases = rl_map.size();
+    j=0;
+    size_t k=0;
+    std::vector<size_t> sym_freqs(alphabet, 0);
+
+    for(auto const &ptr : rl_map){
+        rl_map.get_value_from(ptr, hp_d);
+        phrase.clear();
+        for(size_t i=0;i<key_w2.size(ptr);i++){
+            rl_dict.dict[j] = key_w.read(ptr, i);
+            sym_freqs[rl_dict.dict[j]]+=hp_d.freq;
+            j++;
+        }
+        rl_dict.d_lim[j-1] = true;
+        rl_dict.freqs[k++] = hp_d.freq;
+
+        sym =key_w2.read(ptr, 0);
+        if(sym=='\n'){
+            rl_dict.t_size += key_w2.size(ptr)*hp_d.freq;
+        }else{
+            sym_freqs[sym]-=hp_d.freq;
+            rl_dict.t_size += (key_w2.size(ptr)-1)*hp_d.freq;
+        }
+    }
+
+    for(unsigned long sym_freq : sym_freqs){
+        if(sym_freq>rl_dict.max_sym_freq){
+            rl_dict.max_sym_freq = sym_freq;
+        }
+    }
+}
+
+template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, bool hp_comp, tmp_workspace &ws);
+
+template size_t parsing_round<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
+                                                                             parsing_info &p_info, bv_t &phrase_desc, bool hp_comp, tmp_workspace &ws);
+
+template size_t parsing_round<lms_parsing<i_file_stream<size_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
+                                                                            parsing_info &p_info, bv_t &phrase_desc, bool hp_comp, tmp_workspace &ws);
