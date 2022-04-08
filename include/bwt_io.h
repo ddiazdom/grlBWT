@@ -40,7 +40,8 @@ public:
 
     explicit bwt_buff_reader(const std::string& input_file, size_t buff_size=1024 * 1024){
         file = input_file;
-#ifdef __linux__
+
+#if defined(__linux__) && defined(NO_CACHED_PAGE)
         empty_page_cache(file);
 #endif
         ifs.open(file, std::ifstream::binary);
@@ -358,6 +359,12 @@ public:
                              uint8_t _sb=8, uint8_t _fb=8, size_t buff_size=1024 * 1024){
 
         file = input_file;
+
+#if defined(__linux__) && defined(NO_CACHED_PAGE)
+        if(file_exists(file)){
+            empty_page_cache(file);
+        }
+#endif
 
         ofs.open(file, mode | std::ios::out | std::ios::binary);
         assert(ofs.good());

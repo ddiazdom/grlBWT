@@ -78,10 +78,29 @@ struct tmp_workspace{
 
     void remove_file(std::string const& prefix) const {
         std::filesystem::path file =  std::filesystem::path(tmp_folder) / std::string(prefix+"_"+ext);
-        bool res = remove(file);
-        if(!res){
+        try{
+            std::filesystem::remove(file);
+        }catch (std::filesystem::filesystem_error const& ex){
             std::cout<<"Error trying to remove "<<file<<std::endl;
+            std::cout<<ex.what()<<std::endl;
             exit(1);
+        }
+    }
+
+    void move_file(std::string const& prefix, std::string const& dest) const {
+        std::filesystem::path file =  std::filesystem::path(tmp_folder) / std::string(prefix+"_"+ext);
+        try{
+            std::filesystem::rename(file, dest);
+        }catch(std::filesystem::filesystem_error const& ex){
+            if(ex.code()==std::make_error_code(std::errc::cross_device_link)){
+                const auto copy_opts = std::filesystem::copy_options::overwrite_existing;
+                std::filesystem::copy_file(file, dest, copy_opts);
+                remove_file(prefix);
+            }else{
+                std::cout<<ex.what()<<std::endl;
+                std::cout<<"Error trying to move "<<file<<" to "<<dest<<std::endl;
+                exit(1);
+            }
         }
     }
 

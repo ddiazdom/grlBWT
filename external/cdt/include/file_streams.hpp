@@ -31,7 +31,7 @@ struct i_file_stream{
 
     i_file_stream(const std::string& i_file, size_t buff_size_){
         file =  i_file;
-#ifdef __linux__
+#if defined(__linux__) && defined(NO_CACHED_PAGE)
         empty_page_cache(file);
 #endif
         text_i = std::ifstream(file, std::ifstream::binary);
@@ -147,6 +147,12 @@ struct o_file_stream{
 
     o_file_stream(const std::string& o_file, size_t buff_size_, std::ios::openmode mode){
         file = o_file;
+
+#if defined(__linux__) && defined(NO_CACHED_PAGE)
+        if(file_exists(file)){
+            empty_page_cache(file);
+        }
+#endif
 
         ofs.open(file, mode | std::ios::out | std::ios::binary);
         assert(ofs.good());

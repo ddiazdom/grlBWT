@@ -67,6 +67,10 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
+#if defined(__linux__) && defined(NO_CACHED_PAGE)
+    std::cout<<"Running without page caching (debugging purposes)"<<std::endl;
+#endif
+
     tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
 
     std::cout << "Input file:       "<<args.input_file<<std::endl;

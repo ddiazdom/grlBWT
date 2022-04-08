@@ -5,6 +5,7 @@ project(grlBWT)
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
+add_definitions(-DNO_CACHED_PAGE)
 
 find_package(LibSDSL REQUIRED)
 
