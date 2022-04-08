@@ -1,6 +1,6 @@
 #include <thread>
 
-#include "external/CLI11.hpp"
+#include "CLI11.hpp"
 #include "utils.h"
 #include "grl_bwt.hpp"
 #include "fastx_handler.h"
@@ -80,13 +80,18 @@ int main(int argc, char** argv) {
 
     if(is_fastx(args.input_file)){
         input_collection = tmp_ws.get_file("plain_input");
-        str_coll = fastx2plain(args.input_file, input_collection);
-        if(args.rev_comp) get_rev_comp(input_collection, str_coll);
+        //str_coll = fastx2plain(args.input_file, input_collection);
+        //if(args.rev_comp) get_rev_comp(input_collection, str_coll);
     }else {
-        input_collection = tmp_ws.get_file("plain_input");
-        std::filesystem::copy(args.input_file, input_collection);
-        str_coll = collection_stats(input_collection);
-        if(args.rev_comp) get_rev_comp(input_collection, str_coll);
+        if(args.rev_comp){
+            input_collection = tmp_ws.get_file("plain_input");
+            std::filesystem::copy(args.input_file, input_collection);
+            str_coll = collection_stats(input_collection);
+            //get_rev_comp(input_collection, str_coll);
+        }else{
+            input_collection = args.input_file;
+            str_coll = collection_stats(input_collection);
+        }
     }
 
     std::cout<<"Alphabet : "<<str_coll.alphabet.size()<<std::endl;

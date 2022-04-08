@@ -104,7 +104,9 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.alphabet+2;
 
-    std::cout<<"    Computing the number of induced symbols"<<std::endl;
+    std::cout<<"    Computing the number of induced symbols"<<std::flush;
+
+    auto start = std::chrono::steady_clock::now();
     vector_t hocc_buckets(hocc_rs(dict.phrases_has_hocc.size())+1, 0, sdsl::bits::hi(dict.t_size)+1);
     size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
 
@@ -118,8 +120,11 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 
     std::string prev_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round+1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
+    auto end = std::chrono::steady_clock::now();
+    report_time(start, end, 9);
 
-    std::cout<<"    Performing the induction from the previous BWT"<<std::endl;
+    std::cout<<"    Performing the induction from the previous BWT"<<std::flush;
+    start = std::chrono::steady_clock::now();
     for(size_t i=0;i<bwt_buff.size();i++) {
 
         bwt_buff.read_run(i, sym, freq);
@@ -168,12 +173,6 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
         bwt_buff.write_sym(i, sym);
     }
 
-    /*std::cout<<"dictionary: "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
-    std::cout<<"hocc_buckets: "<<double(sdsl::size_in_bytes(hocc_buckets))/1000000<<std::endl;
-    std::cout<<"has_hocc: "<<double(sdsl::size_in_bytes(dict.phrases_has_hocc))/1000000<<std::endl;
-    std::cout<<"hocc_rs: "<<double(sdsl::size_in_bytes(hocc_rs))/1000000<<std::endl;
-    std::cout<<"hocc: "<<double(n_runs*bps)/1000000<<std::endl;*/
-
     sdsl::util::clear(dict.dict);
     sdsl::util::clear(hocc_buckets);
     sdsl::util::clear(hocc_rs);
@@ -181,7 +180,11 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 #ifdef __linux__
     malloc_trim(0);
 #endif
-    std::cout<<"    Assembling the new BWT"<<std::endl;
+    end = std::chrono::steady_clock::now();
+    report_time(start, end, 2);
+
+    std::cout<<"    Assembling the new BWT"<<std::flush;
+    start = std::chrono::steady_clock::now();
     std::string new_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round));
 
     uint8_t new_al_b = INT_CEIL(sdsl::bits::hi(std::max(dict.alphabet, dict.p_alpha_size)+2)+1, 8);
@@ -262,10 +265,11 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
     p_bwt.close(true);
     bwt_buff.close(true);
     new_bwt_buff.close();
-
     if(remove(dict_file.c_str())){
         std::cout<<"Error trying to remove file "<<dict_file<<std::endl;
     }
+    end = std::chrono::steady_clock::now();
+    report_time(start, end, 26);
 
     std::cout<<"    Stats:       "<<std::endl;
     std::cout<<"      BWT size (n):       "<<new_bwt_size<<std::endl;
@@ -348,12 +352,11 @@ void ind_phase(tmp_workspace& ws, size_t p_round){
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_ws, size_t n_threads,
                   str_collection& str_coll, float hbuff_frac) {
 
+    std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
-
     size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
     ind_phase(tmp_ws, p_rounds);
-
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
-    std::cout<<"The resulting BWT was stored in "<<o_file<<std::endl;
+    std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
 }
 

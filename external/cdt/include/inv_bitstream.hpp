@@ -6,8 +6,7 @@
 #define CDT_BIT_STREAM_HPP
 #include <iostream>
 #include <limits>
-#include <sdsl/structure_tree.hpp>
-#include <sdsl/util.hpp>
+#include "cdt_common.hpp"
 
 template<class word_t>
 struct inv_bitstream  {
@@ -19,7 +18,7 @@ struct inv_bitstream  {
     size_t stream_size{};
 public:
 
-    inline size_t read(size_t i, size_t j) const {
+    [[nodiscard]] inline size_t read(size_t i, size_t j) const {
         size_t cell_i = i >> word_shift;
         size_t cell_j = j >> word_shift;
         size_t len = j-i+1UL;
@@ -52,17 +51,14 @@ public:
         }
     }
 
-    size_type serialize(std::ostream &out, sdsl::structure_tree_node *v=nullptr, std::string name="") const{
-        sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
-        out.write((char *)&stream_size, sizeof(size_t));
+    size_type serialize(std::ostream &out) const{
+        size_t written_bytes = serialize_elm(out, stream_size);
         out.write((char *)stream, sizeof(word_t)*stream_size);
-        size_t written_bytes = sizeof(size_t) + (sizeof(word_t)*stream_size);
-        sdsl::structure_tree::add_size(child, written_bytes);
-        return written_bytes;
+        return written_bytes + (sizeof(word_t)*stream_size);
     }
 
     void load(std::istream &in){
-        in.read((char *)&stream_size, sizeof(size_t));
+        load_elm(in, stream_size);
         stream = reinterpret_cast<word_t *>(malloc(sizeof(word_t)*stream_size));
         in.read((char *)stream, sizeof(word_t)*stream_size);
     }

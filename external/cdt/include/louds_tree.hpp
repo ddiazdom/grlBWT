@@ -7,7 +7,6 @@
 
 #include<sdsl/bit_vectors.hpp>
 
-
 class louds_tree {
 
 private:

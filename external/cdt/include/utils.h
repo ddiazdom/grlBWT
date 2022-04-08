@@ -9,11 +9,10 @@
 #include <vector>
 #include <unordered_set>
 #include <filesystem>
+#include <fstream>
 
 #ifdef __APPLE__
 #include <unistd.h>
-#include <fstream>
-
 #endif
 
 struct str_collection {
@@ -24,6 +23,11 @@ struct str_collection {
     uint8_t min_sym=255;
     size_t n_char=0;
 };
+
+#ifdef __linux__
+// clear filename from page cache.
+void empty_page_cache(const std::string& filename);
+#endif
 
 //check if the file is gzipped
 bool check_gzip(const std::string& file);
@@ -72,9 +76,13 @@ struct tmp_workspace{
         return std::filesystem::path(tmp_folder) / std::string(prefix+"_"+ext);
     }
 
-    [[nodiscard]] bool remove_file(std::string const& prefix) const {
-        std::filesystem::path file = std::filesystem::path(prefix) / std::string(prefix+"_"+ext);
-        return remove(file);
+    void remove_file(std::string const& prefix) const {
+        std::filesystem::path file =  std::filesystem::path(tmp_folder) / std::string(prefix+"_"+ext);
+        bool res = remove(file);
+        if(!res){
+            std::cout<<"Error trying to remove "<<file<<std::endl;
+            exit(1);
+        }
     }
 
     ~tmp_workspace(){

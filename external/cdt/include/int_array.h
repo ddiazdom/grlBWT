@@ -9,7 +9,6 @@
 #include <limits>
 #include <cassert>
 #include <utility>
-#include <sdsl/util.hpp>
 #include "memory_handler.hpp"
 #include "bitstream.h"
 
@@ -34,7 +33,7 @@ struct int_array{
         bits.stream = allocator::allocate<word_t>(bits.stream_size, true, 0);
     }
 
-    //initialize from a allocated memory
+    //initialize from allocated memory
     int_array(word_t *ptr, size_t size_, uint8_t width_){
         m_size = size_;
         m_width = width_;
@@ -79,7 +78,6 @@ struct int_array{
     void move(int_array<word_t>&& other) noexcept {
         m_size = std::exchange(other.m_size, 0);
         m_width = std::exchange(other.m_width, 0);
-
         bits.stream_size = std::exchange(other.bits.stream_size, 0);
         if(bits.stream!= nullptr){
             allocator::deallocate(bits.stream);
@@ -126,7 +124,7 @@ struct int_array{
         return bits.compare_chunk(other.bits.stream, 0, tot_bits);
     }
 
-    inline void* data() const{
+    [[nodiscard]] inline void* data() const{
         return bits.stream;
     }
 
@@ -135,19 +133,19 @@ struct int_array{
         bits.stream_size = size;
     }
 
-    inline size_t width() const{
+    [[nodiscard]] inline size_t width() const{
         return m_width;
     }
 
-    inline size_t n_words() const{
+    [[nodiscard]] inline size_t n_words() const{
         return m_size==0? 0: INT_CEIL(n_bits(), stream_t::word_bits);
     }
 
-    inline size_t n_bytes() const{//number of bytes used by the data (ceil)
+    [[nodiscard]] inline size_t n_bytes() const{//number of bytes used by the data (ceil)
         return INT_CEIL(n_bits(), 8);
     }
 
-    inline size_t n_bits() const{//number of bits used by the data (exact)
+    [[nodiscard]] inline size_t n_bits() const{//number of bits used by the data (exact)
         return m_size * m_width;
     }
 
@@ -161,7 +159,7 @@ struct int_array{
     }
 
     inline void push_back(value_type value) {
-        assert(sdsl::bits::hi(value)+1<=m_width);
+        //assert(sdsl::bits::hi(value)+1<=m_width);
         size_t i = m_size * m_width;
         size_t j = (m_size+1) * m_width - 1;
         if((j/stream_t::word_bits)>=bits.stream_size){
@@ -188,11 +186,11 @@ struct int_array{
         }
     }
 
-    inline size_t size() const{
+    [[nodiscard]] inline size_t size() const{
         return m_size;
     }
 
-    inline bool empty() const{
+    [[nodiscard]] inline bool empty() const{
         return m_size==0;
     }
 
@@ -211,30 +209,33 @@ struct int_array{
         return bits.read(idx * m_width, (idx + 1) * m_width - 1);
     }
 
-    size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
-        sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
-        size_t written_bytes = 0;
-        written_bytes +=  bits.serialize(out, "bit_stream");
-        out.write((char *)&m_size, sizeof(size_t));
-        written_bytes+=sizeof(size_t);
-        out.write((char *)&m_width, 1);
-        sdsl::structure_tree::add_size(child, written_bytes+1);
-        return written_bytes + 1;
+    size_type serialize(std::ostream &out) const{
+        size_t written_bytes = bits.serialize(out);
+        written_bytes +=serialize_elm(out, m_size);
+        written_bytes +=serialize_elm(out, m_width);
+        return written_bytes;
     }
 
     void load(std::istream &in){
         bits.load(in);
-        in.read((char *)m_size, sizeof(size_t));
-        in.read((char *)m_width, 1);
+        load_elm(in, m_size);
+        load_elm(in, m_width);
     }
 
-    void set(size_t val){
+    void initialize(size_t val, size_t n_elems){
         if(val==0){
-            memset(bits.stream, 0, bits.stream_size*sizeof(word_t));
+            size_t n_cells = INT_CEIL(n_elems*m_width, stream_t::word_bits);
+            assert(n_cells<=bits.stream_size);
+            memset(bits.stream, 0, n_cells*sizeof(word_t));
+            if(n_elems>m_size) m_size = n_elems;
         }else{
             std::cout<<"not implemented yet"<<std::endl;
             exit(1);
         }
+    }
+
+    void swap(int_array<word_t>& other){
+        move(std::move(other));
     }
 };
 #endif //LPG_COMPRESSOR_INT_ARRAY_H

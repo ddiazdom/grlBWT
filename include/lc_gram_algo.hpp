@@ -145,7 +145,7 @@ struct parse_functor{
             phrase.mask_tail();
 
             //auto res = data.m_map.find(phrase.data(), phrase.n_bits());
-            auto res = data.m_map.new_find(phrase.data(), phrase.n_bits());
+            auto res = data.m_map.find(phrase.data(), phrase.n_bits());
             //assert(res.second==res2.second);
 
             assert(res.second);

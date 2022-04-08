@@ -27,6 +27,11 @@ const size_t masks[65]={0x0,
                         0x1FFFFFFFFFFFFFF,0x3FFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFF,
                         0x1FFFFFFFFFFFFFFF,0x3FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF};
 
+struct decode_t{
+    size_t value;
+    size_t next_pos;
+};
+
 class elias_gamma{
 private:
 public:
@@ -43,7 +48,7 @@ public:
     //! returns a pair (value, new_index) where value is the decoded
     //! integer and new_index is the position in the stream immediately
     //! after the code
-    static std::pair<size_type, size_type> decode(const size_type *bit_stream, size_t bit_index);
+    static void decode(const size_type *bit_stream, size_t bit_index, decode_t& res);
 };
 
 class elias_delta{
@@ -60,7 +65,7 @@ public:
     //! returns a pair (value, new_index) where value is the decoded
     //! integer and new_index is the position in the stream immediately
     //! after the code
-    static std::pair<size_type, size_type> decode(const size_type *bit_stream, size_t bit_index);
+    static void decode(const size_type *bit_stream, size_t bit_index, decode_t& res);
 };
 
 /*
@@ -89,7 +94,7 @@ inline std::pair<elias_gamma::size_type, elias_gamma::size_type> elias_gamma::en
     return {value,(2*len) -1};
 }
 
-inline std::pair<elias_gamma::size_type, elias_gamma::size_type> elias_gamma::decode(const size_type *bit_stream, size_t bit_index) {
+inline void elias_gamma::decode(const size_type *bit_stream, size_t bit_index, decode_t& res) {
 
     size_t code_len, n_zeroes;
     size_t cell_start = bit_index >> word_shift;
@@ -117,7 +122,9 @@ inline std::pair<elias_gamma::size_type, elias_gamma::size_type> elias_gamma::de
             tmp |= bit_stream[cell_end]>>(word_bits-right);
         }
     }
-    return {tmp, bit_index+code_len};
+
+    res.value = tmp;
+    res.next_pos = bit_index + code_len;
 }
 
 inline std::pair<elias_delta::size_type , elias_delta::size_type > elias_delta::encode(size_type value) {
@@ -127,33 +134,38 @@ inline std::pair<elias_delta::size_type , elias_delta::size_type > elias_delta::
     return {value + ((1UL<<(len-1))*(g_code.first-1)),len + g_code.second-1};
 }
 
-inline std::pair<elias_delta::size_type, elias_delta::size_type> elias_delta::decode(const size_type *bit_stream, size_t bit_index) {
+inline void elias_delta::decode(const size_type *bit_stream, size_t bit_index, decode_t& res) {
 
-    auto len = elias_gamma::decode(bit_stream, bit_index);
+    elias_gamma::decode(bit_stream, bit_index, res);
 
-    if(len.first==1) return {1, bit_index+1};
+    if(res.value==1){
+        res.next_pos = bit_index+1;
+        return;
+    }
 
     size_t word_pos, bit_pos;
     size_type tmp;
 
-    bit_index = len.second;
+    bit_index = res.next_pos;
     word_pos = bit_index >> word_shift;
     bit_pos = bit_index & (word_bits-1UL);
 
-    if((bit_pos+len.first-1) > word_bits){
+    if((bit_pos+res.value-1) > word_bits){
 
         size_t left = word_bits - bit_pos;
-        size_t right = len.first-left-1;
+        size_t right = res.value-left-1;
 
         tmp = (bit_stream[word_pos] & masks[left])<<right;
         tmp |= bit_stream[word_pos+1] >> (word_bits - right);
-        tmp |= 1UL << (len.first-1UL);
+        tmp |= 1UL << (res.value-1UL);
 
     }else{
-        tmp = bit_stream[word_pos] >> (word_bits - (bit_pos + len.first - 1));
-        tmp &= masks[len.first-1];
-        tmp |= 1UL << (len.first-1UL);
+        tmp = bit_stream[word_pos] >> (word_bits - (bit_pos + res.value - 1));
+        tmp &= masks[res.value-1];
+        tmp |= 1UL << (res.value-1UL);
     }
-    return {tmp, bit_index+len.first-1};
+
+    res.next_pos = bit_index+res.value-1;
+    res.value = tmp;
 }
 #endif //MULTI_BWT_INTEGER_ENCODERS_HPP

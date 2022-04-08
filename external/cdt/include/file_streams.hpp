@@ -11,6 +11,7 @@
 #include <cstring>
 #include <limits>
 #include "bitstream.h"
+#include "utils.h"
 
 template<class sym_t>
 struct i_file_stream{
@@ -30,6 +31,9 @@ struct i_file_stream{
 
     i_file_stream(const std::string& i_file, size_t buff_size_){
         file =  i_file;
+#ifdef __linux__
+        empty_page_cache(file);
+#endif
         text_i = std::ifstream(file, std::ifstream::binary);
 
         text_i.seekg (0, std::ifstream::end);

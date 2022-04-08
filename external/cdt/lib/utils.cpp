@@ -7,7 +7,10 @@
 #include <unistd.h>
 #endif
 #include <random>
-#include "zlib.h"
+#include <zlib.h>
+#ifdef __linux__
+#include <fcntl.h>
+#endif
 
 bool is_fastx(const std::string& input_file){
 
@@ -26,6 +29,20 @@ bool is_fastx(const std::string& input_file){
     }
     return f_sym=='>' || f_sym=='@';
 }
+
+#ifdef __linux__
+void empty_page_cache(const std::string& filename) {
+    const int fd = open(filename.c_str(), O_RDWR);
+    if (fd == -1) {
+        std::perror(filename.c_str());
+        std::exit(EXIT_FAILURE);
+    }
+    const off_t length = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0L, SEEK_SET);
+    posix_fadvise(fd, 0, length, POSIX_FADV_DONTNEED);
+    close(fd);
+}
+#endif
 
 bool file_exists(const std::filesystem::path& p, std::filesystem::file_status const& s){
     if(std::filesystem::status_known(s) ? std::filesystem::exists(s) : std::filesystem::exists(p)){

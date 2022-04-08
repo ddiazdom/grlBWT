@@ -39,6 +39,9 @@ public:
 
     explicit bwt_buff_reader(const std::string& input_file, size_t buff_size=1024 * 1024){
         file = input_file;
+#ifdef __linux__
+        empty_page_cache(file);
+#endif
         ifs.open(file, std::ifstream::binary);
         assert(ifs.good());
 
