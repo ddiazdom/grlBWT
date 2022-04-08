@@ -19,7 +19,7 @@ int main(int argc, char** argv){
 
     std::cout<<"decompressing the first "<<n_seqs<<" sequences "<<std::endl;
     std::string seq;
-    for(size_t i=0;i<n_seqs;i++){
+    for(long i=0;i<n_seqs;i++){
         seq.clear();
         auto res = fmi.lf(i);
         size_t next_pos = res.second;

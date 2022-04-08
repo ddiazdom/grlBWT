@@ -50,7 +50,12 @@ target_include_directories(grlbwt
 
 target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS})
 
+#scripts
 add_executable(grlbwt-cli main.cpp)
 target_link_libraries(grlbwt-cli LINK_PUBLIC grlbwt biopar)
 target_include_directories(grlbwt-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external)
+
+add_executable(print-seqs scripts/print_seqs.cpp)
+target_link_libraries(print-seqs LINK_PUBLIC grlbwt)
+target_include_directories(print-seqs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/scripts)
 

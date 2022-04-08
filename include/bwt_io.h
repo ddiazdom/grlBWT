@@ -10,6 +10,7 @@
 #include <functional>
 #include <cstring>
 #include <cassert>
+#include "utils.h"
 
 class bwt_buff_reader {
 

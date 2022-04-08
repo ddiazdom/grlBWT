@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     std::cout << "Input file:       "<<args.input_file<<std::endl;
     std::cout << "Temporary folder: "<<tmp_ws.folder()<<std::endl;
 
-    if(args.output_file.empty()) args.output_file = args.input_file;
+    if(args.output_file.empty()) args.output_file = std::filesystem::path(args.input_file).filename();
     args.output_file = std::filesystem::path(args.output_file).replace_extension(".rl_bwt");
 
     std::string input_collection = args.input_file;
