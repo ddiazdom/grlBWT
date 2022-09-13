@@ -95,19 +95,23 @@ void report_mem_peak(){
 }
 
 str_collection collection_stats(std::string& input_file){
+    //We assume that the smallest symbol in the collection is the separator symbol.
+    // This should be the last character in the file
     str_collection str_coll;
     size_t sym_frq[256] = {0};
     std::ifstream ifs(input_file, std::ios::binary);
     char buffer[8192]={0};
     size_t read_bytes;
     std::streampos buff_size=8192;
+    uint8_t sym;
 
     while(true){
         ifs.read((char *)&buffer, buff_size);
         read_bytes = ifs.gcount();
         if(read_bytes>0){
             for(size_t i=0;i<read_bytes;i++){
-                sym_frq[(uint8_t)buffer[i]]++;
+                sym = (uint8_t)buffer[i];
+                sym_frq[sym]++;
             }
         }else{
             break;
@@ -122,9 +126,15 @@ str_collection collection_stats(std::string& input_file){
         }
     }
 
-    str_coll.n_strings = sym_frq[10];
     str_coll.min_sym = str_coll.alphabet[0];
     str_coll.max_sym = str_coll.alphabet.back();
+    str_coll.n_strings = sym_frq[str_coll.alphabet[0]];
     ifs.close();
+
+    if(sym!=str_coll.min_sym){
+        std::cerr<<"Error: the file does not end with the separator symbol"<<std::endl;
+        exit(1);
+    }
+
     return str_coll;
 }

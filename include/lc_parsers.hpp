@@ -132,7 +132,7 @@ struct lms_parsing{
             }
 
             //std::cout<<"range: "<<start<<" "<<end<<std::endl;
-            if(start<end){
+            if(start<=end){
                 thread_ranges.emplace_back(start, end);
             }
         }

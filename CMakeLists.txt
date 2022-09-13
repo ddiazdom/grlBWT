@@ -54,3 +54,11 @@ add_executable(grlbwt-cli main.cpp)
 target_link_libraries(grlbwt-cli grlbwt biopar)
 target_include_directories(grlbwt-cli PUBLIC external/bioparsers/include)
 
+add_executable(reverse_bwt scripts/reverse_bwt.cpp)
+target_link_libraries(reverse_bwt grlbwt biopar)
+target_include_directories(reverse_bwt PUBLIC scripts/)
+
+add_executable(bwt_stats scripts/stats.cpp)
+target_link_libraries(bwt_stats grlbwt biopar)
+target_include_directories(bwt_stats PUBLIC scripts/)
+

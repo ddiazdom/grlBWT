@@ -409,6 +409,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                                       tmp_addr + (k * hb_bytes));
             k++;
         }
+        assert(!threads_data.empty());
 
         std::vector<std::thread> threads(threads_data.size());
         hash_functor<parse_data_type, parser_t> hf;
