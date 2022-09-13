@@ -6,14 +6,15 @@
 #include <thread>
 #include <chrono>
 #include <cstdlib>
-#include "utils.hpp"
+#include "utils.h"
 #include "LMS_induction.h"
 #include "bwt_io.h"
 #ifdef __linux__
 #include <malloc.h>
 #endif
 
-void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks) {
+void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
+               parsing_info& p_info, tmp_workspace& ws) {
     dict.dict_dummy = dict.alphabet+s_sa.size()+1;
     size_t pos, em_nt, new_size=0, sym;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
@@ -38,10 +39,8 @@ void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa
                 }
                 phrase.mask_tail();
 
-                auto res = phrases_ht.new_find(phrase.data(), phrase.n_bits());
+                auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
                 assert(res.second);
-                //auto res2 = phrases_ht.new_find(phrase.data(), phrase.n_bits());
-                //assert(res.second==res2.second);
 
                 em_nt = 0;
                 phrases_ht.get_value_from(res.first, em_nt);
@@ -58,28 +57,27 @@ void comp_dict_int_v2(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa
     dict.dict.swap(new_dict);
     dict.n_phrases = s_sa.size();
     sdsl::util::clear(dict.d_lim);
+
+    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
+    sdsl::store_to_file(dict, dict_file);
 }
 
-size_t compress_dictionary_v2(dictionary &dict, vector_t &sa, parsing_info& p_info, sdsl::cache_config& config) {
+void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
+                 phrase_map_t& new_phrases_ht, tmp_workspace& ws) {
 
-    size_t p_round = p_info.p_round;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
-    std::string pre_bwt_file = sdsl::cache_file_name("pre_bwt_lev_"+std::to_string(p_round), config);
+    std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
     size_t sb = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
-    phrase_map_t new_phrases_ht;
-
     size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
     vector_t ranks(dict.n_phrases, 0, width);
-
-    bv_t phr_marks(dict.dict.size(), false);
 
     while(u<sa.size()) {
         d_pos = (sa[u]>>1UL) - 1;
@@ -151,32 +149,22 @@ size_t compress_dictionary_v2(dictionary &dict, vector_t &sa, parsing_info& p_in
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
     sdsl::util::clear(dict.freqs);
-    sdsl::store_to_file(ranks, sdsl::cache_file_name("phr_ranks", config));
+    sdsl::store_to_file(ranks, ws.get_file("phr_ranks"));
     sdsl::util::clear(ranks);
     new_phrases_ht.shrink_databuff();
 
 #ifdef __linux__
     malloc_trim(0);
 #endif
-
-    auto start = std::chrono::steady_clock::now();
-    comp_dict_int_v2(dict, new_phrases_ht, sa, phr_marks);
-    auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 4);
-
-    std::string dict_file = sdsl::cache_file_name("dict_lev_"+std::to_string(p_round), config);
-    sdsl::store_to_file(dict, dict_file);
-    return sa.size();
 }
 
-size_t assign_ids(dictionary &dict, parsing_info &p_info, sdsl::cache_config &config) {
+size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    std::cout<<"Suffix induction"<<std::endl;
-    auto start = std::chrono::steady_clock::now();
     vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
-
     uint8_t width = sdsl::bits::hi(dict.dict.size())+1;
 
+    std::cout<<"    Sorting the dictionary using suffix induction"<<std::flush;
+    auto start = std::chrono::steady_clock::now();
     if(width<=8){
         suffix_induction<uint8_t>(sa, dict);
     }else if(width<=16){
@@ -186,24 +174,25 @@ size_t assign_ids(dictionary &dict, parsing_info &p_info, sdsl::cache_config &co
     }else{
         suffix_induction<uint64_t>(sa, dict);
     }
-
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
-    std::cout<<"Number of phrases : "<<dict.n_phrases<<std::endl;
-    std::cout<<"Alphabet :          "<<dict.alphabet<<std::endl;
+    phrase_map_t new_phrases_ht;
+    bv_t phr_marks(dict.dict.size(), false);
 
-    std::cout<<"dict  "<<double(sdsl::size_in_bytes(dict.dict))/1000000<<std::endl;
-    std::cout<<"freqs "<<double(sdsl::size_in_bytes(dict.freqs))/1000000<<std::endl;
-    std::cout<<"sa    "<<double(sdsl::size_in_bytes(sa))/1000000<<std::endl;
-    std::cout<<"has_hocc    "<<double(sdsl::size_in_bytes(dict.phrases_has_hocc))/1000000<<std::endl;
-
+    std::cout<<"    Constructing the preliminary BWT"<<std::flush;
     start = std::chrono::steady_clock::now();
-    size_t new_number_of_phrases = compress_dictionary_v2(dict, sa, p_info, config);
+    get_pre_bwt(dict, sa, p_info, phr_marks, new_phrases_ht, ws);
     end = std::chrono::steady_clock::now();
-    std::cout<<"Sort and compress dictionary"<<std::endl;
-    report_time(start, end, 4);
-    return new_number_of_phrases;
+    report_time(start, end, 17);
+
+    std::cout<<"    Storing the dictionary as a grammar"<<std::flush;
+    start = std::chrono::steady_clock::now();
+    dict2gram(dict, new_phrases_ht, sa, phr_marks, p_info, ws);
+    end = std::chrono::steady_clock::now();
+    report_time(start, end, 14);
+
+    return sa.size();
 }
 
 void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files) {
@@ -332,21 +321,20 @@ std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std
 
 
 template<template<class, class> class lc_parser_t>
-size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, alpha_t& alphabet,
-                     sdsl::cache_config &config) {
+size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
 
     std::cout<<"Parsing the text:    "<<std::endl;
-    std::string output_file = sdsl::cache_file_name("tmp_output", config);
-    std::string tmp_i_file = sdsl::cache_file_name("tmp_input", config);
+    std::string output_file = ws.get_file("tmp_output");
+    std::string tmp_i_file = ws.get_file("tmp_input");
 
     // mark which symbols represent string boundaries
-    bv_t symbol_desc(alphabet.back().first+1,false);
-    symbol_desc[alphabet[0].first] = true;
+    bv_t symbol_desc(str_coll.alphabet.back()+1,false);
+    symbol_desc[str_coll.alphabet[0]] = true;
 
     parsing_info p_info;
-    for(auto const& pair : alphabet){
-        if(p_info.max_sym_freq<pair.second){
-            p_info.max_sym_freq = pair.second;
+    for(unsigned long sym_freq : str_coll.sym_freqs){
+        if(p_info.max_sym_freq<sym_freq){
+            p_info.max_sym_freq = sym_freq;
         }
     }
 
@@ -359,7 +347,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, a
     std::cout<<"  Parsing round "<<iter++<<std::endl;
     auto start = std::chrono::steady_clock::now();
     rem_phrases = build_lc_gram_int<byte_parser_t>(i_file, tmp_i_file, n_threads, hbuff_size,
-                                                   p_info, symbol_desc, config);
+                                                   p_info, symbol_desc, ws);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
@@ -367,7 +355,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, a
         start = std::chrono::steady_clock::now();
         std::cout<<"  Parsing round "<<iter++<<std::endl;
         rem_phrases = build_lc_gram_int<int_parser_t>(tmp_i_file, output_file, n_threads,
-                                                      hbuff_size, p_info, symbol_desc, config);
+                                                      hbuff_size, p_info, symbol_desc, ws);
         end = std::chrono::steady_clock::now();
 
         report_time(start, end,4);
@@ -376,12 +364,14 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, a
     }
 
     sdsl::util::clear(symbol_desc);
+    ws.remove_file("suffix_file");
+
     return iter-2;
 }
 
 template<class parser_t, class out_sym_t>
 size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                       parsing_info &p_info, bv_t &phrase_desc, sdsl::cache_config &config) {
+                       parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws) {
 
 #ifdef __linux__
     malloc_trim(0);
@@ -405,8 +395,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     //number of bytes per thread
     size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
+    std::cout << "    Computing the phrases in the text" << std::flush;
+    auto start = std::chrono::steady_clock::now();
     {
-        std::cout << "    Computing the phrases in the text" << std::endl;
 
         void *buff_addr = malloc(hbuff_size);
         auto tmp_addr = reinterpret_cast<char *>(buff_addr);
@@ -435,6 +426,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
 #endif
     }
 
+    auto end = std::chrono::steady_clock::now();
+    report_time(start, end, 16);
+
     //join the different phrase files
     std::vector<std::string> phrases_files;
     for(size_t i=0;i<threads_data.size();i++){
@@ -450,7 +444,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         size_t max_freq = join_res.second;
 
         //save a copy of the hash table into a file
-        std::string ht_file = sdsl::cache_file_name("ht_data", config);
+        std::string ht_file = ws.get_file("ht_data");
         mp_table.store_data_to_file(ht_file);
 
         //temporal unload of the hash table (not the data)
@@ -458,32 +452,32 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         size_t tot_phrases=0;
         {
             //create a dictionary from where the ids will be computed
-            std::cout<<"    Creating the dictionary from the hash table"<<std::endl;
+            std::cout<<"    Creating the dictionary from the hash table"<<std::flush;
+            start = std::chrono::steady_clock::now();
             dictionary dict(mp_table, dict_syms, max_freq, phrase_desc,
                             threads_data[0].ifs.size(), p_info.prev_alph,
                             p_info.max_sym_freq);
+            end = std::chrono::steady_clock::now();
             mp_table.destroy_data();
+            report_time(start, end, 6);
 
-            //rename phrases according to their lexicographical ranks
-            std::cout<<"    Assigning identifiers to the phrases"<<std::endl;
-            tot_phrases = assign_ids(dict, p_info, config);
+            //process the dictionary
+            tot_phrases = process_dictionary(dict, p_info, ws);
         }
 
         //reload the hash table
         mp_table.load_data_from_file(ht_file);
-        if(remove(ht_file.c_str())){
-            std::cout<<"Error trying to remove temporal file"<<std::endl;
-            std::cout<<"Aborting"<<std::endl;
-            exit(1);
-        }
+        ws.remove_file("ht_data");
 
         {
+            std::cout<<"    Assigning ranks to the new phrases"<<std::flush;
+            start = std::chrono::steady_clock::now();
             bv_t new_phrase_desc(tot_phrases, false);
             key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
 
             size_t j=0;
             vector_t ranks;
-            std::string ranks_file = sdsl::cache_file_name("phr_ranks", config);
+            std::string ranks_file = ws.get_file("phr_ranks");
             sdsl::load_from_file(ranks, ranks_file);
             for(auto const& ptr : mp_table){
                 phrase_map_t::val_type val=0;
@@ -492,11 +486,16 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                 mp_table.insert_value_at(ptr, val);
                 new_phrase_desc[val] = phrase_desc[key_w.read(ptr, 0)];
             }
-            std::string suffix_file = sdsl::cache_file_name("suffix_file", config);
+            ws.remove_file("phr_ranks");
+            std::string suffix_file = ws.get_file("suffix_file");
             sdsl::store_to_file(new_phrase_desc, suffix_file);
+            end = std::chrono::steady_clock::now();
+            report_time(start, end, 15);
         }
 
-        std::cout<<"    Creating the parse of the text"<<std::endl;
+        std::cout<<"    Creating the parse of the text"<<std::flush;
+
+        start = std::chrono::steady_clock::now();
         {//store the phrases into a new file
             std::vector<std::thread> threads(threads_data.size());
             parse_functor<parse_data_type, parser_t> pf;
@@ -522,24 +521,15 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
 
         {
             //keep track of the phrases that have to be rephrased
-            //key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
-
-            std::string suffix_file = sdsl::cache_file_name("suffix_file", config);
+            std::string suffix_file = ws.get_file("suffix_file");
             bv_t new_phrase_desc;
             sdsl::load_from_file(new_phrase_desc, suffix_file);
-            /*auto it = mp_table.begin();
-            auto it_end = mp_table.end();
-            size_t sym;
-            while (it != it_end) {
-                auto val = it.value();
-                //read the (reversed) last symbol
-                sym = key_w.read(*it, 0);
-                new_phrase_desc[val] = phrase_desc[sym];
-                ++it;
-            }*/
             p_info.prev_alph = phrase_desc.size();
             phrase_desc.swap(new_phrase_desc);
         }
+
+        end = std::chrono::steady_clock::now();
+        report_time(start, end, 19);
 
         p_info.max_sym_freq = max_freq;
         p_info.lms_phrases = mp_table.size();
@@ -578,10 +568,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     }
 }
 
-template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, alpha_t& alphabet, sdsl::cache_config &config);
+template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws);
 
 template size_t build_lc_gram_int<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                                                                 parsing_info &p_gram, bv_t &phrase_desc, sdsl::cache_config &config);
+                                                                                 parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
 
 template size_t build_lc_gram_int<lms_parsing<i_file_stream<size_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                                                                parsing_info &p_gram, bv_t &phrase_desc, sdsl::cache_config &config);
+                                                                                parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);

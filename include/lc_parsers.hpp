@@ -101,7 +101,7 @@ struct lms_parsing{
             prev_sym = curr_sym;
             prev_s_type = s_type;
         }
-        assert(curr_lms[0]!=1);
+        //assert(curr_lms[0]!=1);
         if(!curr_lms.empty()){
             task(curr_lms);
         }

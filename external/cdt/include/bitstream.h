@@ -8,8 +8,7 @@
 #include<iostream>
 #include <limits>
 #include "macros.h"
-#include <sdsl/structure_tree.hpp>
-#include <sdsl/util.hpp>
+#include "cdt_common.hpp"
 
 template<class word_t>
 struct bitstream{
@@ -24,7 +23,7 @@ struct bitstream{
 
     bitstream(): stream(nullptr), stream_size(0){};
 
-    inline size_t n_bits() const {
+    [[nodiscard]] inline size_t n_bits() const {
         return stream_size<<word_shift;
     }
 
@@ -82,7 +81,7 @@ struct bitstream{
         write(i + read_bits, j, (tmp_src[n_words-1] & masks[tot_bits-read_bits]));
     }
 
-    inline size_t read(size_t i, size_t j) const{
+    [[nodiscard]] inline size_t read(size_t i, size_t j) const{
         size_t cell_i = i >> word_shift;
         size_t cell_j = j >> word_shift;
         size_t i_pos = (i & (word_bits - 1UL));
@@ -140,7 +139,7 @@ struct bitstream{
     }
 
     //compare the segment ]a-bits..a] with the segment ]b-bits..b+bits]
-    //return the index (0-based) of the rightmost different bit (return len if the segments are equal)
+    //return the bit_pos (0-based) of the rightmost different bit (return len if the segments are equal)
     inline size_t inv_com_segments(size_t a, size_t b, size_t& bits) const {
         size_t n_words = INT_CEIL(bits, word_bits);
         size_t rem_bits, data_a, data_b, read_bits=0;
@@ -183,19 +182,20 @@ struct bitstream{
         }
     }
 
-    size_type serialize(std::ostream &out, sdsl::structure_tree_node *v, std::string name) const{
-        sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
-        out.write((char *)&stream_size, sizeof(size_t));
+    size_type serialize(std::ostream &out) const{
+        size_t written_bytes = serialize_elm(out, stream_size);
         out.write((char *)stream, sizeof(word_t)*stream_size);
-        size_t written_bytes = sizeof(size_t) + (sizeof(word_t)*stream_size);
-        sdsl::structure_tree::add_size(child, written_bytes);
-        return written_bytes;
+        return written_bytes + (sizeof(word_t)*stream_size);
     }
 
     void load(std::istream &in){
-        in.read((char *)&stream_size, sizeof(size_t));
-        assert(stream== nullptr);
-        stream = (word_t *) malloc(sizeof(word_t)*stream_size);
+        load_elm(in, stream_size);
+        if(stream==nullptr){
+            stream = (word_t *) malloc(sizeof(word_t)*stream_size);
+        }else{
+            stream = (word_t *) realloc(stream, sizeof(word_t)*stream_size);
+        }
+
         in.read((char *)stream, sizeof(word_t)*stream_size);
     }
 };

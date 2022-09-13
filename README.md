@@ -17,8 +17,9 @@ computations, thus decreasing computing time too.
 2. CMake >= 3.7
 3. SDSL-lite
 
-The xxHash library is already included in the source files. We include a CMake module that will search for the local
-installation of the SDSL-library. No need to indicate the path during the compilation.
+The xxHash and CLI11 libraries are already included in the source files of this repository. The SDSL-lite has to be installed beforehand.
+However, we include a CMake module that will search for its local
+installation. No need to indicate the path during the compilation.
 
 ## Installation
 
@@ -37,8 +38,9 @@ make
 ./grlbwt ../tests/sample_file.txt
 ```
 
-For the moment, grlBWT only supports input files in one-string-per-line format. We plan to expand to FASTA/Q files for
-genomic collections.
+Our tool currently supports string collections in one-string-per-line format or the classical FASTA and FASTQ formats.
+It also handles gzipped inputs. In principle, grlBWT automatically detects the format. However,
+we have not tested the automatic detection functionality exhaustively yet.
 
 ## Output
 
