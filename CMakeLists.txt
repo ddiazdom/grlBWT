@@ -62,3 +62,7 @@ add_executable(bwt_stats scripts/stats.cpp)
 target_link_libraries(bwt_stats grlbwt biopar)
 target_include_directories(bwt_stats PUBLIC scripts/)
 
+add_executable(split_runs scripts/split_runs.cpp)
+target_link_libraries(split_runs grlbwt biopar)
+target_include_directories(split_runs PUBLIC scripts/)
+
