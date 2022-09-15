@@ -40,6 +40,7 @@ struct fm_index{
         bwt_reader.close();
         ofs.close();
         sdsl::construct(bwt, plain_bwt_file, 1);
+        remove(plain_bwt_file.c_str());
 
         k=0;
         std::vector<size_t> C_tmp;
@@ -67,21 +68,21 @@ struct fm_index{
         }
     }
 
-    size_t size() const {
+    [[nodiscard]] size_t size() const {
         return bwt.size();
     }
 
-    size_t alphabet() const {
+    [[nodiscard]] size_t alphabet() const {
         return C.size();
     }
 
-    std::pair<uint8_t, size_t> lf(size_t idx) const {
+    [[nodiscard]] std::pair<uint8_t, size_t> lf(size_t idx) const {
         auto res = bwt.inverse_select(idx);
         size_t next = C[sym_map[res.second]] + res.first;
         return {res.second, next};
     }
 
-    inline uint8_t get_dummy() const {
+    [[nodiscard]] inline uint8_t get_dummy() const {
         return dummy;
     }
 };

@@ -66,3 +66,7 @@ add_executable(split_runs scripts/split_runs.cpp)
 target_link_libraries(split_runs grlbwt biopar)
 target_include_directories(split_runs PUBLIC scripts/)
 
+add_executable(grl2rle scripts/grlbwt2rle.cpp)
+target_link_libraries(grl2rle grlbwt biopar)
+target_include_directories(grl2rle PUBLIC scripts/)
+

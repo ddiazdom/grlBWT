@@ -134,6 +134,14 @@ public:
         memcpy(&freq, buffer+buff_start+sb, fb);
     }
 
+    inline size_t bytes_per_rsym() const {
+        return sb;
+    }
+
+    inline size_t bytes_per_rlen() const {
+        return fb;
+    }
+
     inline size_t size() const {
        return tot_runs;
     }
