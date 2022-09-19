@@ -100,8 +100,8 @@ int main(int argc, char** argv) {
 
     std::cout<<"Number of runs before: "<<bwt_reader.size()<<std::endl;
     std::cout<<"Number of runs now: "<<tot_runs<<std::endl;
-    std::cout<<"  Overflow splits: "<<o_splits<<std::endl;
-    std::cout<<"  Block boundary splits: "<<b_splits<<std::endl;
+    std::cout<<"  Overflow splits: "<<o_splits<<" ("<<(double(o_splits)/double(tot_runs))*100<<"%) "<<std::endl;
+    std::cout<<"  Block boundary splits: "<<b_splits<<" ("<<(double(b_splits)/double(tot_runs))*100<<"%) "<<std::endl;
     std::cout<<"Increase ratio "<<double(tot_runs)/double(bwt_reader.size())<<std::endl;
     std::cout<<"The new encoding of the BWT was stored in "<<output_file<<std::endl;
 }
