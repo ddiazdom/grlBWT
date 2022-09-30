@@ -431,11 +431,15 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     report_time(start, end, 16);
 
     //join the different phrase files
+    std::cout << "    Merging thread data into one single hash table" << std::flush;
+    start = std::chrono::steady_clock::now();
     std::vector<std::string> phrases_files;
     for(size_t i=0;i<threads_data.size();i++){
         phrases_files.push_back(threads_data[i].thread_dict.dump_file());
     }
     auto join_res = join_thread_phrases(mp_table, phrases_files);
+    end = std::chrono::steady_clock::now();
+    report_time(start, end, 16);
 
     size_t psize=0;//<- for the iter stats
     if(mp_table.size()!=p_info.lms_phrases) {

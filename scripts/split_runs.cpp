@@ -39,17 +39,17 @@ int main(int argc, char** argv) {
                                INT_CEIL(bits, 8));
 
     std::cout<<"Splitting the runs in the BWT"<<std::endl;
-    size_t tot_runs=0, acc_block=0, diff, o_splits=0, b_splits=0;
+    size_t tot_runs=0, acc_block=0, diff, o_splits=0, b_splits=0, block_runs=0;
+
+    std::vector<size_t> runs_per_block(block_size, 0);
 
     for(size_t i=0;i<bwt_reader.size();i++){
 
         bwt_reader.read_run(i, sym, len);
 
         while(len>max_length){
-
             len-=max_length;
             tmp_len=max_length;
-
             if(block_size>0){
                 while((acc_block+tmp_len)>block_size){
                     diff = (acc_block + tmp_len) - block_size;
@@ -58,18 +58,22 @@ int main(int argc, char** argv) {
                     bwt_writer.push_back(sym, tmp_len);
                     tot_runs++;
                     b_splits++;
+                    block_runs++;
+                    runs_per_block[block_runs]++;
                     assert((acc_block + tmp_len) == block_size);
 
                     tmp_len = diff;
                     acc_block = 0;
+                    block_runs=0;
                 }
             }
-
             assert((acc_block+tmp_len)<=block_size);
             //append extra run of length tmp_len
             bwt_writer.push_back(sym, tmp_len);
             tot_runs++;
             o_splits++;
+            block_runs++;
+            runs_per_block[block_runs]++;
             acc_block +=tmp_len;
         }
 
@@ -82,10 +86,13 @@ int main(int argc, char** argv) {
                 bwt_writer.push_back(sym, len);
                 tot_runs++;
                 b_splits++;
+                block_runs++;
+                runs_per_block[block_runs]++;
                 assert((acc_block + len) == block_size);
 
                 len = diff;
                 acc_block = 0;
+                block_runs = 0;
             }
         }
 
@@ -93,6 +100,8 @@ int main(int argc, char** argv) {
         //append run of length len
         bwt_writer.push_back(sym, len);
         tot_runs++;
+        block_runs++;
+        runs_per_block[block_runs]++;
         acc_block+=len;
     }
     bwt_reader.close();
@@ -102,6 +111,19 @@ int main(int argc, char** argv) {
     std::cout<<"Number of runs now: "<<tot_runs<<std::endl;
     std::cout<<"  Overflow splits: "<<o_splits<<" ("<<(double(o_splits)/double(tot_runs))*100<<"%) "<<std::endl;
     std::cout<<"  Block boundary splits: "<<b_splits<<" ("<<(double(b_splits)/double(tot_runs))*100<<"%) "<<std::endl;
+    std::cout<<"Distribution of runs per block:"<<std::endl;
+
+    size_t decile = (INT_CEIL(tot_runs, 10) + (tot_runs/10))/2;
+    size_t q = decile;
+    size_t acc=0;
+    for(size_t i=0;i<runs_per_block.size();i++){
+        acc += runs_per_block[i];
+        if(acc > q){
+            std::cout<<"q"<<INT_CEIL(q,decile)<<" "<<(i-1)<<" "<<double(acc)/double(tot_runs)<<std::endl;
+            q+=decile;
+        }
+    }
+
     std::cout<<"Increase ratio "<<double(tot_runs)/double(bwt_reader.size())<<std::endl;
     std::cout<<"The new encoding of the BWT was stored in "<<output_file<<std::endl;
 }
