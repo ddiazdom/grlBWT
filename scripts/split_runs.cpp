@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     size_t acc=0, block_acc=0;
     std::string output_dist_file = output_file+".dist";
     std::ofstream ofs(output_dist_file);
-    ofs <<"#number_of_runs_in_a_block\tfreq\trelative_freq"<<std::endl;
+    ofs <<"number_of_runs_in_a_block\tfreq\trelative_freq"<<std::endl;
     for(size_t i=0;i<runs_per_block.size();i++){
         acc += (i*runs_per_block[i]);
         block_acc+=runs_per_block[i];
@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
             q+=decile;
         }
         if(i<=max_n_runs){
-            ofs <<i<<"\t"<<runs_per_block[i]<<"\t"<<double(block_acc)/double(tot_blocks)<<std::endl;
+            ofs <<i<<"\t"<<runs_per_block[i]<<"\t"<<double(runs_per_block[i])/double(tot_blocks)<<std::endl;
         }else{
             assert(runs_per_block[i]==0);
         }
