@@ -118,7 +118,7 @@ str_collection collection_stats(std::string& input_file){
         }
     }
 
-    for(size_t i=0;i<255;i++){
+    for(size_t i=0;i<256;i++){
         if(sym_frq[i]!=0){
             str_coll.alphabet.push_back(i);
             str_coll.sym_freqs.push_back(sym_frq[i]);
