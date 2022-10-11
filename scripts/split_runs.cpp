@@ -129,26 +129,55 @@ int main(int argc, char** argv) {
     std::cout<<"  Block boundary splits: "<<b_splits<<" ("<<(double(b_splits)/double(tot_runs))*100<<"%) "<<std::endl;
     std::cout<<"Distribution of runs per block:"<<std::endl;
 
-    size_t decile = (INT_CEIL(tot_runs, 10) + (tot_runs/10))/2;
-    size_t q = decile;
-    size_t acc=0, block_acc=0;
+    size_t q1=(tot_blocks+1)/4;
+    size_t q2 = (tot_blocks+1)/2;
+    size_t q3 = (3*(tot_blocks+1))/4;
+    size_t res1, res2, res3;
+    bool b_q1=false, b_q2=false, b_q3=false;
+    size_t block_acc=0;
     std::string output_dist_file = output_file+".dist";
     std::ofstream ofs(output_dist_file);
-    ofs <<"number_of_runs_in_a_block\tfreq\trelative_freq"<<std::endl;
+    ofs <<"number_of_runs_in_a_block\tfreq\trelative_freq\tacc_freq"<<std::endl;
+    size_t min_runs=0;
     for(size_t i=0;i<runs_per_block.size();i++){
-        acc += (i*runs_per_block[i]);
+
+        if(min_runs==0 && runs_per_block[i]!=0){
+            min_runs = i;
+        }
+
         block_acc+=runs_per_block[i];
-        if(acc > q){
-            std::cout<<"q"<<INT_CEIL(q,decile)<<" "<<(i-1)<<" "<<double(acc)/double(tot_runs)<<std::endl;
-            q+=decile;
+        if(!b_q1 && block_acc > q1){
+            //std::cout<<q1<<" q1:"<<i<<" "<<double(block_acc)/double(tot_blocks)<<std::endl;
+            b_q1=true;
+            res1=i;
+        }
+
+        if(!b_q2 && block_acc > q2){
+            //std::cout<<q2<<" q2:"<<i<<" "<<double(block_acc)/double(tot_blocks)<<std::endl;
+            res2=i;
+            b_q2=true;
+        }
+
+        if(!b_q3 && block_acc > q3){
+            //std::cout<<q3<<" q3:"<<i<<" "<<double(block_acc)/double(tot_blocks)<<std::endl;
+            res3=i;
+            b_q3=true;
         }
         if(i<=max_n_runs){
-            ofs <<i<<"\t"<<runs_per_block[i]<<"\t"<<double(runs_per_block[i])/double(tot_blocks)<<std::endl;
+            ofs <<i<<"\t"<<runs_per_block[i]<<"\t"<<double(runs_per_block[i])/double(tot_blocks)<<"\t"<<double(block_acc)/double(tot_blocks)<<std::endl;
         }else{
             assert(runs_per_block[i]==0);
         }
     }
     ofs.close();
+    std::cout<<"min n_runs: "<<min_runs<<std::endl;
+    std::cout<<"q1 "<<res1<<std::endl;
+    std::cout<<"q2 "<<res2<<std::endl;
+    std::cout<<"q3 "<<res3<<std::endl;
+    std::cout<<"IQR "<<res3-res1<<std::endl;
+    std::cout<<"upper whisker "<<(double(res3) + (double(res3-res1)*1.5))<<std::endl;
+    std::cout<<"max n_runs: "<<max_n_runs<<std::endl;
+
     std::cout<<"Increase ratio "<<double(tot_runs)/double(bwt_reader.size())<<std::endl;
     std::cout<<"The new encoding of the BWT was stored in "<<output_file<<std::endl;
 
