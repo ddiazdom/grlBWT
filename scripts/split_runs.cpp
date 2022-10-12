@@ -170,13 +170,15 @@ int main(int argc, char** argv) {
         }
     }
     ofs.close();
-    std::cout<<"min n_runs: "<<min_runs<<std::endl;
-    std::cout<<"q1 "<<res1<<std::endl;
-    std::cout<<"q2 "<<res2<<std::endl;
-    std::cout<<"q3 "<<res3<<std::endl;
-    std::cout<<"IQR "<<res3-res1<<std::endl;
-    std::cout<<"upper whisker "<<(double(res3) + (double(res3-res1)*1.5))<<std::endl;
-    std::cout<<"max n_runs: "<<max_n_runs<<std::endl;
+    std::cout<<"min_n_runs q1 q2 q3 upper_whisker max_n_runs"<<std::endl;
+    std::cout<<min_runs<<" "<<res1<<" "<<res2<<" "<<res3<<" "<<(double(res3) + (double(res3-res1)*1.5))<<" "<<max_n_runs<<std::endl;
+//    std::cout<<"min n_runs: "<<min_runs<<std::endl;
+//    std::cout<<"q1: "<<res1<<std::endl;
+//    std::cout<<"q2: "<<res2<<std::endl;
+//    std::cout<<"q3: "<<res3<<std::endl;
+//    std::cout<<"IQR: "<<res3-res1<<std::endl;
+//    std::cout<<"upper whisker: "<<(double(res3) + (double(res3-res1)*1.5))<<std::endl;
+//    std::cout<<"max n_runs: "<<max_n_runs<<std::endl;
 
     std::cout<<"Increase ratio "<<double(tot_runs)/double(bwt_reader.size())<<std::endl;
     std::cout<<"The new encoding of the BWT was stored in "<<output_file<<std::endl;
