@@ -25,7 +25,8 @@ int main(int argc, char** argv){
     size_t one_byte=0;
     size_t two_bytes=0;
     size_t three_bytes=0;
-    uint8_t alphabet[256]={0};
+    size_t alphabet[256]={0};
+    uint8_t min_sym = 255, max_sym=0;
 
     std::cout<<"Reading the input BWT"<<std::endl;
     for(size_t i=0;i<bwt_reader.size();i++){
@@ -42,6 +43,8 @@ int main(int argc, char** argv){
         }else{
             three_bytes++;
         }
+        if(sym<min_sym) min_sym = sym;
+        if(sym>max_sym) max_sym = sym;
     }
 
     size_t sigma=0;
@@ -58,6 +61,11 @@ int main(int argc, char** argv){
 
     std::cout<<"Number of runs: "<<bwt_reader.size()<<std::endl;
     std::cout<<"Text alphabet: "<<sigma<<std::endl;
+    for(size_t i=0;i<256;i++){
+        if(alphabet[i]!=0){
+            std::cout<<"  sym: "<<(int)i<<" freq: "<<alphabet[i]<<std::endl;
+        }
+    }
     std::cout<<"Text size: "<<acc<<std::endl;
     std::cout<<"n/r: "<<double(acc)/double(bwt_reader.size())<<std::endl;
     std::cout<<(double(one_byte)/l)*100<<"% of the run lenghts fit 1 byte"<<std::endl;
