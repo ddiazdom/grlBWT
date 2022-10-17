@@ -58,7 +58,7 @@ add_executable(reverse_bwt scripts/reverse_bwt.cpp)
 target_link_libraries(reverse_bwt grlbwt biopar)
 target_include_directories(reverse_bwt PUBLIC scripts/)
 
-add_executable(bwt_stats scripts/stats.cpp)
+add_executable(bwt_stats scripts/stats.cpp scripts/grl2plain.cpp)
 target_link_libraries(bwt_stats grlbwt biopar)
 target_include_directories(bwt_stats PUBLIC scripts/)
 
@@ -69,4 +69,8 @@ target_include_directories(split_runs PUBLIC scripts/)
 add_executable(grlbwt2rle scripts/grlbwt2rle.cpp)
 target_link_libraries(grlbwt2rle grlbwt biopar)
 target_include_directories(grlbwt2rle PUBLIC scripts/)
+
+add_executable(grl2plain scripts/grl2plain.cpp)
+target_link_libraries(grl2plain grlbwt biopar)
+target_include_directories(grl2plain PUBLIC scripts/)
 
