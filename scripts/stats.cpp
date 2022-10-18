@@ -61,6 +61,7 @@ int main(int argc, char** argv){
 
     std::cout<<"Number of runs: "<<bwt_reader.size()<<std::endl;
     std::cout<<"Text alphabet: "<<sigma<<std::endl;
+    std::cout<<"Number of runs for each symbol"<<std::endl;
     for(size_t i=0;i<256;i++){
         if(alphabet[i]!=0){
             std::cout<<"  sym: "<<(int)i<<" freq: "<<alphabet[i]<<std::endl;
