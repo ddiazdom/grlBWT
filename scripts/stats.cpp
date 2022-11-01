@@ -26,6 +26,7 @@ int main(int argc, char** argv){
     size_t two_bytes=0;
     size_t three_bytes=0;
     size_t alphabet[256]={0};
+    size_t freq[256]={0};
     uint8_t min_sym = 255, max_sym=0;
 
     std::cout<<"Reading the input BWT"<<std::endl;
@@ -34,6 +35,8 @@ int main(int argc, char** argv){
         if(len<min_run) min_run = len;
         if(len>max_run) max_run = len;
         alphabet[sym]++;
+        freq[sym]+=len;
+
         acc+=len;
         bwt_lens[i] = len;
         if(len<=255){
@@ -59,13 +62,25 @@ int main(int argc, char** argv){
     auto l = (double)bwt_reader.size();
     double prop=0.1;
 
-    std::cout<<"Number of runs: "<<bwt_reader.size()<<std::endl;
-    std::cout<<"Text alphabet: "<<sigma<<std::endl;
-    std::cout<<"Number of runs for each symbol"<<std::endl;
+    std::vector<std::tuple<uint8_t, size_t, size_t>> rl_stats;
     for(size_t i=0;i<256;i++){
         if(alphabet[i]!=0){
-            std::cout<<"  sym: "<<(int)i<<" freq: "<<alphabet[i]<<std::endl;
+            rl_stats.emplace_back(i, alphabet[i], freq[i]);
         }
+    }
+    std::sort(rl_stats.begin(), rl_stats.end(), [&](auto a, auto b){ return std::get<1>(a)<std::get<1>(b);});
+
+    std::cout<<"Number of runs: "<<bwt_reader.size()<<std::endl;
+    std::cout<<"Text alphabet: "<<sigma<<std::endl;
+    std::cout<<"Run stats:"<<std::endl;
+
+    size_t k=1;
+    size_t n_bits = sizeof(unsigned int)*8 - __builtin_clz(acc);
+    size_t space_acc=0, space;
+    for(auto const& tuple : rl_stats){
+        space=32*std::get<1>(tuple)*2;
+        std::cout<<k++<<") Symbol:"<<(int)std::get<0>(tuple)<<"\t\tnumber of runs in the BWT:"<<std::get<1>(tuple)<<"\t\ttext frequency:"<<std::get<2>(tuple)<<" | "<<space<<" "<<space_acc<<std::endl;
+        space_acc+=space;
     }
     std::cout<<"Text size: "<<acc<<std::endl;
     std::cout<<"n/r: "<<double(acc)/double(bwt_reader.size())<<std::endl;
