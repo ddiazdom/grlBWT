@@ -93,7 +93,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
             if(pl_sym==dummy_sym){
                 exist_as_phrase = true;
                 d_rank = d_lim_rs(d_pos);
-                ranks[d_rank] = rank << 1UL;
+                ranks[d_rank] = rank;
             }else{
                 exist_as_phrase = false;
             }
