@@ -99,7 +99,7 @@ struct dictionary {
         written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
         written_bytes+= sdsl::write_member(max_sym_freq, out, child, "max_sym_freq");
         written_bytes+= sdsl::write_member(dict_dummy, out, child, "dummy_sym");
-        dict.serialize(out, child);
+        dict.serialize(out);
         phrases_has_hocc.serialize(out, child);
         return written_bytes;
     }

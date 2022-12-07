@@ -173,8 +173,8 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
         bwt_buff.write_sym(i, sym);
     }
 
-    sdsl::util::clear(dict.dict);
-    sdsl::util::clear(hocc_buckets);
+    dict.dict.erase();
+    hocc_buckets.erase();
     sdsl::util::clear(hocc_rs);
 
 #ifdef __linux__

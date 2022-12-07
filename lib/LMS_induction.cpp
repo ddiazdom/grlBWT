@@ -8,8 +8,8 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
 
     auto * buckets = (value_type *) calloc((dict.alphabet+1), sizeof(value_type));
 
-    for(auto && sym : dict.dict){
-        buckets[sym]++;
+    for(size_t i=0;i<dict.dict.size();i++){
+        buckets[dict.dict[i]]++;
     }
 
     size_t acc=0, freq, max_freq=0;
@@ -36,7 +36,7 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
             sa[pos] = sa[pos] & ~1UL;
         }
     }
-    sdsl::util::clear(freqs);
+    freqs.erase();
 
     induce_L_type<value_type>(sa, dict, buckets);
 

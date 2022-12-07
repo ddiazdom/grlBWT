@@ -40,7 +40,11 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC z pthread ${LIBSDSL_LIBRARIES} cdt)
+target_link_libraries(grlbwt LINK_PUBLIC
+        z
+        pthread
+        #${LIBSDSL_LIBRARIES}
+        cdt)
 
 target_include_directories(grlbwt
         PUBLIC
@@ -73,4 +77,8 @@ target_include_directories(grlbwt2rle PUBLIC scripts/)
 add_executable(grl2plain scripts/grl2plain.cpp)
 target_link_libraries(grl2plain grlbwt biopar)
 target_include_directories(grl2plain PUBLIC scripts/)
+
+add_executable(test_bv_rs scripts/test_bv_and_rank_supp.cpp external/cdt/lib/cdt_common.cpp)
+target_link_libraries(test_bv_rs ${LIBSDSL_LIBRARIES})
+target_include_directories(test_bv_rs PUBLIC external/cdt/include ${LIBSDSL_INCLUDE_DIRS})
 

@@ -12,33 +12,108 @@
 #include "memory_handler.hpp"
 #include "bitstream.h"
 
-template<class word_t>
+template<class word_t,
+         uint8_t w_bits=std::numeric_limits<word_t>::digits>
 struct int_array{
 
+    static_assert(w_bits<=std::numeric_limits<word_t>::digits);
     typedef size_t size_type;
     typedef word_t value_type;
-    typedef bitstream<word_t> stream_t;
+    //typedef typename std::conditional<w_bits==1, bool, typename std::conditional<w_bits<=8, uint8_t, typename std::conditional<w_bits<=16, uint16_t, typename std::conditional<w_bits<=32, uint32_t, uint64_t>::type>::type>::type>::type v_type;
+    typedef bitstream<word_t, w_bits> stream_t;
 
-    size_t m_size;
-    uint8_t m_width;
+    size_t m_cap = 0;
+    size_t m_size = 0;
+    uint8_t m_width = w_bits;
     stream_t bits;
 
-    //default constructor
-    int_array():  m_size(0), m_width(0) {};
+    class proxy {
+    private:
+        int_array & m_arr;
+        size_t m_idx;
+
+    public:
+        proxy(int_array & _arr, size_t _idx) : m_arr(_arr), m_idx(_idx) {}
+
+        operator value_type() const {
+            return m_arr.bits.read(m_idx * m_arr.m_width, (m_idx + 1) * m_arr.m_width - 1);
+        }
+
+        proxy& operator=(value_type value) {
+            m_arr.write(m_idx, value);
+            return *this;
+        }
+
+        proxy& operator=(const proxy& other) {
+            m_arr.write(m_idx, (value_type)other);
+            return *this;
+        }
+
+        proxy& operator++() {
+            auto val = (value_type)*this;
+            m_arr.write(m_idx, val+1);
+            return *this;
+        }
+
+        value_type operator++(int) {
+            auto val = (value_type)*this;
+            ++(*this);
+            return val;
+        }
+
+        proxy& operator--() {
+            auto val = (value_type)*this;
+            m_arr.write(m_idx, val-1);
+            return *this;
+        }
+
+        value_type operator--(int) {
+            auto val = (value_type)*this;
+            --(*this);
+            return val;
+        }
+
+        proxy& operator+=(const value_type x) {
+            auto val = (value_type)*this;
+            m_arr.write(m_idx, val+x);
+            return *this;
+        }
+
+        proxy& operator-=(const value_type x) {
+            auto val = (value_type)*this;
+            m_arr.write(m_idx, val-x);
+            return *this;
+        }
+
+        bool operator==(const proxy& x)const {
+            return value_type(*this) == value_type(x);
+        }
+
+        bool operator<(const proxy& x)const {
+            return value_type(*this) < value_type(x);
+        }
+    };
 
     //simple constructor (cap is the capacity of the vector)
-    int_array(size_t cap_, uint8_t width_) : m_size(0), m_width(width_) {
-        assert(m_width <= stream_t::word_bits);
-        bits.stream_size = INT_CEIL(cap_ * width_, stream_t::word_bits);
+    int_array(size_t cap_, uint8_t width_) : m_cap(cap_), m_width(width_){
+        assert(m_width <= w_bits);
+        bits.stream_size = INT_CEIL(m_cap * width_, stream_t::word_bits);
         bits.stream = allocator::allocate<word_t>(bits.stream_size, true, 0);
     }
 
     //initialize from allocated memory
-    int_array(word_t *ptr, size_t size_, uint8_t width_){
-        m_size = size_;
-        m_width = width_;
+    int_array(word_t *ptr, size_t size_, uint8_t width_): m_cap(size_), m_size(size_), m_width(width_){
+        assert(m_width <= w_bits);
         bits.stream_size = INT_CEIL(m_size*m_width, stream_t::word_bits);
         bits.stream = ptr;
+    }
+
+    //initialize with default value and size
+    int_array(size_t size_, value_type def_val, uint8_t width_) : m_cap(size_), m_size(size_), m_width(width_){
+        assert(m_width <= w_bits);
+        bits.stream_size = INT_CEIL(m_size * width_, stream_t::word_bits);
+        bits.stream = allocator::allocate<word_t>(bits.stream_size, true, 0);
+        initialize(def_val, m_size);
     }
 
     //initializer-list constructor
@@ -48,13 +123,15 @@ struct int_array{
         for(auto const& sym : list) if(sym>max) max=sym;
 
         m_width = std::max(4UL, sizeof(unsigned int)*8 - __builtin_clz(max));
+        assert(m_width<=w_bits);
         m_size = list.size();
+        m_cap = m_size;
 
         bits.stream_size = n_words();
         bits.stream = allocator::allocate<word_t>(bits.stream_size, false, 0);
         size_t i=0;
-        for(auto const& sym : list){
-            write(i++,sym);
+        for(auto const& val : list){
+            write(i++,val);
         }
         mask_tail();
     }
@@ -63,20 +140,24 @@ struct int_array{
         allocator::deallocate<word_t>(bits.stream);
     }
 
+    //default constructor
+    int_array()=default;
+
     //move constructor
-    int_array(int_array<word_t>&& other) noexcept:  m_size(0),  m_width(0) {
+    explicit int_array(int_array<word_t>&& other) noexcept {
         bits.stream=nullptr;
         bits.stream_size=0;
         move(std::forward<int_array<word_t>>(other));
     };
 
     //copy constructor
-    int_array(const int_array& other) noexcept : m_size(0),  m_width(0) {
+    int_array(const int_array& other) noexcept {
         copy(other);
     };
 
     void move(int_array<word_t>&& other) noexcept {
         m_size = std::exchange(other.m_size, 0);
+        m_cap = std::exchange(other.m_cap, 0);
         m_width = std::exchange(other.m_width, 0);
         bits.stream_size = std::exchange(other.bits.stream_size, 0);
         if(bits.stream!= nullptr){
@@ -87,6 +168,7 @@ struct int_array{
 
     inline void copy(const int_array<word_t> &other) {
         m_size = other.m_size;
+        m_cap = other.cap;
         m_width = other.m_width;
         bits.stream_size = n_words();
 
@@ -100,6 +182,14 @@ struct int_array{
 
     inline void clear() {
         m_size=0;
+    }
+
+    inline void erase() {
+        m_size=0;
+        m_cap = 0;
+        allocator::deallocate(bits.stream);
+        bits.stream = nullptr;
+        bits.stream_size = 0;
     }
 
     //copy assignment operator
@@ -159,12 +249,12 @@ struct int_array{
     }
 
     inline void push_back(value_type value) {
-        //assert(sdsl::bits::hi(value)+1<=m_width);
+        if((m_size+1)>m_cap){
+            m_cap = m_cap==0? 2: m_cap*2;
+            reserve(m_cap);
+        }
         size_t i = m_size * m_width;
         size_t j = (m_size+1) * m_width - 1;
-        if((j/stream_t::word_bits)>=bits.stream_size){
-            reserve(m_size*2);
-        }
         bits.write(i, j , value);
         m_size++;
     }
@@ -173,21 +263,35 @@ struct int_array{
         if(m_size>=1) m_size--;
     }
 
-    void reserve(size_t new_size) {
+    void reserve(size_t new_cap) {
         //reserve memory for new_size number of elements
         size_t new_buffer_size = 0;
-        if(new_size>0){
-            new_buffer_size = INT_CEIL(new_size * m_width, stream_t::word_bits);
+        if(new_cap>0){
+            new_buffer_size = INT_CEIL(new_cap * m_width, stream_t::word_bits);
         }
 
         if(new_buffer_size>bits.stream_size){
             bits.stream = allocator::reallocate<word_t>(bits.stream, bits.stream_size, new_buffer_size, false, 0);
             bits.stream_size = new_buffer_size;
         }
+        m_cap = new_cap;
+    }
+
+    void resize(size_t new_size) {
+        //reserve memory for new_size number of elements
+        size_t new_buffer_size = INT_CEIL(new_size * m_width, stream_t::word_bits);
+        bits.stream = allocator::reallocate<word_t>(bits.stream, bits.stream_size, new_buffer_size, false, 0);
+        bits.stream_size = new_buffer_size;
+        m_size = new_size;
+        m_cap = m_size;
     }
 
     [[nodiscard]] inline size_t size() const{
         return m_size;
+    }
+
+    [[nodiscard]] inline size_t capacity() const{
+        return m_cap;
     }
 
     [[nodiscard]] inline bool empty() const{
@@ -200,18 +304,24 @@ struct int_array{
     }
 
     inline void write(size_t idx, value_type value){
+        assert(idx<m_cap);
         if(idx>=m_size) m_size = idx+1;
         bits.write(idx * m_width, (idx + 1) * m_width - 1, value);
     }
 
-    inline value_type operator[](size_t idx) const{
+    inline value_type operator[](const size_t idx) const {
         assert(idx<m_size);
         return bits.read(idx * m_width, (idx + 1) * m_width - 1);
+    }
+
+    inline proxy operator[](const size_t idx) {
+        return proxy(*this, idx);
     }
 
     size_type serialize(std::ostream &out) const{
         size_t written_bytes = bits.serialize(out);
         written_bytes +=serialize_elm(out, m_size);
+        written_bytes +=serialize_elm(out, m_cap);
         written_bytes +=serialize_elm(out, m_width);
         return written_bytes;
     }
@@ -219,15 +329,15 @@ struct int_array{
     void load(std::istream &in){
         bits.load(in);
         load_elm(in, m_size);
+        load_elm(in, m_cap);
         load_elm(in, m_width);
     }
 
-    void initialize(size_t val, size_t n_elems){
+    void initialize(value_type val, size_t n_elems){
         if(val==0){
             size_t n_cells = INT_CEIL(n_elems*m_width, stream_t::word_bits);
             assert(n_cells<=bits.stream_size);
             memset(bits.stream, 0, n_cells*sizeof(word_t));
-            if(n_elems>m_size) m_size = n_elems;
         }else{
             std::cout<<"not implemented yet"<<std::endl;
             exit(1);
@@ -237,5 +347,13 @@ struct int_array{
     void swap(int_array<word_t>& other){
         move(std::move(other));
     }
+
+    void set_width(uint8_t new_width){
+        assert(new_width<=w_bits);
+        m_width = new_width;
+    }
 };
+
+typedef int_array<size_t, 1> bit_array;
+
 #endif //LPG_COMPRESSOR_INT_ARRAY_H

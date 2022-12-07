@@ -72,10 +72,6 @@ int main(int argc, char** argv) {
     std::cout << "Input file:       "<<args.input_file<<std::endl;
     std::cout << "Temporary folder: "<<tmp_ws.folder()<<std::endl;
 
-    if(args.rev_comp){
-        std::cout << "We will compute the BCR BWT for the string collection storing the input string along their DNA reverse complements"<<std::endl;
-    }
-
     if(args.output_file.empty()) args.output_file = std::filesystem::path(args.input_file).filename();
     args.output_file = std::filesystem::path(args.output_file).replace_extension(".rl_bwt");
 
@@ -90,13 +86,12 @@ int main(int argc, char** argv) {
     }else if(args.rev_comp) {
         input_collection = tmp_ws.get_file("plain_input");
         std::cout<<"The input is in plain format, but the BCR BWT computation requires the DNA reverse complements"<<std::endl;
-        std::cout<<"Creating a temporary file in plain format: "<<input_collection<<std::endl;
-        std::filesystem::copy(args.input_file, input_collection);
+        //std::cout<<"Creating a temporary file in plain format: "<<input_collection<<std::endl;
+        //std::filesystem::copy(args.input_file, input_collection);
         //TODO get reverse complement in plain format
         std::cout<<"this option is not implemented yet"<<std::endl;
         exit(0);
     } else {
-        std::cout<<"The input is in plain format, and the DNA reverse complements will not be computed"<<std::endl;
         str_coll = collection_stats(input_collection);
     }
 

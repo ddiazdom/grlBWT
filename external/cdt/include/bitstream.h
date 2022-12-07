@@ -10,7 +10,8 @@
 #include "macros.h"
 #include "cdt_common.hpp"
 
-template<class word_t>
+template<class word_t,
+         uint8_t max_dist=std::numeric_limits<word_t>::digits>
 struct bitstream{
 
     constexpr static uint8_t word_bits = std::numeric_limits<word_t>::digits;
@@ -45,17 +46,22 @@ struct bitstream{
 
     inline void write(size_t i, size_t j, size_t value){
         size_t cell_i = i >> word_shift;
-        size_t cell_j = j >> word_shift;
         size_t i_pos = (i & (word_bits-1UL));
 
-        if(cell_i==cell_j){
-            stream[cell_i] &= ~(masks[(j - i + 1UL)] << i_pos);
+        if constexpr (max_dist==1){
+            stream[cell_i] &= ~(1UL << i_pos);
             stream[cell_i] |= value << i_pos;
         }else{
-            size_t right = word_bits - i_pos;
-            size_t left = 1+(j & (word_bits - 1UL));
-            stream[cell_i] = (stream[cell_i] & ~(masks[right] << i_pos)) | (value << i_pos);
-            stream[cell_j] = (stream[cell_j] & ~masks[left]) | (value >> right);
+            size_t cell_j = j >> word_shift;
+            if(cell_i==cell_j){
+                stream[cell_i] &= ~(masks[(j - i + 1UL)] << i_pos);
+                stream[cell_i] |= value << i_pos;
+            }else{
+                size_t right = word_bits - i_pos;
+                size_t left = 1+(j & (word_bits - 1UL));
+                stream[cell_i] = (stream[cell_i] & ~(masks[right] << i_pos)) | (value << i_pos);
+                stream[cell_j] = (stream[cell_j] & ~masks[left]) | (value >> right);
+            }
         }
     }
 
@@ -82,17 +88,35 @@ struct bitstream{
     }
 
     [[nodiscard]] inline size_t read(size_t i, size_t j) const{
-        size_t cell_i = i >> word_shift;
-        size_t cell_j = j >> word_shift;
-        size_t i_pos = (i & (word_bits - 1UL));
+        if constexpr (max_dist==1){
+            return (stream[i>>word_shift] >> (i & (word_bits - 1UL))) & 1UL;
+        }else{
+            size_t cell_i = i >> word_shift;
+            size_t i_pos = (i & (word_bits - 1UL));
+            size_t cell_j = j >> word_shift;
+            if(cell_i == cell_j){
+                return (stream[cell_i] >> i_pos) & masks[(j - i + 1UL)];
+            }else{
+                size_t right = word_bits-i_pos;
+                size_t left = 1+(j & (word_bits - 1UL));
+                return ((stream[cell_j] & masks[left]) << right) | ((stream[cell_i] >> i_pos) & masks[right]);
+            }
+        }
+    }
 
+    [[nodiscard]] inline size_t pop_count(size_t i, size_t j) const{
+        size_t cell_i = i >> word_shift;
+        size_t i_pos = (i & (word_bits - 1UL));
+        size_t cell_j = j >> word_shift;
+        size_t val;
         if(cell_i == cell_j){
-            return (stream[cell_i] >> i_pos) & masks[(j - i + 1UL)];
+            val = (stream[cell_i] >> i_pos) & masks[(j - i + 1UL)];
         }else{
             size_t right = word_bits-i_pos;
             size_t left = 1+(j & (word_bits - 1UL));
-            return ((stream[cell_j] & masks[left]) << right) | ((stream[cell_i] >> i_pos) & masks[right]);
+            val = ((stream[cell_j] & masks[left]) << right) | ((stream[cell_i] >> i_pos) & masks[right]);
         }
+        return __builtin_popcountll(val);
     }
 
     inline void read_chunk(void* dst, size_t i, size_t j) const{
@@ -200,8 +224,8 @@ struct bitstream{
     }
 };
 
-template<class word_t>
-const size_t bitstream<word_t>::masks[65]={0x0,
+template<class word_t, uint8_t max_dist>
+const size_t bitstream<word_t, max_dist>::masks[65]={0x0,
                                0x1,0x3, 0x7,0xF,
                                0x1F,0x3F, 0x7F,0xFF,
                                0x1FF,0x3FF, 0x7FF,0xFFF,

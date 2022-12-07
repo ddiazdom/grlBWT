@@ -21,8 +21,8 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
     vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
     size_t rank=0;
-    for(auto && u : s_sa) {
-        pos = u;
+    for(size_t u=0;u<s_sa.size();u++) {
+        pos = s_sa[u];
 
         if(dict.d_lim[pos]){
             new_dict[new_size++] = dict.dict_dummy;
@@ -67,7 +67,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
 
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
     bool is_maximal, exist_as_phrase;
-    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos;
+    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
@@ -92,7 +92,8 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
             pl_sym = (d_pos==0 || dict.d_lim[d_pos-1]) ? dummy_sym : dict.dict[d_pos-1];
             if(pl_sym==dummy_sym){
                 exist_as_phrase = true;
-                ranks[d_lim_rs(d_pos)] = rank;
+                d_rank = d_lim_rs(d_pos);
+                ranks[d_rank] = rank << 1UL;
             }else{
                 exist_as_phrase = false;
             }
@@ -104,8 +105,9 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                 l_sym = d_pos==0 || dict.d_lim[d_pos-1] ? dummy_sym : dict.dict[d_pos-1];
                 if(!is_maximal && l_sym!=pl_sym) is_maximal = true;
                 if(!exist_as_phrase && l_sym==dummy_sym){
-                    ranks[d_lim_rs(d_pos)] = rank;
                     exist_as_phrase = true;
+                    d_rank = d_lim_rs(d_pos);
+                    ranks[d_rank] = rank;
                 }
                 pl_sym = l_sym;
                 u++;
@@ -148,9 +150,9 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
-    sdsl::util::clear(dict.freqs);
-    sdsl::store_to_file(ranks, ws.get_file("phr_ranks"));
-    sdsl::util::clear(ranks);
+    dict.freqs.erase();
+    store_to_file(ws.get_file("phr_ranks"), ranks);
+    ranks.erase();
     new_phrases_ht.shrink_databuff();
 
 #ifdef __linux__
@@ -439,7 +441,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     }
     auto join_res = join_thread_phrases(mp_table, phrases_files);
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 16);
+    report_time(start, end, 3);
 
     size_t psize=0;//<- for the iter stats
     if(mp_table.size()!=p_info.lms_phrases) {
