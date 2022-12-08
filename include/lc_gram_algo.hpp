@@ -141,19 +141,34 @@ template<typename parse_data_t,
          typename parser_t>
 struct parse_functor{
     void operator()(parse_data_t& data, parser_t& parser){
+        bool prev_rep=false, rep;
         auto task = [&](string_t& phrase){
             phrase.mask_tail();
-
-            //auto res = data.m_map.find(phrase.data(), phrase.n_bits());
             auto res = data.m_map.find(phrase.data(), phrase.n_bits());
-            //assert(res.second==res2.second);
-
             assert(res.second);
             size_t id = 0;
             data.m_map.get_value_from(res.first, id);
-            data.ofs.push_back(id);
+            rep = (id & 1UL);
+
+            //TODO testing
+            /*if(rep){
+               if(!prev_rep){
+                   std::cout<<"previous yest"<<std::endl;
+               }
+               std::cout<<rep<<" yes"<<std::endl;
+            }else if(prev_rep){
+                std::cout<<rep<<" yes"<<std::endl;
+            }else{
+                std::cout<<rep<<" no"<<std::endl;
+            }*/
+            //
+
+            prev_rep = rep;
+            data.ofs.push_back(id>>1UL);
         };
+
         parser(data.ifs, data.start, data.end, task);
+
         data.ofs.close();
         data.ifs.close();
         pthread_exit(nullptr);

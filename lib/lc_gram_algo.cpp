@@ -76,7 +76,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
-    size_t width = sdsl::bits::hi(dict.alphabet+dict.dict.size()-dict.n_phrases)+1;
+    size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
 
     while(u<sa.size()) {
@@ -93,7 +93,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
             if(pl_sym==dummy_sym){
                 exist_as_phrase = true;
                 d_rank = d_lim_rs(d_pos);
-                ranks[d_rank] = rank;
+                ranks[d_rank] = (rank<<1UL) | (dict.freqs[d_rank]>1);
             }else{
                 exist_as_phrase = false;
             }
@@ -107,14 +107,14 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                 if(!exist_as_phrase && l_sym==dummy_sym){
                     exist_as_phrase = true;
                     d_rank = d_lim_rs(d_pos);
-                    ranks[d_rank] = rank;
+                    ranks[d_rank] = (rank << 1UL) | (dict.freqs[d_rank]>1);
                 }
                 pl_sym = l_sym;
                 u++;
             }
 
             if(is_maximal || exist_as_phrase){
-                if(u-bg_pos>1){
+                if(u-bg_pos>1) {
                     //put the phrase in reverse order
                     size_t tmp_pos = f_sa_pos;
                     phrase.clear();
@@ -130,6 +130,15 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     for(size_t j=bg_pos;j<u;j++){
                         phr_marks[(sa[j]>>1UL)-1] = true;
                     }
+
+                    //TODO this is new: it will mark all the phrases containing a left-maximal suffix
+                    if(is_maximal){
+                        for(size_t j=bg_pos;j<u;j++){
+                            d_rank = d_lim_rs((sa[j]>>1UL)-1);
+                            ranks[d_rank] = ranks[d_rank] | 1UL;
+                        }
+                    }
+                    //
                 }
 
                 pre_bwt.push_back(dummy_sym, freq);
@@ -145,7 +154,16 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
             }
         }
     }
+    assert(rank<dict.dict.size());
     pre_bwt.close();
+
+    //TODO test
+    /*size_t n_mark=0;
+    for(size_t i=0;i<ranks.size();i++){
+        n_mark+= (ranks[i] & 1UL);
+    }
+    std::cout<<"Unsolved : "<<n_mark<<" "<<ranks.size()<<std::endl;*/
+    //
 
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
@@ -491,7 +509,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                 mp_table.get_value_from(ptr, val);
                 val = ranks[j++];
                 mp_table.insert_value_at(ptr, val);
-                new_phrase_desc[val] = phrase_desc[key_w.read(ptr, 0)];
+                //the first bit marks if the phrase is repeated or not. We need to shift it to get the real id
+                new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
             }
             ws.remove_file("phr_ranks");
             std::string suffix_file = ws.get_file("suffix_file");
