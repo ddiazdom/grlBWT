@@ -59,17 +59,18 @@ struct dictionary {
 
     dictionary()=default;
     dictionary(phrase_map_t &mp_map, size_t dict_syms,
-               size_t max_freq, bv_t& is_suffix_bv, size_t _t_size,
-               size_t _p_alph_size, size_t _max_sym_freq): alphabet(is_suffix_bv.size()),
-                                                           p_alpha_size(_p_alph_size),
-                                                           n_phrases(mp_map.size()),
-                                                           t_size(_t_size),
-                                                           max_sym_freq(_max_sym_freq),
-                                                           dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
-                                                           freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
-                                                           d_lim(dict_syms, false),
-                                                           phrases_has_hocc(dict.size(), false),
-                                                           desc_bv(&is_suffix_bv){
+               size_t max_freq, bv_t& is_suffix_bv, size_t _t_size, size_t _p_alph_size,
+               size_t _max_sym_freq, size_t _dummy_sym): alphabet(is_suffix_bv.size()),
+                                                         p_alpha_size(_p_alph_size),
+                                                         n_phrases(mp_map.size()),
+                                                         t_size(_t_size),
+                                                         max_sym_freq(_max_sym_freq),
+                                                         dict_dummy(_dummy_sym),
+                                                         dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
+                                                         freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
+                                                         d_lim(dict_syms, false),
+                                                         phrases_has_hocc(dict.size(), false),
+                                                         desc_bv(&is_suffix_bv){
 
         key_wrapper key_w{dict.width(), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
@@ -140,31 +141,39 @@ struct hash_functor{
 template<typename parse_data_t,
          typename parser_t>
 struct parse_functor{
-    void operator()(parse_data_t& data, parser_t& parser){
-        bool prev_rep=false, rep;
+    void operator()(parse_data_t& data, parser_t& parser, size_t& dummy_sym){
+
+        bool prev_unsolved = false, unsolved;
+        size_t cont = 0, prev_sym;
+
         auto task = [&](string_t& phrase){
+
             phrase.mask_tail();
             auto res = data.m_map.find(phrase.data(), phrase.n_bits());
             assert(res.second);
-            size_t id = 0;
-            data.m_map.get_value_from(res.first, id);
-            rep = (id & 1UL);
+            size_t sym = 0;
+            data.m_map.get_value_from(res.first, sym);
+            unsolved = (sym & 1UL);//check if the symbol maps to an unsolved text region
+            sym>>=1UL;//remove the unsolved bit mark
 
             //TODO testing
-            /*if(rep){
-               if(!prev_rep){
-                   std::cout<<"previous yest"<<std::endl;
+            if(unsolved){
+               if(!prev_unsolved && cont>0){
+                   //std::cout<<dummy_sym<<"\t"<<prev_sym<<"\tprevious yes"<<std::endl;
                }
-               std::cout<<rep<<" yes"<<std::endl;
-            }else if(prev_rep){
-                std::cout<<rep<<" yes"<<std::endl;
+               //std::cout<<dummy_sym<<"\t"<<sym<<"\t"<<unsolved<<"\tyes"<<std::endl;
+                cont=0;
+            }else if(prev_unsolved){
+                //std::cout<<dummy_sym<<"\t"<<sym<<"\t"<<unsolved<<"\tyes"<<std::endl;
             }else{
-                std::cout<<rep<<" no"<<std::endl;
-            }*/
+                cont++;
+                //std::cout<<dummy_sym<<"\t"<<sym<<"\t"<<unsolved<<"\tno"<<std::endl;
+            }
             //
 
-            prev_rep = rep;
-            data.ofs.push_back(id>>1UL);
+            prev_sym = sym;
+            prev_unsolved = unsolved;
+            data.ofs.push_back(sym);
         };
 
         parser(data.ifs, data.start, data.end, task);

@@ -16,8 +16,9 @@ struct lms_parsing{
     typedef typename stream_type::sym_type sym_type;
 
     const bv_t& phrase_desc;
+    const size_t dummy_sym;
 
-    explicit lms_parsing(const bv_t& pr_desc): phrase_desc(pr_desc){};
+    explicit lms_parsing(const bv_t& pr_desc, size_t d_sym): phrase_desc(pr_desc), dummy_sym(d_sym){};
 
     inline bool is_suffix(sym_type symbol) const{
         return phrase_desc[symbol];
@@ -81,13 +82,18 @@ struct lms_parsing{
                 curr_lms.clear();
                 s_type = S_TYPE;
             } else {
-                if (curr_sym < prev_sym) {//S_TYPE type
+                if(curr_sym>=dummy_sym){//a masked region of the text
+                    curr_lms.push_back(dummy_sym);//skip the dummy
+                    //if curr_sym==dummy_sym, then the left symbol is S_type
+                    //if curr_sym==(dummy_sym+1), then right symbol is L_type
+                    s_type= (curr_sym==dummy_sym);
+                    if(i>0) curr_sym = ifs.read(--i);
+                } else if (curr_sym < prev_sym) {//S_TYPE type
                     s_type = S_TYPE;
                 } else if (curr_sym == prev_sym) {
                     s_type = prev_s_type;
                 } else {//L_TYPE type
                     s_type = L_TYPE;
-
                     if (prev_s_type == S_TYPE) {//Left-most S suffix
                         if (curr_lms.size()>1) {
                             task(curr_lms);
@@ -97,11 +103,12 @@ struct lms_parsing{
                     }
                 }
             }
+
             curr_lms.push_back(curr_sym);
             prev_sym = curr_sym;
             prev_s_type = s_type;
         }
-        //assert(curr_lms[0]!=1);
+
         if(!curr_lms.empty()){
             task(curr_lms);
         }

@@ -9,6 +9,7 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     auto * buckets = (value_type *) calloc((dict.alphabet+1), sizeof(value_type));
 
     for(size_t i=0;i<dict.dict.size();i++){
+        if(dict.dict[i]==dict.dict_dummy) continue;
         buckets[dict.dict[i]]++;
     }
 
@@ -76,6 +77,16 @@ void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
 
         bck = dict.dict[pos-1];
         l_sym = dict.dict[pos-2];
+
+        //skip the dummy
+        if(l_sym==dict.dict_dummy){
+            if((pos-2)==0 || dict.d_lim[pos-3]) continue;
+            l_sym = dict.dict[pos-3];
+            bck = l_sym;
+            first_eq=false;
+        }
+        //
+
         if(l_sym>=bck){
             ind_pos = buckets[l_sym]++;
             if(!first_eq && l_sym==bck){
@@ -98,10 +109,6 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
 
     for(size_t i=sa.size();i-->0;) {
 
-        /*if(i==42886494){
-            std::cout<<"holaa"<<std::endl;
-        }*/
-
         pos = sa[i];
         lcs = pos & 1UL;
         pos>>=1UL;
@@ -118,7 +125,7 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
 
         bck = dict.dict[pos-1];
 
-        if(pos==1 || dict.d_lim[pos-2]){
+        if(pos==1 || dict.d_lim[pos-2] || dict.dict[pos-2]==dict.dict_dummy){
             p_lcs = lcs;
             continue;
         }
@@ -130,10 +137,6 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
 
             ind_pos = buckets[l_sym]--;
 
-            /*if(sa[ind_pos]!=ind_bck[l_sym] && ind_bck[l_sym]!=0){
-                std::cout<<"holaaa "<<ind_pos<<" "<<ind_bck[l_sym]<<" "<<sa[ind_pos]<<" "<<l_sym<<" "<<bck<<std::endl;
-            }*/
-
             sa[ind_pos] = (pos-1)<<1UL | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
 
             new_break = !first_eq && l_sym==bck;
@@ -144,14 +147,9 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
                 if(ind_pos+1==i) lcs=false;
             }
 
-            /*if(ind_pos>0 && sa[ind_pos-1]==0){
-                sa[ind_pos-1] = i+1;
-                if(ind_pos-1==33639079){
-                    std::cout<<ind_pos-1<<" val:"<<sa[33639079]<<" idx:"<<i<<std::endl;
-                }
-            }*/
             ind_bck[l_sym] = i+1;
         }
+
         p_lcs = lcs;
     }
 }

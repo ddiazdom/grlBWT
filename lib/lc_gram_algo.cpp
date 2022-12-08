@@ -357,6 +357,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
             p_info.max_sym_freq = sym_freq;
         }
     }
+    p_info.tot_phrases = str_coll.alphabet.back()+1;
 
     size_t iter=1;
     size_t rem_phrases;
@@ -401,7 +402,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     typedef typename parser_t::stream_type       stream_type;
     typedef parse_data_t<stream_type, out_sym_t> parse_data_type;
 
-    parser_t parser(phrase_desc);
+    parser_t parser(phrase_desc, p_info.tot_phrases);
     phrase_map_t mp_table(0, "", 0.8);
 
     auto thread_ranges = parser.partition_text(n_threads, i_file);
@@ -481,7 +482,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             start = std::chrono::steady_clock::now();
             dictionary dict(mp_table, dict_syms, max_freq, phrase_desc,
                             threads_data[0].ifs.size(), p_info.prev_alph,
-                            p_info.max_sym_freq);
+                            p_info.max_sym_freq, p_info.tot_phrases);
             end = std::chrono::steady_clock::now();
             mp_table.destroy_data();
             report_time(start, end, 6);
@@ -526,7 +527,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             std::vector<std::thread> threads(threads_data.size());
             parse_functor<parse_data_type, parser_t> pf;
             for(size_t i=0;i<threads_data.size();i++){
-                threads[i] = std::thread(pf, std::ref(threads_data[i]), std::ref(parser));
+                threads[i] = std::thread(pf, std::ref(threads_data[i]), std::ref(parser), std::ref(tot_phrases));
             }
 
             for(size_t i=0;i<threads_data.size();i++) {
