@@ -95,11 +95,21 @@ void report_mem_peak(){
 }
 
 str_collection collection_stats(std::string& input_file){
+
     //We assume that the smallest symbol in the collection is the separator symbol.
     // This should be the last character in the file
     str_collection str_coll;
+
     size_t sym_frq[256] = {0};
+
     std::ifstream ifs(input_file, std::ios::binary);
+
+    uint8_t sep_sym;
+    ifs.seekg(-1, std::ios::end);
+    ifs.read((char *)&sep_sym, 1);
+    ifs.seekg(0, std::ios::beg);
+    size_t pos = ifs.tellg();
+
     char buffer[8192]={0};
     size_t read_bytes;
     std::streampos buff_size=8192;
@@ -112,11 +122,16 @@ str_collection collection_stats(std::string& input_file){
             for(size_t i=0;i<read_bytes;i++){
                 sym = (uint8_t)buffer[i];
                 sym_frq[sym]++;
+                if(sym==sep_sym){
+                    str_coll.str_ptrs.push_back(pos-1);
+                }
             }
         }else{
             break;
         }
     }
+
+    str_coll.str_ptrs.shrink_to_fit();
 
     for(size_t i=0;i<256;i++){
         if(sym_frq[i]!=0){
