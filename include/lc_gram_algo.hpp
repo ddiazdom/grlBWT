@@ -41,6 +41,7 @@ struct parsing_info{
     size_t p_round=0; //parsing round
     size_t prev_alph=0; //size of the alphabet in the previous parsing round
     size_t max_sym_freq=0; // most repeated symbol in the input text of the round
+    std::vector<size_t> str_ptrs;
 };
 
 struct dictionary {
@@ -56,6 +57,7 @@ struct dictionary {
     bv_t     d_lim;
     bv_t phrases_has_hocc;   //mark the phrases with hidden occurrences
     bv_t* desc_bv=nullptr;
+    size_t e_size={};
 
     dictionary()=default;
     dictionary(phrase_map_t &mp_map, size_t dict_syms,
@@ -70,13 +72,16 @@ struct dictionary {
                                                          freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
                                                          d_lim(dict_syms, false),
                                                          phrases_has_hocc(dict.size(), false),
-                                                         desc_bv(&is_suffix_bv){
+                                                         desc_bv(&is_suffix_bv),
+                                                         e_size(dict_syms){
 
         key_wrapper key_w{dict.width(), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
+
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i);
+                if(dict[j]==dict_dummy) e_size--;
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;
@@ -86,6 +91,10 @@ struct dictionary {
             freqs[k++] = freq;
         }
         assert(j==dict_syms);
+    }
+
+    [[nodiscard]] inline size_t eff_size() const {
+        return e_size;
     }
 
     [[nodiscard]] inline bool is_suffix(size_t sym) const{
@@ -141,39 +150,39 @@ struct hash_functor{
 template<typename parse_data_t,
          typename parser_t>
 struct parse_functor{
-    void operator()(parse_data_t& data, parser_t& parser, size_t& dummy_sym){
+    void operator()(parse_data_t& data, parser_t& parser, size_t& new_dummy_sym){
 
-        bool prev_unsolved = false, unsolved;
-        size_t cont = 0, prev_sym;
+        bool prev_unsolved = true, unsolved, smaller, prev_smaller=false;
+        size_t cont = 0, prev_sym=0;
 
         auto task = [&](string_t& phrase){
 
             phrase.mask_tail();
+
             auto res = data.m_map.find(phrase.data(), phrase.n_bits());
             assert(res.second);
             size_t sym = 0;
             data.m_map.get_value_from(res.first, sym);
             unsolved = (sym & 1UL);//check if the symbol maps to an unsolved text region
             sym>>=1UL;//remove the unsolved bit mark
+            smaller = sym < prev_sym;
 
-            //TODO testing
             if(unsolved){
-               if(!prev_unsolved && cont>0){
-                   //std::cout<<dummy_sym<<"\t"<<prev_sym<<"\tprevious yes"<<std::endl;
-               }
-               //std::cout<<dummy_sym<<"\t"<<sym<<"\t"<<unsolved<<"\tyes"<<std::endl;
+                if(!prev_unsolved && cont>0){
+                    data.ofs.push_back(new_dummy_sym+prev_smaller);
+                    data.ofs.push_back(prev_sym);
+                }
+                data.ofs.push_back(sym);
                 cont=0;
             }else if(prev_unsolved){
-                //std::cout<<dummy_sym<<"\t"<<sym<<"\t"<<unsolved<<"\tyes"<<std::endl;
-            }else{
+                data.ofs.push_back(sym);
+            }else {
                 cont++;
-                //std::cout<<dummy_sym<<"\t"<<sym<<"\t"<<unsolved<<"\tno"<<std::endl;
             }
             //
-
+            prev_smaller = smaller;
             prev_sym = sym;
             prev_unsolved = unsolved;
-            data.ofs.push_back(sym);
         };
 
         parser(data.ifs, data.start, data.end, task);

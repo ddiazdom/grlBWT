@@ -15,6 +15,7 @@
 
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws) {
+
     dict.dict_dummy = dict.alphabet+s_sa.size()+1;
     size_t pos, em_nt, new_size=0, sym;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
@@ -40,6 +41,7 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
                 phrase.mask_tail();
 
                 auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
+
                 assert(res.second);
 
                 em_nt = 0;
@@ -180,7 +182,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
+    vector_t sa(dict.eff_size(), 0, sdsl::bits::hi(dict.dict.size())+2);
     uint8_t width = sdsl::bits::hi(dict.dict.size())+1;
 
     std::cout<<"    Sorting the dictionary using suffix induction"<<std::flush;
@@ -358,6 +360,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
         }
     }
     p_info.tot_phrases = str_coll.alphabet.back()+1;
+    p_info.str_ptrs.swap(str_coll.str_ptrs);
 
     size_t iter=1;
     size_t rem_phrases;
@@ -402,10 +405,16 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     typedef typename parser_t::stream_type       stream_type;
     typedef parse_data_t<stream_type, out_sym_t> parse_data_type;
 
-    parser_t parser(phrase_desc, p_info.tot_phrases);
+    parser_t parser(p_info.tot_phrases, p_info.str_ptrs);
     phrase_map_t mp_table(0, "", 0.8);
 
-    auto thread_ranges = parser.partition_text(n_threads, i_file);
+    std::vector<std::pair<size_t, size_t>> thread_ranges;
+
+    size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size(), n_threads);
+
+    for(size_t i=0;i<n_threads;i++){
+        thread_ranges.emplace_back(str_per_thread*i, std::min(str_per_thread*(i+1)-1, p_info.str_ptrs.size()-1));
+    }
 
     std::vector<parse_data_type> threads_data;
     threads_data.reserve(thread_ranges.size());

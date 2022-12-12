@@ -15,21 +15,23 @@ struct lms_parsing{
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
 
-    const bv_t& phrase_desc;
+    std::vector<size_t>& str_ptr;
     const size_t dummy_sym;
+    const size_t dummy_bd;//dummy symbol that indicate a masked suffix of a string
 
-    explicit lms_parsing(const bv_t& pr_desc, size_t d_sym): phrase_desc(pr_desc), dummy_sym(d_sym){};
+    explicit lms_parsing(size_t d_sym, std::vector<size_t>& str_ptr_): str_ptr(str_ptr_),
+                                                                       dummy_sym(d_sym),
+                                                                       dummy_bd(d_sym+2){};
 
+    /***
     inline bool is_suffix(sym_type symbol) const{
         return phrase_desc[symbol];
     }
-
-    /***
     * Find the greatest position j such that ifs[j]<=ifs[idx] and ifs[j] is S*
     * @param idx : the scan starts from this position
     * @param ifs : input file stream
     * @return
-    */
+    *
     long long prev_break(long long idx, stream_t& ifs) const {
 
         if(idx<=0) return 0;
@@ -54,66 +56,82 @@ struct lms_parsing{
             prev_sym = sym;
             prev_type = type;
         }
-    }
+    }*/
 
     void operator()(stream_t& ifs,
                     size_t start, size_t end,
                     std::function<void(string_t&)> task) const {
 
-
-        bool s_type, prev_s_type = S_TYPE;
+        bool s_type, prev_s_type;
         sym_type curr_sym, prev_sym;
+        string_t curr_lms(2, sdsl::bits::hi(dummy_sym)+1);
 
-        string_t curr_lms(2, sdsl::bits::hi(phrase_desc.size())+1);
-        prev_sym = ifs.read(end);
-        curr_lms.push_back(prev_sym);
+        for(size_t str=end;str>start;str--){
 
-        for (size_t i = end; i-- > start;) {
+            size_t start_ps = str_ptr[str-1]+1;
+            size_t end_ps = str_ptr[str];
 
-            curr_sym = ifs.read(i);
+            prev_sym = ifs.read(end);
+            prev_s_type = S_TYPE;
+            curr_lms.push_back(prev_sym);
 
-            //                                     L_TYPE   S_TYPE*
-            //                                        ---- ----
-            //this is a junction between two strings = ...$ $...
-            if (is_suffix(curr_sym)) {
-                if (!curr_lms.empty()) {
-                    task(curr_lms);
-                }
-                curr_lms.clear();
-                s_type = S_TYPE;
-            } else {
-                if(curr_sym>=dummy_sym){//a masked region of the text
-                    curr_lms.push_back(dummy_sym);//skip the dummy
-                    //if curr_sym==dummy_sym, then the left symbol is S_type
-                    //if curr_sym==(dummy_sym+1), then right symbol is L_type
+            for (size_t i = end_ps; i-- > start_ps;) {
+
+                curr_sym = ifs.read(i);
+                if(curr_sym>=dummy_sym){//we reach a masked region x_1 # x_2
+
+                    //if curr_sym==dummy_sym, then the left symbol (i-1) is S_type
+                    //if curr_sym==(dummy_sym+1), then the left symbol (i-1) is L_type
                     s_type= (curr_sym==dummy_sym);
-                    if(i>0) curr_sym = ifs.read(--i);
-                } else if (curr_sym < prev_sym) {//S_TYPE type
-                    s_type = S_TYPE;
-                } else if (curr_sym == prev_sym) {
-                    s_type = prev_s_type;
-                } else {//L_TYPE type
-                    s_type = L_TYPE;
-                    if (prev_s_type == S_TYPE) {//Left-most S suffix
-                        if (curr_lms.size()>1) {
-                            task(curr_lms);
+
+                    if(i>start){
+                        curr_lms.push_back(dummy_sym);//skip the dummy
+                        curr_sym = ifs.read(--i);
+
+                        //the break for the next phrase occurs in the left end of the masked region (x_1).
+                        // We can merge the active phrase with the next phrase in one single super phrase
+                        if(i>start && s_type==S_TYPE && ifs.read(i-1)>curr_sym){
+                            curr_lms.push_back(curr_sym);
+                            curr_sym = ifs.read(--i);
+                            s_type = L_TYPE;
                         }
-                        curr_lms.clear();
-                        curr_lms.push_back(prev_sym);
+                    }else{
+                        break;
+                    }
+                } else {
+                    if (curr_sym < prev_sym) {//S_TYPE type
+                        s_type = S_TYPE;
+                    } else if (curr_sym == prev_sym) {
+                        s_type = prev_s_type;
+                    } else {//L_TYPE type
+                        s_type = L_TYPE;
+                        if (prev_s_type == S_TYPE) {//LMS suffix
+
+                            //the break for the next phrase occurs in the right end of the masked region (x_2)
+                            // We can merge the active phrase with the next phrase in one single super phrase
+                            if(i==start || (i>start && ifs.read(i-1)!=dummy_sym)){
+                                if (curr_lms.size()>1) {
+                                    task(curr_lms);
+                                }
+                                curr_lms.clear();
+                                curr_lms.push_back(prev_sym);
+                            }
+                        }
                     }
                 }
+                curr_lms.push_back(curr_sym);
+                prev_sym = curr_sym;
+                prev_s_type = s_type;
             }
 
-            curr_lms.push_back(curr_sym);
-            prev_sym = curr_sym;
-            prev_s_type = s_type;
-        }
-
-        if(!curr_lms.empty()){
-            task(curr_lms);
+            if(!curr_lms.empty()){
+                task(curr_lms);
+            }
+            curr_lms.clear();
         }
     }
 
+    /*
     std::vector<std::pair<size_t, size_t>> partition_text(size_t n_chunks,
                                                           std::string& i_file) const {
         std::vector<std::pair<size_t, size_t>> thread_ranges;
@@ -138,14 +156,13 @@ struct lms_parsing{
                 assert(is_suffix(is.read(end)));
             }
 
-            //std::cout<<"range: "<<start<<" "<<end<<std::endl;
             if(start<=end){
                 thread_ranges.emplace_back(start, end);
             }
         }
         is.close();
         return thread_ranges;
-    }
+    }*/
 };
 
 #endif //LPG_COMPRESSOR_LC_PARSERS_HPP
