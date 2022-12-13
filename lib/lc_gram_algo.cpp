@@ -233,29 +233,31 @@ void join_parse_chunks(const std::string &output_file, std::vector<std::string> 
         len = i_file.tellg()/sizeof(size_t);
         i_file.seekg (0, std::ifstream::beg);
 
-        rem=len;
-        to_read = std::min<size_t>(buff_size, len);
+        if(len>0){
+            rem=len;
+            to_read = std::min<size_t>(buff_size, len);
 
-        while(true){
+            while(true){
 
-            i_file.seekg( (rem - to_read) * sizeof(size_t));
-            i_file.read((char *)buffer, sizeof(size_t)*to_read);
-            assert(i_file.good());
+                i_file.seekg( (rem - to_read) * sizeof(size_t));
+                i_file.read((char *)buffer, sizeof(size_t)*to_read);
+                assert(i_file.good());
 
-            //invert data
-            start =0;end=to_read-1;
-            while(start<end){
-                std::swap(buffer[start++], buffer[end--]);
+                //invert data
+                start =0;end=to_read-1;
+                while(start<end){
+                    std::swap(buffer[start++], buffer[end--]);
+                }
+
+                of.write((char *)buffer, sizeof(size_t)*to_read);
+                assert(of.good());
+
+                rem -= i_file.gcount()/sizeof(size_t);
+                to_read = std::min<size_t>(buff_size, rem);
+                if(to_read == 0) break;
             }
-
-            of.write((char *)buffer, sizeof(size_t)*to_read);
-            assert(of.good());
-
-            rem -= i_file.gcount()/sizeof(size_t);
-            to_read = std::min<size_t>(buff_size, rem);
-            if(to_read == 0) break;
+            i_file.close();
         }
-        i_file.close();
 
         if(remove(file.c_str())){
             std::cout<<"Error trying to remove temporal file"<<std::endl;
@@ -361,6 +363,8 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     }
     p_info.tot_phrases = str_coll.alphabet.back()+1;
     p_info.str_ptrs.swap(str_coll.str_ptrs);
+    p_info.str_ptrs.push_back(str_coll.n_char);
+    p_info.str_ptrs.shrink_to_fit();
 
     size_t iter=1;
     size_t rem_phrases;
@@ -405,12 +409,12 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
     typedef typename parser_t::stream_type       stream_type;
     typedef parse_data_t<stream_type, out_sym_t> parse_data_type;
 
-    parser_t parser(p_info.tot_phrases, p_info.str_ptrs);
+    parser_t parser(p_info.tot_phrases);
     phrase_map_t mp_table(0, "", 0.8);
 
     std::vector<std::pair<size_t, size_t>> thread_ranges;
 
-    size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size(), n_threads);
+    size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size()-1, n_threads);
 
     for(size_t i=0;i<n_threads;i++){
         thread_ranges.emplace_back(str_per_thread*i, std::min(str_per_thread*(i+1)-1, p_info.str_ptrs.size()-1));
@@ -436,7 +440,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
             tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
             threads_data.emplace_back(i_file, tmp_o_file, mp_table, range.first, range.second, hb_bytes,
-                                      tmp_addr + (k * hb_bytes));
+                                      tmp_addr + (k * hb_bytes), p_info.str_ptrs);
             k++;
         }
         assert(!threads_data.empty());
@@ -521,6 +525,16 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
                 mp_table.insert_value_at(ptr, val);
                 //the first bit marks if the phrase is repeated or not. We need to shift it to get the real id
                 new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
+
+                //todo testing
+                /*if(p_info.p_round>5){
+                    std::cout<<" phrase : ";
+                    for(size_t i=key_w.size(ptr);i-->0;){
+                        std::cout<<key_w.read(ptr, i)<<" ";
+                    }
+                    std::cout<<""<<std::endl;
+                }*/
+                //
             }
             ws.remove_file("phr_ranks");
             std::string suffix_file = ws.get_file("suffix_file");
@@ -542,6 +556,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             for(size_t i=0;i<threads_data.size();i++) {
                 threads[i].join();
             }
+
         }
 
         std::vector<std::string> chunk_files;
@@ -550,11 +565,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         }
         join_parse_chunks(o_file, chunk_files);
 
-        {// this is just to get the size of the resulting parse
-            i_file_stream<size_t> ifs(o_file, BUFFER_SIZE);
-            psize = ifs.tot_cells;
-        }
-
         {
             //keep track of the phrases that have to be rephrased
             std::string suffix_file = ws.get_file("suffix_file");
@@ -562,6 +572,73 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             sdsl::load_from_file(new_phrase_desc, suffix_file);
             p_info.prev_alph = phrase_desc.size();
             phrase_desc.swap(new_phrase_desc);
+        }
+
+        {
+            i_file_stream<size_t> ifs(o_file, BUFFER_SIZE);
+            psize = ifs.tot_cells;
+
+            //update string pointers
+            long acc=0, prev;
+            for(size_t i=0;i<threads_data.size();i++){
+                prev = p_info.str_ptrs[threads_data[i].start];
+                for(size_t j=threads_data[i].start; j<=threads_data[i].end;j++){
+                    acc += (prev-p_info.str_ptrs[j]);
+                    prev = p_info.str_ptrs[j];
+                    p_info.str_ptrs[j] = acc;
+                }
+                acc +=prev+1;
+            }
+            p_info.str_ptrs.back() = (long)psize;
+
+            //TODO testing
+            if(p_info.p_round>5){
+                /*for(size_t ctr=0;ctr<(p_info.str_ptrs.size()-1);ctr++){
+                    if(p_info.str_ptrs[ctr]<=(p_info.str_ptrs[ctr+1]-1)){
+                        std::cout<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
+                        for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
+                            std::cout<<ifs.read(k)<<" ";
+                        }
+                        std::cout<<""<<std::endl;
+                    }
+                }*/
+                /*size_t ctr=1;
+                for(long i=0;i<(long)ifs.size();i++){
+                    if(ifs.read(i)<tot_phrases && phrase_desc[ifs.read(i)]){
+                        if((i+1)!=p_info.str_ptrs[ctr]){
+                            while((i+1)>p_info.str_ptrs[ctr]){
+                                if(p_info.str_ptrs[ctr]>(p_info.str_ptrs[ctr+1]-1)){
+                                    std::cout<<" xxx "<<p_info.str_ptrs[ctr]<<" "<<p_info.str_ptrs[ctr+1]-1<<std::endl;
+                                }else{
+                                    std::cout<<" *** "<<p_info.str_ptrs[ctr]<<" "<<p_info.str_ptrs[ctr+1]-1<<" | ";
+                                    for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
+                                        std::cout<<ifs.read(k)<<" ";
+                                    }
+                                    std::cout<<""<<std::endl;
+                                }
+                                ctr++;
+                            }
+                            if((i+1)==p_info.str_ptrs[ctr]){
+                                std::cout<<(i+1)<<" "<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
+                                for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
+                                    std::cout<<ifs.read(k)<<" ";
+                                }
+                                ctr++;
+                            }else{
+                                std::cout<<"wrong!"<<std::endl;
+                            }
+                        }else{
+                            std::cout<<(i+1)<<" "<<p_info.str_ptrs[ctr]<<" - "<<p_info.str_ptrs[ctr+1]-1<<" | "<<ifs.size()<<" "<<ctr<<std::endl;
+                            for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
+                                std::cout<<ifs.read(k)<<" ";
+                            }
+                            std::cout<<""<<std::endl;
+                            ctr++;
+                        }
+                    }
+                }*/
+            }
+            //
         }
 
         end = std::chrono::steady_clock::now();
@@ -577,7 +654,11 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         std::cout<<"      Total phrases:  "<<p_info.tot_phrases<<std::endl;
         std::cout<<"      Parse size:     "<<psize<<std::endl;
 
-        return p_info.lms_phrases;
+        if(psize==0){
+            return 0;
+        }else{
+            return p_info.lms_phrases;
+        }
 
     } else{ //just copy the input
 

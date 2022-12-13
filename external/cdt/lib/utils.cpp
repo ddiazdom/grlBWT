@@ -108,7 +108,7 @@ str_collection collection_stats(std::string& input_file){
     ifs.seekg(-1, std::ios::end);
     ifs.read((char *)&sep_sym, 1);
     ifs.seekg(0, std::ios::beg);
-    size_t pos = ifs.tellg();
+    size_t pos = 0, cont=0;
 
     char buffer[8192]={0};
     size_t read_bytes;
@@ -122,8 +122,10 @@ str_collection collection_stats(std::string& input_file){
             for(size_t i=0;i<read_bytes;i++){
                 sym = (uint8_t)buffer[i];
                 sym_frq[sym]++;
+                cont++;
                 if(sym==sep_sym){
-                    str_coll.str_ptrs.push_back(pos-1);
+                    str_coll.str_ptrs.push_back(pos);
+                    pos = cont;
                 }
             }
         }else{
