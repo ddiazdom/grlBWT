@@ -21,15 +21,18 @@ struct parse_data_t {
     size_t                start;
     size_t                end;
     phrase_map_t          thread_dict;
+    std::vector<long>&  str_ptr;
 
     parse_data_t(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
                  size_t start_, size_t end_,
-                 const size_t &hb_size, void *hb_addr) : ifs(i_file_, BUFFER_SIZE),
-                                                         ofs(o_file_, BUFFER_SIZE, std::ios::out),
-                                                         m_map(m_map_),
-                                                         start(start_),
-                                                         end(end_),
-                                                         thread_dict(hb_size, o_file_ + "_phrases", 0.7, hb_addr) {
+                 const size_t &hb_size, void *hb_addr,
+                 std::vector<long>& str_ptr_) : ifs(i_file_, BUFFER_SIZE),
+                                                ofs(o_file_, BUFFER_SIZE, std::ios::out),
+                                                m_map(m_map_),
+                                                start(start_),
+                                                end(end_),
+                                                thread_dict(hb_size, o_file_ + "_phrases", 0.7, hb_addr),
+                                                str_ptr(str_ptr_){
         //TODO for the moment the input string has to have a sep_symbol appended at the end
         //TODO assertion : sep_symbols cannot be consecutive
     };
@@ -41,7 +44,7 @@ struct parsing_info{
     size_t p_round=0; //parsing round
     size_t prev_alph=0; //size of the alphabet in the previous parsing round
     size_t max_sym_freq=0; // most repeated symbol in the input text of the round
-    std::vector<size_t> str_ptrs;
+    std::vector<long> str_ptrs;
 };
 
 struct dictionary {
@@ -130,7 +133,8 @@ template<typename parse_data_t,
          typename parser_t>
 struct hash_functor{
     void operator()(parse_data_t& data, parser_t& parser){
-        auto task = [&](string_t& phrase){
+
+        auto hash_phrase = [&](string_t& phrase){
             phrase.mask_tail();
             auto res = data.thread_dict.insert(phrase.data(), phrase.n_bits(), 1);
             if(!res.second){
@@ -141,7 +145,11 @@ struct hash_functor{
             }
         };
 
-        parser(data.ifs, data.start, data.end, task);
+        auto init_str = [&](size_t str) -> std::pair<long, long>{
+            return {data.str_ptr[str], data.str_ptr[str+1]-1};
+        };
+
+        parser(data.ifs, data.start, data.end, hash_phrase, init_str);
         data.thread_dict.flush();
         pthread_exit(nullptr);
     };
@@ -150,15 +158,15 @@ struct hash_functor{
 template<typename parse_data_t,
          typename parser_t>
 struct parse_functor{
+
     void operator()(parse_data_t& data, parser_t& parser, size_t& new_dummy_sym){
 
-        bool prev_unsolved = true, unsolved, smaller, prev_smaller=false;
-        size_t cont = 0, prev_sym=0;
+        bool prev_unsolved, unsolved, smaller, prev_smaller, rm_sym=true;
+        size_t n_masked, prev_sym;
 
-        auto task = [&](string_t& phrase){
+        auto phrase2symbol = [&](string_t& phrase){
 
             phrase.mask_tail();
-
             auto res = data.m_map.find(phrase.data(), phrase.n_bits());
             assert(res.second);
             size_t sym = 0;
@@ -168,24 +176,47 @@ struct parse_functor{
             smaller = sym < prev_sym;
 
             if(unsolved){
-                if(!prev_unsolved && cont>0){
-                    data.ofs.push_back(new_dummy_sym+prev_smaller);
+                if(!prev_unsolved && n_masked>0){
+                    if(!rm_sym) data.ofs.push_back(new_dummy_sym+prev_smaller);
                     data.ofs.push_back(prev_sym);
                 }
                 data.ofs.push_back(sym);
-                cont=0;
+                n_masked=0;
+                rm_sym = false;
             }else if(prev_unsolved){
                 data.ofs.push_back(sym);
+                rm_sym = false;
             }else {
-                cont++;
+                n_masked++;
             }
-            //
+
             prev_smaller = smaller;
             prev_sym = sym;
             prev_unsolved = unsolved;
         };
 
-        parser(data.ifs, data.start, data.end, task);
+        auto init_str = [&](size_t str) -> std::pair<long, long>{
+
+            assert(str>=data.start && str<=data.end);
+            size_t start = data.str_ptr[str];
+            size_t end = data.str_ptr[str+1]-1;
+
+            if((str+1)<=data.end){
+                data.str_ptr[str+1] = data.ofs.size()-1;
+            }
+
+            prev_unsolved = false;
+            prev_smaller = false;
+            n_masked = 0;
+            rm_sym = true;
+            prev_sym = 0;
+
+            return {start, end};
+        };
+
+        parser(data.ifs, data.start, data.end, phrase2symbol, init_str);
+
+        data.str_ptr[data.start] = data.ofs.size()-1;
 
         data.ofs.close();
         data.ifs.close();

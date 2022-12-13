@@ -36,6 +36,14 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
 
         if(sym==dict.dict_dummy){
             assert(i>0 && i<(dict.dict.size()-1));
+
+            //TODO testing
+            /*if(dict.d_lim[i] || !dict.d_lim[i-1]){
+                std::cout<<dict.dict[i-1]<<", "<<dict.dict[i]<<", "<<dict.dict[i+1]<<" | "<<dict.dict_dummy<<std::endl;
+                std::cout<<dict.d_lim[i-1]<<", "<<dict.d_lim[i]<<", "<<dict.d_lim[i+1]<<std::endl;
+            }*/
+            //
+
             assert(!dict.d_lim[i] && !dict.d_lim[i-1]);//the dummy is nor the first nor the last
             l_sym = dict.dict[i-1];
             r_sym = dict.dict[i+1];

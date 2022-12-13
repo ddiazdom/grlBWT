@@ -18,7 +18,7 @@
 struct str_collection {
     std::vector<uint8_t> alphabet;
     std::vector<size_t> sym_freqs;
-    std::vector<size_t> str_ptrs;
+    std::vector<long> str_ptrs;
     size_t n_strings=0;
     uint8_t max_sym=0;
     uint8_t min_sym=255;
