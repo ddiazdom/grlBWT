@@ -159,40 +159,43 @@ template<typename parse_data_t,
          typename parser_t>
 struct parse_functor{
 
-    void operator()(parse_data_t& data, parser_t& parser, size_t& new_dummy_sym){
+    void operator()(parse_data_t& data, parser_t& parser){
 
-        bool prev_unsolved, unsolved, smaller, prev_smaller, rm_sym=true;
-        size_t n_masked, prev_sym;
+        //bool prev_unsolved, unsolved, smaller, prev_smaller, rm_sym=true;
+        //size_t n_masked, prev_sym;
+        size_t str_len;
 
         auto phrase2symbol = [&](string_t& phrase){
-
             phrase.mask_tail();
             auto res = data.m_map.find(phrase.data(), phrase.n_bits());
             assert(res.second);
             size_t sym = 0;
             data.m_map.get_value_from(res.first, sym);
-            unsolved = (sym & 1UL);//check if the symbol maps to an unsolved text region
-            sym>>=1UL;//remove the unsolved bit mark
-            smaller = sym < prev_sym;
 
-            if(unsolved){
-                if(!prev_unsolved && n_masked>0){
-                    if(!rm_sym) data.ofs.push_back(new_dummy_sym+prev_smaller);
-                    data.ofs.push_back(prev_sym);
+            if(phrase.size()<str_len || (sym & 1UL)){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
+
+                /*unsolved = (sym & 1UL);//check if the symbol maps to an unsolved text region
+                sym>>=1UL;//remove the unsolved bit mark
+                smaller = sym < prev_sym;
+                if(unsolved){
+                    if(!prev_unsolved && n_masked>0){
+                        if(!rm_sym) data.ofs.push_back(new_dummy_sym+prev_smaller);
+                        data.ofs.push_back(prev_sym);
+                    }
+                    data.ofs.push_back(sym);
+                    n_masked=0;
+                    rm_sym = false;
+                }else if(prev_unsolved){
+                    data.ofs.push_back(sym);
+                    rm_sym = false;
+                }else {
+                    n_masked++;
                 }
+                prev_smaller = smaller;
+                prev_sym = sym;
+                prev_unsolved = unsolved;*/
                 data.ofs.push_back(sym);
-                n_masked=0;
-                rm_sym = false;
-            }else if(prev_unsolved){
-                data.ofs.push_back(sym);
-                rm_sym = false;
-            }else {
-                n_masked++;
             }
-
-            prev_smaller = smaller;
-            prev_sym = sym;
-            prev_unsolved = unsolved;
         };
 
         auto init_str = [&](size_t str) -> std::pair<long, long>{
@@ -201,16 +204,16 @@ struct parse_functor{
             size_t start = data.str_ptr[str];
             size_t end = data.str_ptr[str+1]-1;
 
+            str_len = end-start+1;
+
             if((str+1)<=data.end){
                 data.str_ptr[str+1] = data.ofs.size()-1;
             }
-
-            prev_unsolved = false;
+            /*prev_unsolved = false;
             prev_smaller = false;
             n_masked = 0;
             rm_sym = true;
-            prev_sym = 0;
-
+            prev_sym = 0;*/
             return {start, end};
         };
 
