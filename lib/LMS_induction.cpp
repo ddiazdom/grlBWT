@@ -9,13 +9,6 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     auto * buckets = (value_type *) calloc((dict.alphabet+1), sizeof(value_type));
 
     for(size_t i=0;i<dict.dict.size();i++){
-        //TODO testing
-        /*if(dict.dict[i]==196170){
-            std::cout<<i<<" | "<<dict.dict[i-1]<<" "<<dict.dict[i]<<" "<<dict.dict[i+1]<<" "<<dict.dict[i+2]<<" "<<dict.dict[i+3]<<" "<<dict.dict[i+4]<<" | "<<dict.dict_dummy<<std::endl;
-            std::cout<<dict.d_lim[i-1]<<" "<<dict.d_lim[i]<<" "<<dict.d_lim[i+1]<<" "<<dict.d_lim[i+2]<<" "<<dict.d_lim[i+3]<<std::endl;
-        }*/
-        //
-        if(dict.dict[i]==dict.dict_dummy) continue;
         buckets[dict.dict[i]]++;
     }
 
@@ -30,35 +23,14 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
 
     vector_t freqs(dict.alphabet+1, 0, sdsl::bits::hi(max_freq)+1);
     bv_t solv_syms(dict.alphabet+1, false);
-    size_t sym, l_sym, r_sym;
+    size_t sym;
+
     for(size_t i=0;i<dict.dict.size();i++) {
         sym = dict.dict[i];
-
-        if(sym==dict.dict_dummy){
-            assert(i>0 && i<(dict.dict.size()-1));
-
-            //TODO testing
-            /*if(dict.d_lim[i] || !dict.d_lim[i-1]){
-                std::cout<<dict.dict[i-1]<<", "<<dict.dict[i]<<", "<<dict.dict[i+1]<<" | "<<dict.dict_dummy<<std::endl;
-                std::cout<<dict.d_lim[i-1]<<", "<<dict.d_lim[i]<<", "<<dict.d_lim[i+1]<<std::endl;
-            }*/
-            //
-
-            assert(!dict.d_lim[i] && !dict.d_lim[i-1]);//the dummy is nor the first nor the last
-            l_sym = dict.dict[i-1];
-            r_sym = dict.dict[i+1];
-
-            //todo testing
-            //std::cout<<l_sym<<" <- "<<" # "<<" -> "<<r_sym<<std::endl;
-            //std::cout<<buckets[l_sym+1]-buckets[l_sym]<<" "<<buckets[r_sym+1]-buckets[r_sym]<<std::endl;
-            assert(buckets[l_sym+1]-buckets[l_sym]==1);
-            assert(buckets[r_sym+1]-buckets[r_sym]==1);
-            //
-
-            sa[buckets[l_sym]] = i<<1UL;
-            sa[buckets[r_sym]] = (i+2)<<1UL;
-            solv_syms[l_sym]= true;
-            solv_syms[r_sym]= true;
+        freq = buckets[sym+1]-buckets[sym];
+        if(freq==1){
+            sa[buckets[sym]] = (i+1)<<1UL;
+            solv_syms[sym]= true;
         }else if(dict.d_lim[i]){
             sa[buckets[sym+1]-1-freqs[sym]++] = ((i+1)<<1UL) | 1UL;
         }
@@ -76,9 +48,9 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     for(size_t i=0;i<solv_syms.size();i++){
         if(solv_syms[i]) buckets[i]++;
     }
-    sdsl::util::clear(solv_syms);
+    //sdsl::util::clear(solv_syms);
 
-    induce_L_type<value_type>(sa, dict, buckets);
+    induce_L_type<value_type>(sa, dict, buckets, solv_syms);
 
     //move the pointer of every bucket to the last S symbol
     for(size_t bck=0;bck<dict.alphabet;bck++){
@@ -89,30 +61,23 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
         buckets[bck] = ptr;
     }
 
-    induce_S_type<value_type>(sa, dict, buckets);
+    induce_S_type<value_type>(sa, dict, buckets, solv_syms);
 
     //TODO testing
-    /*for(size_t i=273024;i<sa.size();i++){
+    /*for(size_t i=0;i<sa.size();i++){
         pos = (sa[i]>>1UL)-1;
-        if((sa[i])>>1==0){
-            std::cout<<"whut? "<<i<<std::endl;
-        }
         std::cout<<(sa[i] & 1UL)<<" | ";
         do{
-            if(dict.dict[pos]==dict.dict_dummy){
-                std::cout<<"* ";
-            }else{
-                std::cout<<dict.dict[pos]<<" ";
-            }
+            std::cout<<dict.dict[pos]<<" ";
         }while(!dict.d_lim[pos++]);
-        std::cout<<""<<std::endl;
+        std::cout<<" -> "<<dict.is_suffix(dict.dict[pos-1])<<std::endl;
     }*/
     //
     free(buckets);
 }
 
 template <class value_type>
-void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
+void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets, bv_t& solved_sym) {
 
     size_t pos, l_sym, bck;
     vector_t ind_bck(dict.alphabet+1, 0, sdsl::bits::hi(sa.size())+1);
@@ -132,15 +97,15 @@ void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
         }
         if(pos==1 || dict.d_lim[pos-2]) continue;
 
-        if(dict.dict[pos-2]==dict.dict_dummy ||
+        /*if(dict.dict[pos-2]==dict.dict_dummy ||
            (pos>2 && dict.dict[pos-3]==dict.dict_dummy)){
             continue;
-        }
+        }*/
 
         bck = dict.dict[pos-1];
         l_sym = dict.dict[pos-2];
 
-        if(l_sym>=bck){
+        if(!solved_sym[l_sym] && l_sym>=bck){
             if(!first_eq && l_sym==bck){
                 first_eq = true;
                 lcs = false;
@@ -152,7 +117,7 @@ void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets) {
 }
 
 template <class value_type>
-void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
+void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets, bv_t& solved_sym) {
 
     size_t pos, bck, l_sym, ind_pos;
     vector_t ind_bck(dict.alphabet+1, 0, sdsl::bits::hi(sa.size())+1);
@@ -180,16 +145,16 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets) {
             continue;
         }
 
-        if(dict.dict[pos-2]==dict.dict_dummy ||
+        /*if(dict.dict[pos-2]==dict.dict_dummy ||
            (pos>2 && dict.dict[pos-3]==dict.dict_dummy)){
             p_lcs = lcs;
             continue;
-        }
+        }*/
 
         bck = dict.dict[pos-1];
         l_sym = dict.dict[pos-2];
 
-        if(l_sym < bck || (l_sym==bck && i >= buckets[bck])){
+        if(!solved_sym[l_sym] && (l_sym < bck || (l_sym==bck && i >= buckets[bck]))){
 
             ind_pos = buckets[l_sym]--;
 

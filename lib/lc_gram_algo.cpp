@@ -68,8 +68,8 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                  phrase_map_t& new_phrases_ht, tmp_workspace& ws) {
 
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
-    bool is_maximal, exist_as_phrase;
-    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank;
+    bool is_maximal, exist_as_phrase, is_str_suffix;
+    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, phrase_frq;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
@@ -80,6 +80,12 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
 
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
+
+    //TODO this is new
+    std::vector<std::pair<size_t, size_t>> str_suffix_freq;
+    str_suffix_freq.reserve(200);
+    bool sym_present;
+    //
 
     while(u<sa.size()) {
         d_pos = (sa[u]>>1UL) - 1;
@@ -100,10 +106,20 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                 exist_as_phrase = false;
             }
 
+            //TODO this is new
+            while(!dict.d_lim[d_pos]) d_pos++;
+            is_str_suffix = dict.is_suffix(dict.dict[d_pos]);
+            if(is_str_suffix){
+                str_suffix_freq.clear();
+                str_suffix_freq.emplace_back(pl_sym, freq);
+            }
+            //
+
             u++;
             while(u<sa.size() && sa[u] & 1UL){
                 d_pos = (sa[u]>>1UL) - 1;
-                freq += dict.freqs[d_lim_rs(d_pos)];
+                phrase_frq = dict.freqs[d_lim_rs(d_pos)];
+                freq += phrase_frq;
                 l_sym = d_pos==0 || dict.d_lim[d_pos-1] ? dummy_sym : dict.dict[d_pos-1];
                 if(!is_maximal && l_sym!=pl_sym) is_maximal = true;
                 if(!exist_as_phrase && l_sym==dummy_sym){
@@ -111,6 +127,22 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     d_rank = d_lim_rs(d_pos);
                     ranks[d_rank] = (rank << 1UL) | (dict.freqs[d_rank]>1);
                 }
+
+                //TODO this is new
+                if(is_str_suffix){
+                    sym_present=false;
+                    for(auto & sym : str_suffix_freq){
+                        if(l_sym==sym.first){
+                            sym.second += phrase_frq;
+                            sym_present = true;
+                        }
+                    }
+                    if(!sym_present){
+                        str_suffix_freq.emplace_back(pl_sym, phrase_frq);
+                    }
+                }
+                //
+
                 pl_sym = l_sym;
                 u++;
             }
@@ -132,18 +164,19 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     for(size_t j=bg_pos;j<u;j++){
                         phr_marks[(sa[j]>>1UL)-1] = true;
                     }
-
-                    //TODO this is new: it will mark all the phrases containing a left-maximal suffix
-                    if(is_maximal){
-                        for(size_t j=bg_pos;j<u;j++){
-                            d_rank = d_lim_rs((sa[j]>>1UL)-1);
-                            ranks[d_rank] = ranks[d_rank] | 1UL;
-                        }
-                    }
-                    //
                 }
 
-                pre_bwt.push_back(dummy_sym, freq);
+                //todo this is new
+                if(is_str_suffix){
+                    for(auto & sym : str_suffix_freq){
+                        pre_bwt.push_back(sym.first, sym.second);
+                    }
+                    //std::cout<<str_suffix_freq.size()<<" is_maximal "<<is_maximal<<" "<<" exists_as_phrase "<<exist_as_phrase<<std::endl;
+                }else{
+                    pre_bwt.push_back(dummy_sym, freq);
+                }
+                //
+
                 sa[rank] = f_sa_pos;
                 rank++;
             }else{
@@ -363,7 +396,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     }
     p_info.tot_phrases = str_coll.alphabet.back()+1;
     p_info.str_ptrs.swap(str_coll.str_ptrs);
-    p_info.str_ptrs.push_back(str_coll.n_char);
+    p_info.str_ptrs.push_back((long)str_coll.n_char);
     p_info.str_ptrs.shrink_to_fit();
 
     size_t iter=1;
@@ -528,7 +561,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
 
                 //todo testing
                 /*if(p_info.p_round>5){
-                    std::cout<<" phrase : ";
+                    std::cout<<" phrase : "<<(val>>1UL)<<" -> ";
                     for(size_t i=key_w.size(ptr);i-->0;){
                         std::cout<<key_w.read(ptr, i)<<" ";
                     }
@@ -550,13 +583,11 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             std::vector<std::thread> threads(threads_data.size());
             parse_functor<parse_data_type, parser_t> pf;
             for(size_t i=0;i<threads_data.size();i++){
-                threads[i] = std::thread(pf, std::ref(threads_data[i]), std::ref(parser), std::ref(tot_phrases));
+                threads[i] = std::thread(pf, std::ref(threads_data[i]), std::ref(parser));
             }
-
             for(size_t i=0;i<threads_data.size();i++) {
                 threads[i].join();
             }
-
         }
 
         std::vector<std::string> chunk_files;
@@ -592,17 +623,17 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             p_info.str_ptrs.back() = (long)psize;
 
             //TODO testing
-            if(p_info.p_round>5){
+            if(p_info.p_round>4){
                 /*for(size_t ctr=0;ctr<(p_info.str_ptrs.size()-1);ctr++){
                     if(p_info.str_ptrs[ctr]<=(p_info.str_ptrs[ctr+1]-1)){
                         std::cout<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
                         for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                            std::cout<<ifs.read(k)<<" ";
+                            std::cout<<(ifs.read(k)>>1UL)<<" ";
                         }
                         std::cout<<""<<std::endl;
                     }
-                }*/
-                /*size_t ctr=1;
+                }
+                size_t ctr=1;
                 for(long i=0;i<(long)ifs.size();i++){
                     if(ifs.read(i)<tot_phrases && phrase_desc[ifs.read(i)]){
                         if((i+1)!=p_info.str_ptrs[ctr]){
