@@ -192,14 +192,6 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     assert(rank<dict.dict.size());
     pre_bwt.close();
 
-    //TODO test
-    /*size_t n_mark=0;
-    for(size_t i=0;i<ranks.size();i++){
-        n_mark+= (ranks[i] & 1UL);
-    }
-    std::cout<<"Unsolved : "<<n_mark<<" "<<ranks.size()<<std::endl;*/
-    //
-
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
