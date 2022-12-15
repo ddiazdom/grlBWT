@@ -8,51 +8,15 @@
 #include "common.h"
 #include "utils.h"
 #include "lc_parsers.hpp"
-
-template<class istream_t,
-         class out_sym_t=size_t,
-         class ostream_t=o_file_stream<out_sym_t>>
-struct parse_data_t {
-
-    istream_t             ifs;
-    ostream_t             ofs;
-
-    phrase_map_t&         m_map;
-    size_t                start;
-    size_t                end;
-    phrase_map_t          thread_dict;
-    std::vector<long>&  str_ptr;
-
-    parse_data_t(std::string &i_file_, std::string &o_file_, phrase_map_t &m_map_,
-                 size_t start_, size_t end_,
-                 const size_t &hb_size, void *hb_addr,
-                 std::vector<long>& str_ptr_) : ifs(i_file_, BUFFER_SIZE),
-                                                ofs(o_file_, BUFFER_SIZE, std::ios::out),
-                                                m_map(m_map_),
-                                                start(start_),
-                                                end(end_),
-                                                thread_dict(hb_size, o_file_ + "_phrases", 0.7, hb_addr),
-                                                str_ptr(str_ptr_){
-        //TODO for the moment the input string has to have a sep_symbol appended at the end
-        //TODO assertion : sep_symbols cannot be consecutive
-    };
-};
-
-struct parsing_info{
-    size_t lms_phrases=0; //number of LMS phrases in the current parsing round
-    size_t tot_phrases=0; //total number of phrases generated in the current parsing round
-    size_t p_round=0; //parsing round
-    size_t prev_alph=0; //size of the alphabet in the previous parsing round
-    size_t max_sym_freq=0; // most repeated symbol in the input text of the round
-    std::vector<long> str_ptrs;
-};
+#include "parsing_strategies.h"
 
 struct dictionary {
+
     typedef size_t size_type;
     size_t alphabet{};       //alphabet of the dictionary
     size_t p_alpha_size{};   //size of the previous alphabet
     size_t n_phrases{};      //number of LMS phrases in the dictionary
-    size_t t_size{};         //size of the text from the dictionary was generated
+    size_t t_size{};         //size of the text from which the dictionary was generated
     size_t max_sym_freq{};   //maximum symbol frequency in the parse from which the dictionary was created
     size_t dict_dummy{};     //dummy symbol for the dictionary
     vector_t dict;           //list of phrases in the dictionary
@@ -129,118 +93,20 @@ struct dictionary {
     }
 };
 
-template<typename parse_data_t,
-         typename parser_t>
-struct hash_functor{
-    void operator()(parse_data_t& data, parser_t& parser){
-
-        auto hash_phrase = [&](string_t& phrase){
-            phrase.mask_tail();
-            auto res = data.thread_dict.insert(phrase.data(), phrase.n_bits(), 1);
-            if(!res.second){
-                size_t val;
-                data.thread_dict.get_value_from(res.first, val);
-                val++;
-                data.thread_dict.insert_value_at(res.first, val);
-            }
-        };
-
-        auto init_str = [&](size_t str) -> std::pair<long, long>{
-            return {data.str_ptr[str], data.str_ptr[str+1]-1};
-        };
-
-        parser(data.ifs, data.start, data.end, hash_phrase, init_str);
-        data.thread_dict.flush();
-        pthread_exit(nullptr);
-    };
-};
-
-template<typename parse_data_t,
-         typename parser_t>
-struct parse_functor{
-
-    void operator()(parse_data_t& data, parser_t& parser){
-
-        //bool prev_unsolved, unsolved, smaller, prev_smaller, rm_sym=true;
-        //size_t n_masked, prev_sym;
-        size_t str_len;
-
-        auto phrase2symbol = [&](string_t& phrase){
-            phrase.mask_tail();
-            auto res = data.m_map.find(phrase.data(), phrase.n_bits());
-            assert(res.second);
-            size_t sym = 0;
-            data.m_map.get_value_from(res.first, sym);
-
-            if(phrase.size()<str_len || (sym & 1UL)){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
-
-                /*unsolved = (sym & 1UL);//check if the symbol maps to an unsolved text region
-                sym>>=1UL;//remove the unsolved bit mark
-                smaller = sym < prev_sym;
-                if(unsolved){
-                    if(!prev_unsolved && n_masked>0){
-                        if(!rm_sym) data.ofs.push_back(new_dummy_sym+prev_smaller);
-                        data.ofs.push_back(prev_sym);
-                    }
-                    data.ofs.push_back(sym);
-                    n_masked=0;
-                    rm_sym = false;
-                }else if(prev_unsolved){
-                    data.ofs.push_back(sym);
-                    rm_sym = false;
-                }else {
-                    n_masked++;
-                }
-                prev_smaller = smaller;
-                prev_sym = sym;
-                prev_unsolved = unsolved;*/
-                data.ofs.push_back(sym);
-            }
-        };
-
-        auto init_str = [&](size_t str) -> std::pair<long, long>{
-
-            assert(str>=data.start && str<=data.end);
-            size_t start = data.str_ptr[str];
-            size_t end = data.str_ptr[str+1]-1;
-
-            str_len = end-start+1;
-
-            if((str+1)<=data.end){
-                data.str_ptr[str+1] = data.ofs.size()-1;
-            }
-            /*prev_unsolved = false;
-            prev_smaller = false;
-            n_masked = 0;
-            rm_sym = true;
-            prev_sym = 0;*/
-            return {start, end};
-        };
-
-        parser(data.ifs, data.start, data.end, phrase2symbol, init_str);
-
-        data.str_ptr[data.start] = data.ofs.size()-1;
-
-        data.ofs.close();
-        data.ifs.close();
-        pthread_exit(nullptr);
-    };
-};
 
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws);
+
 void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
                  phrase_map_t& new_phrases_ht, tmp_workspace& ws);
-template<template<class, class> class lc_parser_t>
+
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                      str_collection& str_coll, tmp_workspace &ws);
-template<class parser_t, class out_sym_t=size_t>
-size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
+
+template<class parse_strategy>
+size_t build_lc_gram_int(std::string &i_file, std::string &o_file, parse_strategy& p_strat,
                          parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
-void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files);
-std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files);
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
-
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H

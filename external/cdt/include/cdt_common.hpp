@@ -69,4 +69,17 @@ void load_elm(std::istream& ifs, val_type& value){
     ifs.read((char *)&value, sizeof(val_type));
 }
 
+template<class vector_type>
+void store_pl_vector(std::string const& file, vector_type& vector){
+    std::ofstream ofs(file, std::ios::binary);
+    serialize_plain_vector<vector_type>(ofs, vector);
+    ofs.close();
+}
+
+template<class vector_type>
+void load_pl_vector(std::string const& file, vector_type& vector){
+    std::ifstream ifs(file, std::ios::binary);
+    load_plain_vector<vector_type>(ifs, vector);
+    ifs.close();
+}
 #endif //CDT_COMMON_H

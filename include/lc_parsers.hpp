@@ -14,18 +14,15 @@ struct lms_parsing{
 
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
-    const size_t dummy_sym;
-
-    explicit lms_parsing(size_t d_sym): dummy_sym(d_sym){};
 
     void operator()(stream_t& ifs,
-                    size_t f_string, size_t l_string,
+                    size_t f_string, size_t l_string, size_t max_symbol,
                     std::function<void(string_t&)> process_phrase,
                     const std::function<std::pair<long, long>(size_t)>& init_str) const {
 
         bool s_type, prev_s_type, is_rep, prev_is_rep;
         sym_type curr_sym, prev_sym;
-        string_t phrase(2, sdsl::bits::hi(dummy_sym)+1);
+        string_t phrase(2, sdsl::bits::hi(max_symbol)+1);
         size_t end_ps, start_ps;
 
         for(size_t str=l_string+1;str-->f_string;) {

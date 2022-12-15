@@ -46,7 +46,7 @@ public:
             locus.first = bit_pos+ht.description_bits();
             locus.second = locus.first+n_bits;
         }else{
-            locus.first = ht.next_av_bit+31;
+            locus.first = ht.next_av_bit+ht.description_bits()-1;
         }
         m_data.pointer = nullptr;
     };
@@ -559,7 +559,6 @@ public:
     }
 
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
-
         assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
         size_t hash;

@@ -242,134 +242,6 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
     return sa.size();
 }
 
-void join_parse_chunks(const std::string &output_file, std::vector<std::string> &chunk_files) {
-
-    //concatenate the files
-    std::ofstream of(output_file, std::ofstream::binary);
-    size_t buff_size = BUFFER_SIZE/sizeof(size_t);
-    size_t len, rem, to_read, start, end;
-    auto *buffer = new size_t[buff_size];
-
-    for(auto const& file: chunk_files){
-
-        std::ifstream i_file(file, std::ifstream::binary);
-
-        i_file.seekg (0, std::ifstream::end);
-        len = i_file.tellg()/sizeof(size_t);
-        i_file.seekg (0, std::ifstream::beg);
-
-        if(len>0){
-            rem=len;
-            to_read = std::min<size_t>(buff_size, len);
-
-            while(true){
-
-                i_file.seekg( (rem - to_read) * sizeof(size_t));
-                i_file.read((char *)buffer, sizeof(size_t)*to_read);
-                assert(i_file.good());
-
-                //invert data
-                start =0;end=to_read-1;
-                while(start<end){
-                    std::swap(buffer[start++], buffer[end--]);
-                }
-
-                of.write((char *)buffer, sizeof(size_t)*to_read);
-                assert(of.good());
-
-                rem -= i_file.gcount()/sizeof(size_t);
-                to_read = std::min<size_t>(buff_size, rem);
-                if(to_read == 0) break;
-            }
-            i_file.close();
-        }
-
-        if(remove(file.c_str())){
-            std::cout<<"Error trying to remove temporal file"<<std::endl;
-            std::cout<<"Aborting"<<std::endl;
-            exit(1);
-        }
-    }
-    delete[] buffer;
-    of.close();
-}
-
-std::pair<size_t, size_t> join_thread_phrases(phrase_map_t& map, std::vector<std::string> &files) {
-
-    size_t dic_bits=0, freq, max_freq=0;
-
-    for(auto const& file : files){
-
-        std::ifstream text_i(file, std::ios_base::binary);
-
-        text_i.seekg (0, std::ifstream::end);
-        size_t tot_bytes = text_i.tellg();
-        text_i.seekg (0, std::ifstream::beg);
-
-        auto buffer = reinterpret_cast<char *>(malloc(tot_bytes));
-
-        text_i.read(buffer, std::streamsize(tot_bytes));
-
-        bitstream<ht_buff_t> bits;
-        bits.stream = reinterpret_cast<ht_buff_t*>(buffer);
-
-        size_t next_bit = 32;
-        size_t tot_bits = tot_bytes*8;
-        size_t key_bits;
-        size_t value_bits=sizeof(size_t)*8;
-        void* key=nullptr;
-        size_t max_key_bits=0;
-
-        while(next_bit<tot_bits){
-
-            key_bits = bits.read(next_bit-32, next_bit-1);
-
-            size_t n_bytes = INT_CEIL(key_bits, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t);
-            if(key_bits>max_key_bits){
-                if(key==nullptr){
-                    key = malloc(n_bytes);
-                }else {
-                    key = realloc(key, n_bytes);
-                }
-                max_key_bits = key_bits;
-            }
-
-            char *tmp = reinterpret_cast<char*>(key);
-            tmp[INT_CEIL(key_bits, 8)-1] = 0;
-
-            bits.read_chunk(key, next_bit, next_bit+key_bits-1);
-            next_bit+=key_bits;
-            freq = bits.read(next_bit, next_bit+value_bits-1);
-            next_bit+=value_bits+32;
-
-            auto res = map.insert(key, key_bits, freq);
-            if(!res.second){
-                size_t val;
-                map.get_value_from(res.first, val);
-                val+=freq;
-                if(val>max_freq) max_freq = val;
-                map.insert_value_at(res.first, val);
-            }else{
-                if(freq>max_freq) max_freq = freq;
-                dic_bits+=key_bits;
-            }
-        }
-        text_i.close();
-
-        if(remove(file.c_str())){
-            std::cout<<"Error trying to remove temporal file"<<std::endl;
-            std::cout<<"Aborting"<<std::endl;
-            exit(1);
-        }
-        free(key);
-        free(buffer);
-    }
-    map.shrink_databuff();
-    return {dic_bits, max_freq};
-}
-
-
-template<template<class, class> class lc_parser_t>
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
 
     std::cout<<"Parsing the text:    "<<std::endl;
@@ -390,27 +262,39 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     p_info.str_ptrs.swap(str_coll.str_ptrs);
     p_info.str_ptrs.push_back((long)str_coll.n_char);
     p_info.str_ptrs.shrink_to_fit();
+    p_info.longest_str = str_coll.longest_string;
 
     size_t iter=1;
-    size_t rem_phrases;
-
-    typedef lc_parser_t<i_file_stream<uint8_t>, string_t> byte_parser_t;
-    typedef lc_parser_t<i_file_stream<size_t>, string_t> int_parser_t;
+    size_t rem_phrases=0;
 
     std::cout<<"  Parsing round "<<iter++<<std::endl;
     auto start = std::chrono::steady_clock::now();
-    rem_phrases = build_lc_gram_int<byte_parser_t>(i_file, tmp_i_file, n_threads, hbuff_size,
-                                                   p_info, symbol_desc, ws);
+    if(n_threads>1) {
+        {
+            mt_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, hbuff_size, n_threads);
+            rem_phrases = build_lc_gram_int<mt_byte_parse_strategy>(i_file, tmp_i_file, p_strat, p_info, symbol_desc, ws);
+        }
+    }else{
+        {
+            st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info);
+            rem_phrases = build_lc_gram_int<st_byte_parse_strategy>(i_file, tmp_i_file, p_strat, p_info, symbol_desc, ws);
+        }
+    }
+
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
     while (rem_phrases > 0) {
         start = std::chrono::steady_clock::now();
         std::cout<<"  Parsing round "<<iter++<<std::endl;
-        rem_phrases = build_lc_gram_int<int_parser_t>(tmp_i_file, output_file, n_threads,
-                                                      hbuff_size, p_info, symbol_desc, ws);
+        if(n_threads>1) {
+            mt_int_parse_strategy p_strat( tmp_i_file, output_file, p_info, hbuff_size, n_threads);
+            rem_phrases = build_lc_gram_int<mt_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
+        }else{
+            st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info);
+            rem_phrases = build_lc_gram_int<st_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
+        }
         end = std::chrono::steady_clock::now();
-
         report_time(start, end,4);
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
@@ -422,107 +306,53 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     return iter-2;
 }
 
-template<class parser_t, class out_sym_t>
-size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                       parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws) {
+template<class parse_strategy_t>
+size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
+                         parse_strategy_t& p_strategy, parsing_info &p_info,
+                         bv_t &phrase_desc, tmp_workspace &ws) {
 
 #ifdef __linux__
     malloc_trim(0);
 #endif
 
-    typedef typename parser_t::sym_type          sym_type;
-    typedef typename parser_t::stream_type       stream_type;
-    typedef parse_data_t<stream_type, out_sym_t> parse_data_type;
-
-    parser_t parser(p_info.tot_phrases);
-    phrase_map_t mp_table(0, "", 0.8);
-
-    std::vector<std::pair<size_t, size_t>> thread_ranges;
-
-    size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size()-1, n_threads);
-
-    for(size_t i=0;i<n_threads;i++){
-        thread_ranges.emplace_back(str_per_thread*i, std::min(str_per_thread*(i+1)-1, p_info.str_ptrs.size()-1));
-    }
-
-    std::vector<parse_data_type> threads_data;
-    threads_data.reserve(thread_ranges.size());
-
-    //how many size_t cells we can fit in the buffer
-    size_t buff_cells = hbuff_size/sizeof(size_t);
-
-    //number of bytes per thread
-    size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
-
-    std::cout << "    Computing the phrases in the text" << std::flush;
+    std::cout<< "    Computing the phrases in the text" << std::flush;
     auto start = std::chrono::steady_clock::now();
-    {
-
-        void *buff_addr = malloc(hbuff_size);
-        auto tmp_addr = reinterpret_cast<char *>(buff_addr);
-        size_t k = 0;
-        for (auto &range: thread_ranges) {
-            std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
-            tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
-            threads_data.emplace_back(i_file, tmp_o_file, mp_table, range.first, range.second, hb_bytes,
-                                      tmp_addr + (k * hb_bytes), p_info.str_ptrs);
-            k++;
-        }
-        assert(!threads_data.empty());
-
-        std::vector<std::thread> threads(threads_data.size());
-        hash_functor<parse_data_type, parser_t> hf;
-        for (size_t i = 0; i < threads_data.size(); i++) {
-            threads[i] = std::thread(hf, std::ref(threads_data[i]), std::ref(parser));
-        }
-
-        for (size_t i = 0; i < threads_data.size(); i++) {
-            threads[i].join();
-        }
-        free(buff_addr);
-
-#ifdef __linux__
-        malloc_trim(0);
-#endif
-    }
-
+    auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 16);
 
-    //join the different phrase files
-    std::cout << "    Merging thread data into one single hash table" << std::flush;
-    start = std::chrono::steady_clock::now();
-    std::vector<std::string> phrases_files;
-    for(size_t i=0;i<threads_data.size();i++){
-        phrases_files.push_back(threads_data[i].thread_dict.dump_file());
-    }
-    auto join_res = join_thread_phrases(mp_table, phrases_files);
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 3);
+    store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
+    std::vector<long>().swap(p_info.str_ptrs);
+
+#ifdef __linux__
+    malloc_trim(0);
+#endif
+
+    phrase_map_t & map = p_strategy.map;
 
     size_t psize=0;//<- for the iter stats
-    if(mp_table.size()!=p_info.lms_phrases) {
+    if(map.size()!=p_info.lms_phrases) {
 
-        size_t width = sdsl::bits::hi(phrase_desc.size())+1;
-        size_t dict_syms = join_res.first/width;
-        size_t max_freq = join_res.second;
+        //size_t width = sdsl::bits::hi(phrase_desc.size())+1;
+        size_t dict_syms = res.first;
+        size_t max_freq = res.second;
 
         //save a copy of the hash table into a file
         std::string ht_file = ws.get_file("ht_data");
-        mp_table.store_data_to_file(ht_file);
+        map.store_data_to_file(ht_file);
 
         //temporal unload of the hash table (not the data)
-        mp_table.destroy_table();
+        map.destroy_table();
         size_t tot_phrases=0;
         {
             //create a dictionary from where the ids will be computed
             std::cout<<"    Creating the dictionary from the hash table"<<std::flush;
             start = std::chrono::steady_clock::now();
-            dictionary dict(mp_table, dict_syms, max_freq, phrase_desc,
-                            threads_data[0].ifs.size(), p_info.prev_alph,
+            dictionary dict(map, dict_syms, max_freq, phrase_desc,
+                            p_strategy.text_size, p_info.prev_alph,
                             p_info.max_sym_freq, p_info.tot_phrases);
             end = std::chrono::steady_clock::now();
-            mp_table.destroy_data();
+            map.destroy_data();
             report_time(start, end, 6);
 
             //process the dictionary
@@ -530,24 +360,24 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         }
 
         //reload the hash table
-        mp_table.load_data_from_file(ht_file);
+        map.load_data_from_file(ht_file);
         ws.remove_file("ht_data");
 
         {
             std::cout<<"    Assigning ranks to the new phrases"<<std::flush;
             start = std::chrono::steady_clock::now();
             bv_t new_phrase_desc(tot_phrases, false);
-            key_wrapper key_w{width, mp_table.description_bits(), mp_table.get_data()};
+            key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
 
             size_t j=0;
             vector_t ranks;
             std::string ranks_file = ws.get_file("phr_ranks");
             sdsl::load_from_file(ranks, ranks_file);
-            for(auto const& ptr : mp_table){
+            for(auto const& ptr : map){
                 phrase_map_t::val_type val=0;
-                mp_table.get_value_from(ptr, val);
+                map.get_value_from(ptr, val);
                 val = ranks[j++];
-                mp_table.insert_value_at(ptr, val);
+                map.insert_value_at(ptr, val);
                 //the first bit marks if the phrase is repeated or not. We need to shift it to get the real id
                 new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
 
@@ -568,25 +398,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             report_time(start, end, 15);
         }
 
-        std::cout<<"    Creating the parse of the text"<<std::flush;
-
-        start = std::chrono::steady_clock::now();
-        {//store the phrases into a new file
-            std::vector<std::thread> threads(threads_data.size());
-            parse_functor<parse_data_type, parser_t> pf;
-            for(size_t i=0;i<threads_data.size();i++){
-                threads[i] = std::thread(pf, std::ref(threads_data[i]), std::ref(parser));
-            }
-            for(size_t i=0;i<threads_data.size();i++) {
-                threads[i].join();
-            }
-        }
-
-        std::vector<std::string> chunk_files;
-        for(size_t i=0;i<threads_data.size();i++){
-            chunk_files.push_back(threads_data[i].ofs.file);
-        }
-        join_parse_chunks(o_file, chunk_files);
+        load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
+        psize = p_strategy.parse_text();
 
         {
             //keep track of the phrases that have to be rephrased
@@ -597,78 +410,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             phrase_desc.swap(new_phrase_desc);
         }
 
-        {
-            i_file_stream<size_t> ifs(o_file, BUFFER_SIZE);
-            psize = ifs.tot_cells;
-
-            //update string pointers
-            long acc=0, prev;
-            for(size_t i=0;i<threads_data.size();i++){
-                prev = p_info.str_ptrs[threads_data[i].start];
-                for(size_t j=threads_data[i].start; j<=threads_data[i].end;j++){
-                    acc += (prev-p_info.str_ptrs[j]);
-                    prev = p_info.str_ptrs[j];
-                    p_info.str_ptrs[j] = acc;
-                }
-                acc +=prev+1;
-            }
-            p_info.str_ptrs.back() = (long)psize;
-
-            //TODO testing
-            if(p_info.p_round>4){
-                /*for(size_t ctr=0;ctr<(p_info.str_ptrs.size()-1);ctr++){
-                    if(p_info.str_ptrs[ctr]<=(p_info.str_ptrs[ctr+1]-1)){
-                        std::cout<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
-                        for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                            std::cout<<(ifs.read(k)>>1UL)<<" ";
-                        }
-                        std::cout<<""<<std::endl;
-                    }
-                }
-                size_t ctr=1;
-                for(long i=0;i<(long)ifs.size();i++){
-                    if(ifs.read(i)<tot_phrases && phrase_desc[ifs.read(i)]){
-                        if((i+1)!=p_info.str_ptrs[ctr]){
-                            while((i+1)>p_info.str_ptrs[ctr]){
-                                if(p_info.str_ptrs[ctr]>(p_info.str_ptrs[ctr+1]-1)){
-                                    std::cout<<" xxx "<<p_info.str_ptrs[ctr]<<" "<<p_info.str_ptrs[ctr+1]-1<<std::endl;
-                                }else{
-                                    std::cout<<" *** "<<p_info.str_ptrs[ctr]<<" "<<p_info.str_ptrs[ctr+1]-1<<" | ";
-                                    for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                                        std::cout<<ifs.read(k)<<" ";
-                                    }
-                                    std::cout<<""<<std::endl;
-                                }
-                                ctr++;
-                            }
-                            if((i+1)==p_info.str_ptrs[ctr]){
-                                std::cout<<(i+1)<<" "<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
-                                for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                                    std::cout<<ifs.read(k)<<" ";
-                                }
-                                ctr++;
-                            }else{
-                                std::cout<<"wrong!"<<std::endl;
-                            }
-                        }else{
-                            std::cout<<(i+1)<<" "<<p_info.str_ptrs[ctr]<<" - "<<p_info.str_ptrs[ctr+1]-1<<" | "<<ifs.size()<<" "<<ctr<<std::endl;
-                            for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                                std::cout<<ifs.read(k)<<" ";
-                            }
-                            std::cout<<""<<std::endl;
-                            ctr++;
-                        }
-                    }
-                }*/
-            }
-            //
-        }
-
-        end = std::chrono::steady_clock::now();
-        report_time(start, end, 19);
-
         p_info.max_sym_freq = max_freq;
-        p_info.lms_phrases = mp_table.size();
+        p_info.lms_phrases = map.size();
         p_info.tot_phrases = tot_phrases;
         p_info.p_round++;
 
@@ -682,7 +425,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
         }else{
             return p_info.lms_phrases;
         }
-
     } else{ //just copy the input
 
         std::ifstream in(i_file, std::ios_base::binary);
@@ -694,24 +436,14 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, size_t n_thre
             psize+=in.gcount();
         } while (in.gcount() > 0);
         free(buffer);
-        psize/=sizeof(sym_type);
-
-        //remove remaining files
-        for(size_t i=0;i<threads_data.size();i++){
-            std::string tmp_file =  threads_data[i].ofs.file;
-            if(remove(tmp_file.c_str())){
-                std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
-            }
-        }
+        psize/=sizeof(typename parse_strategy_t::sym_type);
+        p_strategy.remove_files();
         std::cout<<"    No new phrases found"<<std::endl;
         return 0;
     }
 }
 
-template size_t build_lc_gram<lms_parsing>(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws);
-
-template size_t build_lc_gram_int<lms_parsing<i_file_stream<uint8_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                                                                 parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-
-template size_t build_lc_gram_int<lms_parsing<i_file_stream<size_t>, string_t>>(std::string &i_file, std::string &o_file, size_t n_threads, size_t hbuff_size,
-                                                                                parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<st_byte_parse_strategy>(std::string &i_file, std::string &o_file, st_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<st_int_parse_strategy>(std::string &i_file, std::string &o_file, st_int_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<mt_byte_parse_strategy>(std::string &i_file, std::string &o_file, mt_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<mt_int_parse_strategy>(std::string &i_file, std::string &o_file, mt_int_parse_strategy& p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
