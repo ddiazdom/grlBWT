@@ -111,7 +111,7 @@ str_collection collection_stats(std::string& input_file){
     size_t pos = 0, cont=0;
 
     char buffer[8192]={0};
-    size_t read_bytes;
+    size_t read_bytes, str_len;
     std::streampos buff_size=8192;
     uint8_t sym;
 
@@ -124,7 +124,9 @@ str_collection collection_stats(std::string& input_file){
                 sym_frq[sym]++;
                 cont++;
                 if(sym==sep_sym){
-                    str_coll.str_ptrs.push_back(pos);
+                    str_coll.str_ptrs.push_back((long)pos);
+                    str_len = cont - pos;
+                    if(str_len>str_coll.longest_string) str_coll.longest_string=str_len;
                     pos = cont;
                 }
             }
@@ -152,6 +154,5 @@ str_collection collection_stats(std::string& input_file){
         std::cerr<<"Error: the file does not end with the separator symbol"<<std::endl;
         exit(1);
     }
-
     return str_coll;
 }

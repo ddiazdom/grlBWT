@@ -355,7 +355,7 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_w
     std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
 
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
-    size_t p_rounds = build_lc_gram<lms_parsing>(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
+    size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
     //ind_phase(tmp_ws, p_rounds);
     //std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     //std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
