@@ -457,8 +457,10 @@ struct st_parse_strat_t {//parse data for single thread
     typedef typename parser_t::stream_type istream_t;
     typedef typename parser_type::sym_type sym_type;
 
+
     istream_t           ifs;
     ostream_t           ofs;
+    std::string         o_file;
 
     phrase_map_t        map;
     phrase_map_t&       inner_map;
@@ -471,7 +473,7 @@ struct st_parse_strat_t {//parse data for single thread
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
                      parsing_info& p_info_): ifs(i_file_, BUFFER_SIZE),
-                                             ofs(o_file_, BUFFER_SIZE, std::ios::out),
+                                             o_file(o_file_),
                                              map(0, "", 0.8, nullptr, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                              inner_map(map),
                                              p_info(p_info_),
@@ -479,7 +481,12 @@ struct st_parse_strat_t {//parse data for single thread
                                              text_size(ifs.size()),
                                              max_symbol(p_info.tot_phrases),
                                              start(0),
-                                             end(str_ptr.size()-2){}
+                                             end(str_ptr.size()-2){
+
+        std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
+        tmp_o_file.append("_range_" + std::to_string(start) + "_" + std::to_string(end));
+        ofs = ostream_t(tmp_o_file, BUFFER_SIZE, std::ios::out);
+    }
 
     std::pair<size_t, size_t> get_phrases() {
         hash_functor<st_parse_strat_t, parser_type>()(*this);
@@ -517,7 +524,64 @@ struct st_parse_strat_t {//parse data for single thread
             str_len = (p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2]);
         }
         p_info.longest_str = str_len;
-        return ofs.size();
+
+        size_t tot_sym = reverse_text();
+
+        return tot_sym;
+    }
+
+    size_t reverse_text(){
+
+        std::ofstream of(o_file, std::ofstream::binary);
+        size_t buff_size = BUFFER_SIZE/sizeof(size_t);
+
+        size_t len, rem, to_read, p_start, p_end;
+        auto *buffer = new size_t[buff_size];
+
+        std::string file = ofs.file;
+        std::ifstream tmp_i_file(file, std::ifstream::binary);
+
+        tmp_i_file.seekg (0, std::ifstream::end);
+        len = tmp_i_file.tellg()/sizeof(size_t);
+        tmp_i_file.seekg (0, std::ifstream::beg);
+
+        if(len>0){
+
+            rem=len;
+            to_read = std::min<size_t>(buff_size, len);
+
+            while(true){
+
+                tmp_i_file.seekg( (rem - to_read) * sizeof(size_t));
+                tmp_i_file.read((char *)buffer, sizeof(size_t)*to_read);
+                assert(tmp_i_file.good());
+
+                //invert data
+                p_start =0;
+                p_end=to_read-1;
+                while(p_start<p_end){
+                    std::swap(buffer[p_start++], buffer[p_end--]);
+                }
+
+                of.write((char *)buffer, sizeof(size_t)*to_read);
+                assert(of.good());
+
+                rem -= tmp_i_file.gcount()/sizeof(size_t);
+                to_read = std::min<size_t>(buff_size, rem);
+                if(to_read == 0) break;
+            }
+            tmp_i_file.close();
+        }
+
+        if(remove(file.c_str())){
+            std::cout<<"Error trying to remove temporal file"<<std::endl;
+            std::cout<<"Aborting"<<std::endl;
+            exit(1);
+        }
+
+        delete[] buffer;
+        of.close();
+        return len;
     }
 
     void remove_files(){
