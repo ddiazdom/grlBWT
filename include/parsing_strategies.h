@@ -59,7 +59,7 @@ struct parse_functor{
             size_t sym = 0;
             data.map.get_value_from(res.first, sym);
 
-            if(phrase.size()<str_len || (sym & 1UL)){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
+            if(phrase.size()<str_len){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
                 data.ofs.push_back(sym);
             }
         };
@@ -285,9 +285,6 @@ struct mt_parse_strat_t {//multi thread strategy
 
     size_t parse_text() {
 
-        std::cout<<"    Creating the parse of the text"<<std::flush;
-        auto start = std::chrono::steady_clock::now();
-
         std::vector<std::thread> threads(threads_data.size());
         parse_functor<thread_worker_data_t, parser_type> pf;
         for(size_t i=0;i<threads_data.size();i++){
@@ -377,10 +374,6 @@ struct mt_parse_strat_t {//multi thread strategy
             }
         }*/
         //
-
-        auto end = std::chrono::steady_clock::now();
-        report_time(start, end, 19);
-
         return psize;
     }
 

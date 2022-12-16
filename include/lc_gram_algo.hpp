@@ -24,7 +24,6 @@ struct dictionary {
     bv_t     d_lim;
     bv_t phrases_has_hocc;   //mark the phrases with hidden occurrences
     bv_t* desc_bv=nullptr;
-    size_t e_size={};
 
     dictionary()=default;
     dictionary(phrase_map_t &mp_map, size_t dict_syms,
@@ -39,29 +38,31 @@ struct dictionary {
                                                          freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
                                                          d_lim(dict_syms, false),
                                                          phrases_has_hocc(dict.size(), false),
-                                                         desc_bv(&is_suffix_bv),
-                                                         e_size(dict_syms){
+                                                         desc_bv(&is_suffix_bv){
 
         key_wrapper key_w{dict.width(), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
 
+        //TODO testing
+        size_t n_uniq=0;
+        //
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i);
-                if(dict[j]==dict_dummy) e_size--;
                 d_lim[j++] = false;
             }
             d_lim[j-1] = true;
 
             freq = 0;
             mp_map.get_value_from(ptr, freq);
+
+            n_uniq+=(freq==1);
             freqs[k++] = freq;
         }
-        assert(j==dict_syms);
-    }
 
-    [[nodiscard]] inline size_t eff_size() const {
-        return e_size;
+        std::cout<<"\n"<<double(n_uniq)/double(n_phrases)<<" are unique "<<std::endl;
+
+        assert(j==dict_syms);
     }
 
     [[nodiscard]] inline bool is_suffix(size_t sym) const{

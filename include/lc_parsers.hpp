@@ -25,6 +25,10 @@ struct lms_parsing{
         string_t phrase(2, sdsl::bits::hi(max_symbol)+1);
         size_t end_ps, start_ps;
 
+        //TODO this is for testing
+        //size_t n_reps;
+        //
+
         for(size_t str=l_string+1;str-->f_string;) {
 
             auto range = init_str(str);
@@ -41,6 +45,7 @@ struct lms_parsing{
                     prev_is_rep = prev_sym & 1UL;
                     prev_sym >>=1UL;
                 }
+                //n_reps=prev_is_rep;
 
                 prev_s_type = L_TYPE;
                 phrase.push_back(prev_sym);
@@ -67,6 +72,7 @@ struct lms_parsing{
                             process_phrase(phrase);
                             phrase.clear();
                             phrase.push_back(prev_sym);
+                            //n_reps = prev_is_rep;
                         }
                     }
 
@@ -74,6 +80,7 @@ struct lms_parsing{
                     prev_sym = curr_sym;
                     prev_s_type = s_type;
                     prev_is_rep = is_rep;
+                    //n_reps += prev_is_rep;
                 }
 
                 assert(!phrase.empty());
@@ -83,5 +90,4 @@ struct lms_parsing{
         }
     }
 };
-
 #endif //LPG_COMPRESSOR_LC_PARSERS_HPP
