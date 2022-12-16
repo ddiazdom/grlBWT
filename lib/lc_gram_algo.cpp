@@ -207,7 +207,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    vector_t sa(dict.eff_size(), 0, sdsl::bits::hi(dict.dict.size())+2);
+    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
     uint8_t width = sdsl::bits::hi(dict.dict.size())+1;
 
     std::cout<<"    Sorting the dictionary using suffix induction"<<std::flush;
@@ -334,7 +334,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     if(map.size()!=p_info.lms_phrases) {
 
         //size_t width = sdsl::bits::hi(phrase_desc.size())+1;
-        size_t dict_syms = res.first;
+        size_t dict_sym = res.first;
         size_t max_freq = res.second;
 
         //save a copy of the hash table into a file
@@ -348,7 +348,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             //create a dictionary from where the ids will be computed
             std::cout<<"    Creating the dictionary from the hash table"<<std::flush;
             start = std::chrono::steady_clock::now();
-            dictionary dict(map, dict_syms, max_freq, phrase_desc,
+            dictionary dict(map, dict_sym, max_freq, phrase_desc,
                             p_strategy.text_size, p_info.prev_alph,
                             p_info.max_sym_freq, p_info.tot_phrases);
             end = std::chrono::steady_clock::now();
@@ -398,8 +398,12 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
             report_time(start, end, 15);
         }
 
+        std::cout<<"    Creating the parse of the text"<<std::flush;
+        start = std::chrono::steady_clock::now();
         load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
         psize = p_strategy.parse_text();
+        end = std::chrono::steady_clock::now();
+        report_time(start, end, 19);
 
         {
             //keep track of the phrases that have to be rephrased
@@ -416,9 +420,10 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         p_info.p_round++;
 
         std::cout<<"    Stats:"<<std::endl;
-        std::cout<<"      LMS phrases:    "<<p_info.lms_phrases<<std::endl;
-        std::cout<<"      Total phrases:  "<<p_info.tot_phrases<<std::endl;
-        std::cout<<"      Parse size:     "<<psize<<std::endl;
+        std::cout<<"      Parsing phrases:                  "<<p_info.lms_phrases<<std::endl;
+        std::cout<<"      Number of symbols in the phrases: "<<dict_sym<<std::endl;
+        std::cout<<"      Number of BWT blocks:             "<<p_info.tot_phrases<<std::endl;
+        std::cout<<"      Parse size:                       "<<psize<<std::endl;
 
         if(psize==0){
             return 0;

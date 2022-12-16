@@ -14,7 +14,7 @@
 #include "utils.h"
 extern"C"{
 #include "kseq.h"
-};
+}
 #include <unistd.h>
 
 KSEQ_INIT(gzFile, gzread)
