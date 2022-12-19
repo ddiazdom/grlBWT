@@ -60,7 +60,8 @@ struct dictionary {
             freqs[k++] = freq;
         }
 
-        std::cout<<"\n"<<double(n_uniq)/double(n_phrases)<<" are unique "<<std::endl;
+        //std::cout<<"\n"<<double(n_uniq)/double(n_phrases)<<" are unique "<<std::endl;
+        std::cout<<"\n"<<n_uniq<<" real unique phrases"<<std::endl;
 
         assert(j==dict_syms);
     }

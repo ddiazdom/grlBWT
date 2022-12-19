@@ -104,7 +104,7 @@ struct lms_parsing{
             }
         }
 
-        std::cout<<"There are "<<uniq_phrases<<" that do not require hashing"<<std::endl;
+        //std::cout<<"There are "<<uniq_phrases<<" that do not require hashing"<<std::endl;
     }
 };
 #endif //LPG_COMPRESSOR_LC_PARSERS_HPP
