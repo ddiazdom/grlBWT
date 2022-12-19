@@ -26,7 +26,7 @@ struct lms_parsing{
         size_t end_ps, start_ps;
 
         //TODO this is for testing
-        //size_t n_reps;
+        size_t n_rep_sym, uniq_phrases=0;
         //
 
         for(size_t str=l_string+1;str-->f_string;) {
@@ -45,7 +45,7 @@ struct lms_parsing{
                     prev_is_rep = prev_sym & 1UL;
                     prev_sym >>=1UL;
                 }
-                //n_reps=prev_is_rep;
+                n_rep_sym=prev_is_rep;
 
                 prev_s_type = L_TYPE;
                 phrase.push_back(prev_sym);
@@ -68,11 +68,26 @@ struct lms_parsing{
                     } else {//L_TYPE type
                         s_type = L_TYPE;
                         if (prev_s_type == S_TYPE && prev_is_rep && is_rep) {//LMS suffix
+
+                            //process the previous phrase
                             assert(!phrase.empty());
                             process_phrase(phrase);
+
+                            /*assert(n_rep_sym<=phrase.size());
+                            if(n_rep_sym==phrase.size() && phrase.width()>8){
+                                for(size_t j=phrase.size();j-->0;){
+                                    std::cout<<phrase[j]<<" ";
+                                }
+                                std::cout<<" "<<std::endl;
+                                std::cout<<n_rep_sym<<" "<<phrase.size()<<std::endl;
+                            }*/
+
+                            uniq_phrases+= (n_rep_sym<phrase.size());
+
+                            //create the new phrase
                             phrase.clear();
                             phrase.push_back(prev_sym);
-                            //n_reps = prev_is_rep;
+                            n_rep_sym = prev_is_rep;
                         }
                     }
 
@@ -80,7 +95,7 @@ struct lms_parsing{
                     prev_sym = curr_sym;
                     prev_s_type = s_type;
                     prev_is_rep = is_rep;
-                    //n_reps += prev_is_rep;
+                    n_rep_sym += prev_is_rep;
                 }
 
                 assert(!phrase.empty());
@@ -88,6 +103,8 @@ struct lms_parsing{
                 phrase.clear();
             }
         }
+
+        std::cout<<"There are "<<uniq_phrases<<" that do not require hashing"<<std::endl;
     }
 };
 #endif //LPG_COMPRESSOR_LC_PARSERS_HPP
