@@ -26,7 +26,7 @@ struct lms_parsing{
         size_t end_ps, start_ps;
 
         //TODO this is for testing
-        size_t n_rep_sym, uniq_phrases=0;
+        size_t n_rep_sym, uniq_phrases=0, del_sym=0;
         //
 
         for(size_t str=l_string+1;str-->f_string;) {
@@ -91,6 +91,8 @@ struct lms_parsing{
                         }
                     }
 
+                    del_sym+= !is_rep && !prev_is_rep;
+
                     phrase.push_back(curr_sym);
                     prev_sym = curr_sym;
                     prev_s_type = s_type;
@@ -104,7 +106,7 @@ struct lms_parsing{
             }
         }
 
-        //std::cout<<"There are "<<uniq_phrases<<" that do not require hashing"<<std::endl;
+        std::cout<<"\n  There are "<<del_sym<<" symbols that are not necessary to store and "<<uniq_phrases<<" phrases that are not necessary to hash";
     }
 };
 #endif //LPG_COMPRESSOR_LC_PARSERS_HPP
