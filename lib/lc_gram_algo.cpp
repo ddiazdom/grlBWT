@@ -68,7 +68,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                  phrase_map_t& new_phrases_ht, tmp_workspace& ws) {
 
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
-    bool is_maximal, exist_as_phrase, is_str_suffix;
+    bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, phrase_frq;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
@@ -82,9 +82,10 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     vector_t ranks(dict.n_phrases, 0, width);
 
     //TODO this is new
-    std::vector<std::pair<size_t, size_t>> str_suffix_freq;
-    str_suffix_freq.reserve(200);
-    bool sym_present;
+    //bool is_str_suffix;
+    //std::vector<std::pair<size_t, size_t>> str_suffix_freq;
+    //str_suffix_freq.reserve(200);
+    //bool sym_present;
     //
 
     while(u<sa.size()) {
@@ -107,12 +108,12 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
             }
 
             //TODO this is new
-            while(!dict.d_lim[d_pos]) d_pos++;
-            is_str_suffix = dict.is_suffix(dict.dict[d_pos]);
-            if(is_str_suffix){
-                str_suffix_freq.clear();
-                str_suffix_freq.emplace_back(pl_sym, freq);
-            }
+            //while(!dict.d_lim[d_pos]) d_pos++;
+            //is_str_suffix = dict.is_suffix(dict.dict[d_pos]);
+            //if(is_str_suffix){
+            //    str_suffix_freq.clear();
+            //    str_suffix_freq.emplace_back(pl_sym, freq);
+            //}
             //
 
             u++;
@@ -129,7 +130,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                 }
 
                 //TODO this is new
-                if(is_str_suffix){
+                /*if(is_str_suffix){
                     sym_present=false;
                     for(auto & sym : str_suffix_freq){
                         if(l_sym==sym.first){
@@ -140,9 +141,8 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     if(!sym_present){
                         str_suffix_freq.emplace_back(pl_sym, phrase_frq);
                     }
-                }
+                }*/
                 //
-
                 pl_sym = l_sym;
                 u++;
             }
@@ -167,16 +167,16 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                 }
 
                 //todo this is new
-                if(is_str_suffix){
+                /*if(is_str_suffix){
                     for(auto & sym : str_suffix_freq){
                         pre_bwt.push_back(sym.first, sym.second);
                     }
                     //std::cout<<str_suffix_freq.size()<<" is_maximal "<<is_maximal<<" "<<" exists_as_phrase "<<exist_as_phrase<<std::endl;
                 }else{
-                    pre_bwt.push_back(dummy_sym, freq);
-                }
+                }*/
                 //
 
+                pre_bwt.push_back(dummy_sym, freq);
                 sa[rank] = f_sa_pos;
                 rank++;
             }else{
