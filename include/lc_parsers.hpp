@@ -26,7 +26,9 @@ struct lms_parsing{
         size_t end_ps, start_ps;
 
         //TODO this is for testing
-        size_t n_rep_sym, uniq_phrases=0, del_sym=0;
+        size_t n_rep_sym, uniq_phrases=0;//, del_sym=0;
+        //std::vector<bool> test_seq;
+        //size_t run;
         //
 
         for(size_t str=l_string+1;str-->f_string;) {
@@ -46,9 +48,11 @@ struct lms_parsing{
                     prev_sym >>=1UL;
                 }
                 n_rep_sym=prev_is_rep;
+                //run=1;
 
                 prev_s_type = L_TYPE;
                 phrase.push_back(prev_sym);
+                //test_seq.push_back(prev_is_rep);
 
                 for (size_t i = end_ps; i-- > start_ps;) {
 
@@ -73,40 +77,63 @@ struct lms_parsing{
                             assert(!phrase.empty());
                             process_phrase(phrase);
 
-                            /*assert(n_rep_sym<=phrase.size());
-                            if(n_rep_sym==phrase.size() && phrase.width()>8){
-                                for(size_t j=phrase.size();j-->0;){
-                                    std::cout<<phrase[j]<<" ";
-                                }
-                                std::cout<<" "<<std::endl;
-                                std::cout<<n_rep_sym<<" "<<phrase.size()<<std::endl;
-                            }*/
+                            //TODO testing
+                            /*for(size_t j=test_seq.size();j-->0;){
+                                std::cout<<test_seq[j]<<" ";
+                            }
+                            std::cout<<" | "<<n_rep_sym<<std::endl;*/
+                            //
 
                             uniq_phrases+= (n_rep_sym<phrase.size());
 
                             //create the new phrase
                             phrase.clear();
+                            //test_seq.clear();
                             phrase.push_back(prev_sym);
+                            //test_seq.push_back(prev_is_rep);
                             n_rep_sym = prev_is_rep;
                         }
                     }
 
-                    del_sym+= !is_rep && !prev_is_rep;
+                    /*if(is_rep!=prev_is_rep){
+                        if(!prev_is_rep && run>1){
+                            std::cout<<run<<std::endl;
+                        }
+                        run=0;
+                    }*/
 
+                    //run++;
                     phrase.push_back(curr_sym);
+                    //test_seq.push_back(is_rep);
+                    n_rep_sym += is_rep;
+
                     prev_sym = curr_sym;
                     prev_s_type = s_type;
                     prev_is_rep = is_rep;
-                    n_rep_sym += prev_is_rep;
                 }
 
                 assert(!phrase.empty());
                 process_phrase(phrase);
+
+                /*if(!prev_is_rep && run>1){
+                    std::cout<<run<<std::endl;
+                }*/
+
+                //TODO testing
+                /*for(size_t j=test_seq.size();j-->0;){
+                    std::cout<<test_seq[j]<<" ";
+                }
+                std::cout<<" | "<<n_rep_sym<<" fin string "<<std::endl;*/
+                //
+
+                uniq_phrases+= (n_rep_sym<phrase.size());
+
                 phrase.clear();
+                //test_seq.clear();
             }
         }
 
-        std::cout<<"\n  There are "<<del_sym<<" symbols that are not necessary to store and "<<uniq_phrases<<" phrases that are not necessary to hash";
+        std::cout<<"\n  There are "<<uniq_phrases<<" phrases that are not necessary to hash";
     }
 };
 #endif //LPG_COMPRESSOR_LC_PARSERS_HPP
