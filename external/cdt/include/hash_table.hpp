@@ -566,7 +566,7 @@ public:
             hash = (*(reinterpret_cast<const size_t*>(key)));
             hash =  hash & bitstream<buffer_t>::masks[key_bits];
         }else{
-            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));;
+            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
         }
 
         size_t idx = hash & (n_buckets - 1);

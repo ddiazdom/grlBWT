@@ -46,6 +46,34 @@ struct hash_functor{
 
 template<typename parse_data_t,
         typename parser_t>
+struct counting_functor{
+
+    std::unordered_map<size_t, bool> hash_table;
+
+    void operator()(parse_data_t& data) {
+
+        auto hash_phrase = [&](string_t& phrase){
+            phrase.mask_tail();
+            size_t fingerprint = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8));
+            auto res = hash_table.insert({fingerprint, false});
+            if(!res.second) res.first->second = true;
+        };
+
+        auto init_str = [&](size_t str) -> std::pair<long, long>{
+            return {data.str_ptr[str], data.str_ptr[str+1]-1};
+        };
+        parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
+
+        size_t n_uniq=0;
+        for(auto const& pair : hash_table){
+            n_uniq += !pair.second;
+        }
+        std::cout<<"\n"<<n_uniq<<" estimated unique values "<<std::endl;
+    };
+};
+
+template<typename parse_data_t,
+        typename parser_t>
 struct parse_functor{
 
     void operator()(parse_data_t& data){
@@ -482,7 +510,17 @@ struct st_parse_strat_t {//parse data for single thread
     }
 
     std::pair<size_t, size_t> get_phrases() {
+
+        if(p_info.p_round>0 && p_info.p_round<3){
+            std::cout<<"\n      Estimating the number of phrases we need to hash "<<std::flush;
+            auto s = std::chrono::steady_clock::now();
+            counting_functor<st_parse_strat_t, parser_type>()(*this);
+            auto e = std::chrono::steady_clock::now();
+            report_time(s, e, 3);
+        }
+
         hash_functor<st_parse_strat_t, parser_type>()(*this);
+
         map.shrink_databuff();
 
         key_wrapper key_w{sym_width(max_symbol), map.description_bits(), map.get_data()};
@@ -499,8 +537,9 @@ struct st_parse_strat_t {//parse data for single thread
     }
 
     size_t parse_text() {
-        parse_functor<st_parse_strat_t, parser_type>()(*this);
 
+
+        parse_functor<st_parse_strat_t, parser_type>()(*this);
         //update string pointers
         long acc=0, str_len=0;
         size_t prev = p_info.str_ptrs[start];
