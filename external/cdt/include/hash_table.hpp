@@ -901,6 +901,13 @@ public:
         fb.close();
     }
 
+    size_t hash_table_tot_bytes(){
+        size_t tot_bytes = n_buckets*sizeof(size_t);
+        tot_bytes+= sizeof(data.stream_size);
+        tot_bytes+= data.stream_size * sizeof(buffer_t);
+        return  tot_bytes;
+    }
+
     void load_data_from_file(const std::string& input){
         assert(table==nullptr && data.stream== nullptr && !static_buffer);
         std::ifstream ifs(input, std::ios_base::binary);
