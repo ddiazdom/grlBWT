@@ -56,6 +56,7 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
         }
         rank++;
     }
+
     dict.dict.swap(new_dict);
     dict.n_phrases = s_sa.size();
     sdsl::util::clear(dict.d_lim);
@@ -107,15 +108,6 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                 exist_as_phrase = false;
             }
 
-            //TODO this is new
-            //while(!dict.d_lim[d_pos]) d_pos++;
-            //is_str_suffix = dict.is_suffix(dict.dict[d_pos]);
-            //if(is_str_suffix){
-            //    str_suffix_freq.clear();
-            //    str_suffix_freq.emplace_back(pl_sym, freq);
-            //}
-            //
-
             u++;
             while(u<sa.size() && sa[u] & 1UL){
                 d_pos = (sa[u]>>1UL) - 1;
@@ -129,20 +121,6 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     ranks[d_rank] = (rank << 1UL) | (dict.freqs[d_rank]>1);
                 }
 
-                //TODO this is new
-                /*if(is_str_suffix){
-                    sym_present=false;
-                    for(auto & sym : str_suffix_freq){
-                        if(l_sym==sym.first){
-                            sym.second += phrase_frq;
-                            sym_present = true;
-                        }
-                    }
-                    if(!sym_present){
-                        str_suffix_freq.emplace_back(pl_sym, phrase_frq);
-                    }
-                }*/
-                //
                 pl_sym = l_sym;
                 u++;
             }
@@ -157,6 +135,7 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                         phrase.push_back(dict.dict[tmp_pos--]);
                     }while(tmp_pos>= f_sa_pos);
                     phrase.mask_tail();
+
                     auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank);
                     assert(res.second);
                     dict.phrases_has_hocc[rank] = true;
@@ -191,6 +170,8 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     }
     assert(rank<dict.dict.size());
     pre_bwt.close();
+
+    std::cout<<"\n just testing "<<new_phrases_ht.hash_table_tot_bytes()<<" bytes of the hash table versus "<<INT_CEIL(sa.size()*sa.width(), 8)<<" bytes of the suffix array"<<std::endl;
 
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
