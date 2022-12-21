@@ -1,7 +1,6 @@
 //
 // Created by Diego Diaz on 4/7/20.
 //
-#include "simple_hash_table.h"
 #include "lc_gram_algo.hpp"
 #include <thread>
 #include <chrono>
@@ -65,31 +64,35 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
     sdsl::store_to_file(dict, dict_file);
 }
 
-void dict2gram2(dictionary &dict, vector_t& s_sa, bv_t& phr_marks, bv_rs_t& phr_marks_rs, vector_t& phrase2rank, parsing_info& p_info, tmp_workspace& ws) {
+void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsing_info& p_info, tmp_workspace& ws) {
 
     dict.dict_dummy = dict.alphabet+s_sa.size()+1;
-    size_t pos, new_size=0, sym;
+    size_t pos, new_size=0, sym, f_sym, rank=0, f_pos;
     string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
     vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
     for(size_t u=0;u<s_sa.size();u++) {
         pos = s_sa[u];
-
         if(dict.d_lim[pos]){
             new_dict[new_size++] = dict.dict_dummy;
             new_dict[new_size++] = dict.dict[pos];
         }else{
+            f_pos = pos;
+            f_sym = first_symbol[rank];
+
             pos++;
-            while(!phr_marks[pos] && !dict.d_lim[pos]) pos++;
-            if(phr_marks[pos]){
-                new_dict[new_size++] = dict.dict[pos-1];
-                new_dict[new_size++] = dict.alphabet+phrase2rank[phr_marks_rs(pos)];
+            while(dict.dict[pos]<dict.alphabet && !dict.d_lim[pos]) pos++;
+            if(dict.dict[pos]>=dict.alphabet){
+                new_dict[new_size++] = pos==(f_pos+1) ? f_sym : dict.dict[pos-1];
+                new_dict[new_size++] = dict.dict[pos];
+                assert(new_dict[new_size-2]<dict.alphabet);
             }else{
                 sym = dict.dict[pos];
                 new_dict[new_size++] = dict.dict_dummy;
                 new_dict[new_size++] = dict.is_suffix(sym) ? sym : dict.dict[pos-1];
             }
         }
+        rank++;
     }
 
     dict.dict.swap(new_dict);
@@ -102,11 +105,11 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, bv_t& phr_marks, bv_rs_t& phr_
 
 void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_workspace& ws) {
 
-    string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, phrase_frq;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
+
     std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
     size_t sb = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
@@ -114,15 +117,14 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
-    bv_t phr_marks(dict.dict.size(), false);
 
     while(u<sa.size()) {
-
         d_pos = (sa[u]>>1UL) - 1;
         if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict[d_pos])){
-            u++;
-            while(u<sa.size() && sa[u] & 1UL) u++;
+            sa[u++] = 0;
+            while(u<sa.size() && sa[u] & 1UL) sa[u++] = 0;
         }else{
+
             f_sa_pos = d_pos;
             freq = dict.freqs[d_lim_rs(d_pos)];
             bg_pos = u;
@@ -152,96 +154,61 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
                 u++;
             }
 
-            if(is_maximal || exist_as_phrase){
-                if(u-bg_pos>1) {
-                    dict.phrases_has_hocc[rank] = true;
-                    for(size_t j=bg_pos;j<u;j++){
-                        phr_marks[(sa[j]>>1UL)-1] = true;
-                    }
-                }
+            if(is_maximal || exist_as_phrase) {
                 pre_bwt.push_back(dummy_sym, freq);
                 rank++;
             }else{
                 l_sym = dict.dict[f_sa_pos-1];
+                assert(l_sym<dict.alphabet);
                 if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(freq);
                 }else{
                     pre_bwt.push_back(l_sym, freq);
                 }
+                for(size_t j=bg_pos;j<u;j++) sa[j] = 0;
             }
         }
     }
     assert(rank<dict.dict.size());
     pre_bwt.close();
+
     dict.phrases_has_hocc.resize(rank);
+    sdsl::util::clear(d_lim_rs);
     dict.freqs.erase();
     store_to_file(ws.get_file("phr_ranks"), ranks);
     ranks.erase();
-    sdsl::util::clear(d_lim_rs);
 
 #ifdef __linux__
     malloc_trim(0);
 #endif
 
-    size_t pos =0;
-    while(pos<dict.d_lim.size()){
-        assert(pos==0 || dict.d_lim[pos-1]);
-        while(!dict.d_lim[pos] && !phr_marks[pos]) pos++;
-        if(phr_marks[pos]){
-            pos++;
-            do{
-                phr_marks[pos] = false;
-            }while(!dict.d_lim[pos++]);
-        }else{
-            pos++;
-        }
-    }
-
-    bv_rs_t phr_marks_rs(&phr_marks);
-    vector_t phrase2rank(phr_marks_rs(phr_marks.size()), 0, sym_width(rank));
-    rank=0, u=0;
+    vector_t first_symbol(rank, 0, sym_width(dict.alphabet));
+    u=0; rank=0;
+    size_t f_sym;
     while(u<sa.size()) {
-        d_pos = (sa[u]>>1UL) - 1;
-        if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict[d_pos])){
-            u++;
-            while(u<sa.size() && sa[u] & 1UL) u++;
-        }else{
-            bg_pos = u;
-            is_maximal = false;
-            pl_sym = (d_pos==0 || dict.d_lim[d_pos-1]) ? dummy_sym : dict.dict[d_pos-1];
-            exist_as_phrase = pl_sym==dummy_sym;
-
-            u++;
+        if(sa[u]!=0){
+            assert(!(sa[u] & 1UL));
+            f_sa_pos = (sa[u++]>>1UL)-1;
+            f_sym = dict.dict[f_sa_pos];
+            first_symbol[rank] = f_sym;
+            sa[rank++] = f_sa_pos;
             while(u<sa.size() && sa[u] & 1UL){
-                d_pos = (sa[u]>>1UL) - 1;
-                l_sym = d_pos==0 || dict.d_lim[d_pos-1] ? dummy_sym : dict.dict[d_pos-1];
-                if(!is_maximal && l_sym!=pl_sym) is_maximal = true;
-                if(!exist_as_phrase && l_sym==dummy_sym) exist_as_phrase = true;
-                pl_sym = l_sym;
+                assert(dict.dict[(sa[u]>>1UL)-1]==f_sym);
+                dict.dict[(sa[u]>>1UL)-1] = dict.alphabet + rank;
                 u++;
             }
-
-            if(is_maximal || exist_as_phrase){
-                if(u-bg_pos>1){
-                    for(size_t j=bg_pos;j<u;j++){
-                        size_t sa_pos = (sa[j]>>1UL)-1;
-                        if(phr_marks[sa_pos]){
-                            phrase2rank[phr_marks_rs(sa_pos)] = rank;
-                        }
-                    }
-                }
-                sa[rank] = f_sa_pos;
-                rank++;
-            }
+        }else{
+            u++;
         }
     }
-
     sa.resize(rank);
+    assert(sa.size()==first_symbol.size());
 
 #ifdef __linux__
     malloc_trim(0);
 #endif
-    dict2gram2(dict, sa, phr_marks, phr_marks_rs, phrase2rank, p_info, ws);
+
+    dict2gram2(dict, sa, first_symbol, p_info, ws);
 }
 
 void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,

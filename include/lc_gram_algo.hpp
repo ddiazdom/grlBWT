@@ -34,13 +34,13 @@ struct dictionary {
                                                          t_size(_t_size),
                                                          max_sym_freq(_max_sym_freq),
                                                          dict_dummy(_dummy_sym),
-                                                         dict(dict_syms, 0, sdsl::bits::hi(alphabet)+1),
+                                                         dict(dict_syms, 0, sym_width(alphabet+dict_syms)),
                                                          freqs(n_phrases, 0, sdsl::bits::hi(max_freq)+1),
                                                          d_lim(dict_syms, false),
                                                          phrases_has_hocc(dict.size(), false),
                                                          desc_bv(&is_suffix_bv){
 
-        key_wrapper key_w{dict.width(), mp_map.description_bits(), mp_map.get_data()};
+        key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
 
         //TODO testing
@@ -60,9 +60,7 @@ struct dictionary {
             freqs[k++] = freq;
         }
 
-        //std::cout<<"\n"<<double(n_uniq)/double(n_phrases)<<" are unique "<<std::endl;
         std::cout<<"\n"<<n_uniq<<" real unique phrases"<<std::endl;
-
         assert(j==dict_syms);
     }
 
