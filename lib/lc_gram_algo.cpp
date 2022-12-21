@@ -24,6 +24,10 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
     for(size_t u=0;u<s_sa.size();u++) {
         pos = s_sa[u];
 
+        if(p_info.p_round==1 && u==1633){
+            std::cout<<"holaa "<<dict.dict[pos]<<std::endl;
+        }
+
         if(dict.d_lim[pos]){
             new_dict[new_size++] = dict.dict_dummy;
             new_dict[new_size++] = dict.dict[pos];
@@ -67,32 +71,42 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
 void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsing_info& p_info, tmp_workspace& ws) {
 
     dict.dict_dummy = dict.alphabet+s_sa.size()+1;
-    size_t pos, new_size=0, sym, f_sym, rank=0, f_pos;
-    string_t phrase(2, sdsl::bits::hi(dict.alphabet)+1);
+    size_t pos, new_size=0, l_sym, r_sym;
     vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
+
+    //todo testing
+    dictionary orig_dict;
+    sdsl::load_from_file(orig_dict, "/Users/ddiaz/version_original_"+std::to_string(p_info.p_round));
+    //
 
     for(size_t u=0;u<s_sa.size();u++) {
         pos = s_sa[u];
-        if(dict.d_lim[pos]){
-            new_dict[new_size++] = dict.dict_dummy;
-            new_dict[new_size++] = dict.dict[pos];
-        }else{
-            f_pos = pos;
-            f_sym = first_symbol[rank];
 
+        if(dict.d_lim[pos]){
+            l_sym = dict.dict[pos];
+            assert(l_sym>=dict.alphabet);
+            l_sym = first_symbol[l_sym-dict.alphabet];
+            assert(dict.is_suffix(l_sym));
+
+            new_dict[new_size++] = dict.dict_dummy;
+            new_dict[new_size++] = l_sym;
+        }else{
             pos++;
             while(dict.dict[pos]<dict.alphabet && !dict.d_lim[pos]) pos++;
-            if(dict.dict[pos]>=dict.alphabet){
-                new_dict[new_size++] = pos==(f_pos+1) ? f_sym : dict.dict[pos-1];
-                new_dict[new_size++] = dict.dict[pos];
-                assert(new_dict[new_size-2]<dict.alphabet);
+
+            l_sym = dict.dict[pos-1];
+            if(l_sym >= dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
+            r_sym = dict.dict[pos];
+
+            if(r_sym>=dict.alphabet){
+                new_dict[new_size++] = l_sym;
+                new_dict[new_size++] = r_sym;
             }else{
-                sym = dict.dict[pos];
+                if(r_sym >= dict.alphabet) r_sym = first_symbol[r_sym-dict.alphabet];
                 new_dict[new_size++] = dict.dict_dummy;
-                new_dict[new_size++] = dict.is_suffix(sym) ? sym : dict.dict[pos-1];
+                new_dict[new_size++] = dict.is_suffix(r_sym) ? r_sym : l_sym;
             }
         }
-        rank++;
     }
 
     dict.dict.swap(new_dict);
@@ -101,6 +115,33 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsin
 
     std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
     sdsl::store_to_file(dict, dict_file);
+
+    //TODO testing
+    /*std::cout<<"\nChecking if they are correct .."<<std::endl;
+    for (size_t i = 0; i < dict.dict.size(); i += 2) {
+        if (dict.dict[i] != orig_dict.dict[i] ||
+            dict.dict[i + 1] != orig_dict.dict[i + 1]) {
+            std::cout << i << " -> (" << dict.dict[i] << ", " << dict.dict[i + 1] << " != " << orig_dict.dict[i]
+                      << ", " << orig_dict.dict[i + 1] << ")" << std::endl;
+            exit(1);
+        }
+    }
+    assert(dict.alphabet==orig_dict.alphabet);
+    assert(dict.p_alpha_size==orig_dict.p_alpha_size);
+    assert(dict.n_phrases==orig_dict.n_phrases);
+    assert(dict.t_size==orig_dict.t_size);
+    assert(dict.max_sym_freq==orig_dict.max_sym_freq);
+    for(size_t i=0;i<dict.phrases_has_hocc.size();i++){
+        assert(dict.phrases_has_hocc[i]==orig_dict.phrases_has_hocc[i]);
+    }*/
+    //
+#ifdef __linux__
+    malloc_trim(0);
+#endif
+
+    //TODO testing
+    //sdsl::store_to_file(dict, "/Users/ddiaz/version_nueva_"+std::to_string(p_info.p_round));
+    //
 }
 
 void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_workspace& ws) {
@@ -120,6 +161,7 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 
     while(u<sa.size()) {
         d_pos = (sa[u]>>1UL) - 1;
+
         if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict[d_pos])){
             sa[u++] = 0;
             while(u<sa.size() && sa[u] & 1UL) sa[u++] = 0;
@@ -156,6 +198,7 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 
             if(is_maximal || exist_as_phrase) {
                 pre_bwt.push_back(dummy_sym, freq);
+                if(u-bg_pos>1) dict.phrases_has_hocc[rank] = true;
                 rank++;
             }else{
                 l_sym = dict.dict[f_sa_pos-1];
@@ -190,13 +233,17 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
             assert(!(sa[u] & 1UL));
             f_sa_pos = (sa[u++]>>1UL)-1;
             f_sym = dict.dict[f_sa_pos];
+            sa[rank] = f_sa_pos;
             first_symbol[rank] = f_sym;
-            sa[rank++] = f_sa_pos;
+            dict.dict[f_sa_pos] = dict.alphabet + rank;
+
             while(u<sa.size() && sa[u] & 1UL){
-                assert(dict.dict[(sa[u]>>1UL)-1]==f_sym);
-                dict.dict[(sa[u]>>1UL)-1] = dict.alphabet + rank;
+                f_sa_pos = (sa[u]>>1UL)-1;
+                assert(dict.dict[f_sa_pos]==f_sym);
+                dict.dict[f_sa_pos] = dict.alphabet + rank;
                 u++;
             }
+            rank++;
         }else{
             u++;
         }
@@ -207,7 +254,9 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 #ifdef __linux__
     malloc_trim(0);
 #endif
-
+    std::cout<<"\nbytes SA "<<INT_CEIL(sa.size()*sa.width(), 8)<<std::endl;
+    std::cout<<"bytes dict "<<INT_CEIL(dict.dict.size()*dict.dict.width(), 8)<<std::endl;
+    std::cout<<"bytes first_symbol "<<INT_CEIL(first_symbol.size()*first_symbol.width(), 8)<<std::endl;
     dict2gram2(dict, sa, first_symbol, p_info, ws);
 }
 
