@@ -198,7 +198,9 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 
             if(is_maximal || exist_as_phrase) {
                 pre_bwt.push_back(dummy_sym, freq);
-                if(u-bg_pos>1) dict.phrases_has_hocc[rank] = true;
+                if(u-bg_pos>1){
+                    dict.phrases_has_hocc[rank] = true;
+                }
                 rank++;
             }else{
                 l_sym = dict.dict[f_sa_pos-1];
