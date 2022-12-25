@@ -19,11 +19,11 @@ struct parsing_info{
 };
 
 template<typename parse_data_t,
-        typename parser_t>
+         typename parser_t>
 struct hash_functor{
     void operator()(parse_data_t& data) {
 
-        auto hash_phrase = [&](string_t& phrase){
+        auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
             auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), 1);
 
@@ -52,7 +52,7 @@ struct counting_functor{
 
     void operator()(parse_data_t& data) {
 
-        auto hash_phrase = [&](string_t& phrase){
+        auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
             size_t fingerprint = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8));
             auto res = hash_table.insert({fingerprint, false});

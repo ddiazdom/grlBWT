@@ -17,7 +17,7 @@ struct lms_parsing{
 
     void operator()(stream_t& ifs,
                     size_t f_string, size_t l_string, size_t max_symbol,
-                    std::function<void(string_t&)> process_phrase,
+                    const std::function<void(string_t&)>& process_phrase,
                     const std::function<std::pair<long, long>(size_t)>& init_str) const {
 
         bool s_type, prev_s_type, is_rep, prev_is_rep;

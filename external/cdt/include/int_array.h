@@ -309,6 +309,11 @@ struct int_array{
         bits.write(idx * m_width, (idx + 1) * m_width - 1, value);
     }
 
+    inline value_type read(size_t idx) const {
+        assert(idx<m_size);
+        return bits.read(idx * m_width, (idx + 1) * m_width - 1);
+    }
+
     inline value_type operator[](const size_t idx) const {
         assert(idx<m_size);
         return bits.read(idx * m_width, (idx + 1) * m_width - 1);

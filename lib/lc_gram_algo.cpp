@@ -74,37 +74,34 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsin
     size_t pos, new_size=0, l_sym, r_sym;
     vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
-    //todo testing
-    dictionary orig_dict;
-    sdsl::load_from_file(orig_dict, "/Users/ddiaz/version_original_"+std::to_string(p_info.p_round));
-    //
+    std::cout<<"bytes compressed dict "<<INT_CEIL(new_dict.size()*new_dict.width(), 8)<<std::endl;
 
     for(size_t u=0;u<s_sa.size();u++) {
-        pos = s_sa[u];
+        pos = s_sa.read(u);
 
         if(dict.d_lim[pos]){
-            l_sym = dict.dict[pos];
+            l_sym = dict.dict.read(pos);
             assert(l_sym>=dict.alphabet);
-            l_sym = first_symbol[l_sym-dict.alphabet];
+            l_sym = first_symbol.read(l_sym-dict.alphabet);
             assert(dict.is_suffix(l_sym));
 
-            new_dict[new_size++] = dict.dict_dummy;
-            new_dict[new_size++] = l_sym;
+            new_dict.write(new_size++, dict.dict_dummy);
+            new_dict.write(new_size++, l_sym);
         }else{
             pos++;
-            while(dict.dict[pos]<dict.alphabet && !dict.d_lim[pos]) pos++;
+            while(dict.dict.read(pos)<dict.alphabet && !dict.d_lim[pos]) pos++;
 
-            l_sym = dict.dict[pos-1];
-            if(l_sym >= dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
-            r_sym = dict.dict[pos];
+            l_sym = dict.dict.read(pos-1);
+            if(l_sym >= dict.alphabet) l_sym = first_symbol.read(l_sym-dict.alphabet);
+            r_sym = dict.dict.read(pos);
 
             if(r_sym>=dict.alphabet){
-                new_dict[new_size++] = l_sym;
-                new_dict[new_size++] = r_sym;
+                new_dict.write(new_size++, l_sym);
+                new_dict.write(new_size++, r_sym);
             }else{
-                if(r_sym >= dict.alphabet) r_sym = first_symbol[r_sym-dict.alphabet];
-                new_dict[new_size++] = dict.dict_dummy;
-                new_dict[new_size++] = dict.is_suffix(r_sym) ? r_sym : l_sym;
+                if(r_sym >= dict.alphabet) r_sym = first_symbol.read(r_sym-dict.alphabet);
+                new_dict.write(new_size++, dict.dict_dummy);
+                new_dict.write(new_size++, dict.is_suffix(r_sym) ? r_sym : l_sym);
             }
         }
     }
@@ -118,6 +115,8 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsin
 
     //TODO testing
     /*std::cout<<"\nChecking if they are correct .."<<std::endl;
+    dictionary orig_dict;
+    sdsl::load_from_file(orig_dict, "/Users/ddiaz/version_original_"+std::to_string(p_info.p_round));
     for (size_t i = 0; i < dict.dict.size(); i += 2) {
         if (dict.dict[i] != orig_dict.dict[i] ||
             dict.dict[i + 1] != orig_dict.dict[i + 1]) {
@@ -133,8 +132,8 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsin
     assert(dict.max_sym_freq==orig_dict.max_sym_freq);
     for(size_t i=0;i<dict.phrases_has_hocc.size();i++){
         assert(dict.phrases_has_hocc[i]==orig_dict.phrases_has_hocc[i]);
-    }*/
-    //
+    }
+    //*/
 #ifdef __linux__
     malloc_trim(0);
 #endif
@@ -158,64 +157,94 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
+    vector_t first_symbol(dict.n_phrases, sym_width(dict.alphabet));
 
     while(u<sa.size()) {
-        d_pos = (sa[u]>>1UL) - 1;
+        d_pos = (sa.read(u)>>1UL) - 1;
 
-        if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict[d_pos])){
-            sa[u++] = 0;
-            while(u<sa.size() && sa[u] & 1UL) sa[u++] = 0;
+        if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict.read(d_pos))){
+            u++;
+            while(u<sa.size() && sa.read(u) & 1UL) u++;
         }else{
 
             f_sa_pos = d_pos;
-            freq = dict.freqs[d_lim_rs(d_pos)];
+            freq = dict.freqs.read(d_lim_rs(d_pos));
             bg_pos = u;
             is_maximal = false;
-            pl_sym = (d_pos==0 || dict.d_lim[d_pos-1]) ? dummy_sym : dict.dict[d_pos-1];
+
+            if(d_pos==0 || dict.d_lim[d_pos-1]){
+                pl_sym = dummy_sym;
+            }else{
+                pl_sym = dict.dict[d_pos-1];
+                if(pl_sym>=dict.alphabet) pl_sym = first_symbol[pl_sym-dict.alphabet];
+            }
+
             if(pl_sym==dummy_sym){
                 exist_as_phrase = true;
                 d_rank = d_lim_rs(d_pos);
-                ranks[d_rank] = (rank<<1UL) | (dict.freqs[d_rank]>1);
+                ranks.write(d_rank, (rank<<1UL) | (dict.freqs[d_rank]>1));
             }else{
                 exist_as_phrase = false;
             }
 
             u++;
-            while(u<sa.size() && sa[u] & 1UL){
-                d_pos = (sa[u]>>1UL) - 1;
-                phrase_frq = dict.freqs[d_lim_rs(d_pos)];
+            while(u<sa.size() && sa.read(u) & 1UL){
+                d_pos = (sa.read(u)>>1UL) - 1;
+                phrase_frq = dict.freqs.read(d_lim_rs(d_pos));
                 freq += phrase_frq;
-                l_sym = d_pos==0 || dict.d_lim[d_pos-1] ? dummy_sym : dict.dict[d_pos-1];
+
+                if(d_pos==0 || dict.d_lim[d_pos-1]){
+                    l_sym = dummy_sym;
+                }else{
+                    l_sym = dict.dict.read(d_pos-1);
+                    if(l_sym>=dict.alphabet) l_sym = first_symbol.read(l_sym-dict.alphabet);
+                }
+
                 if(!is_maximal && l_sym!=pl_sym) is_maximal = true;
                 if(!exist_as_phrase && l_sym==dummy_sym){
                     exist_as_phrase = true;
                     d_rank = d_lim_rs(d_pos);
-                    ranks[d_rank] = (rank << 1UL) | (dict.freqs[d_rank]>1);
+                    ranks.write(d_rank, (rank << 1UL) | (dict.freqs.read(d_rank)>1));
                 }
                 pl_sym = l_sym;
                 u++;
             }
 
             if(is_maximal || exist_as_phrase) {
+
                 pre_bwt.push_back(dummy_sym, freq);
+
+                size_t f_sym = dict.dict.read(f_sa_pos);
+                first_symbol.push_back(f_sym);
+
                 if(u-bg_pos>1){
                     dict.phrases_has_hocc[rank] = true;
+                    for(size_t j=bg_pos;j<u;j++){
+                        size_t pos = (sa.read(j)>>1UL)-1;
+                        assert(dict.dict.read(pos)==f_sym);
+                        dict.dict.write(pos, dict.alphabet + rank);
+                    }
                 }
+                sa.write(rank, f_sa_pos);
                 rank++;
             }else{
-                l_sym = dict.dict[f_sa_pos-1];
+                l_sym = dict.dict.read(f_sa_pos-1);
+                if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
+
                 assert(l_sym<dict.alphabet);
                 if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(freq);
                 }else{
                     pre_bwt.push_back(l_sym, freq);
                 }
-                for(size_t j=bg_pos;j<u;j++) sa[j] = 0;
             }
         }
     }
+
     assert(rank<dict.dict.size());
     pre_bwt.close();
+    sa.resize(rank);
+    first_symbol.resize(rank);
 
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
@@ -227,35 +256,6 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
     malloc_trim(0);
 #endif
 
-    vector_t first_symbol(rank, 0, sym_width(dict.alphabet));
-    u=0; rank=0;
-    size_t f_sym;
-    while(u<sa.size()) {
-        if(sa[u]!=0){
-            assert(!(sa[u] & 1UL));
-            f_sa_pos = (sa[u++]>>1UL)-1;
-            f_sym = dict.dict[f_sa_pos];
-            sa[rank] = f_sa_pos;
-            first_symbol[rank] = f_sym;
-            dict.dict[f_sa_pos] = dict.alphabet + rank;
-
-            while(u<sa.size() && sa[u] & 1UL){
-                f_sa_pos = (sa[u]>>1UL)-1;
-                assert(dict.dict[f_sa_pos]==f_sym);
-                dict.dict[f_sa_pos] = dict.alphabet + rank;
-                u++;
-            }
-            rank++;
-        }else{
-            u++;
-        }
-    }
-    sa.resize(rank);
-    assert(sa.size()==first_symbol.size());
-
-#ifdef __linux__
-    malloc_trim(0);
-#endif
     std::cout<<"\nbytes SA "<<INT_CEIL(sa.size()*sa.width(), 8)<<std::endl;
     std::cout<<"bytes dict "<<INT_CEIL(dict.dict.size()*dict.dict.width(), 8)<<std::endl;
     std::cout<<"bytes first_symbol "<<INT_CEIL(first_symbol.size()*first_symbol.width(), 8)<<std::endl;
@@ -338,6 +338,12 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     }
                 }
 
+                //TODO testing
+                if(p_info.p_round==4){
+                    std::cout<<rank<<" -> "<<f_sa_pos<<std::endl;
+                }
+                //
+
                 pre_bwt.push_back(dummy_sym, freq);
                 sa[rank] = f_sa_pos;
                 rank++;
@@ -353,6 +359,10 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     }
     assert(rank<dict.dict.size());
     pre_bwt.close();
+
+    //TODO testing
+    std::cout<<"\n "<<rank<<" "<<dict.alphabet<<std::endl;
+    //
 
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
@@ -388,9 +398,6 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
 
-    phrase_map_t new_phrases_ht;
-    bv_t phr_marks(dict.dict.size(), false);
-
     std::cout<<"    Alternative solution"<<std::flush;
     start = std::chrono::steady_clock::now();
     get_pre_bwt2(dict, sa, p_info,ws);
@@ -398,6 +405,8 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
     report_time(start, end, 17);
 
     /*std::cout<<"    Constructing the preliminary BWT"<<std::flush;
+    phrase_map_t new_phrases_ht;
+    bv_t phr_marks(dict.dict.size(), false);
     start = std::chrono::steady_clock::now();
     get_pre_bwt(dict, sa, p_info, phr_marks, new_phrases_ht, ws);
     end = std::chrono::steady_clock::now();
