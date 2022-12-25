@@ -48,7 +48,6 @@ void suffix_induction(vector_t &sa, const dictionary &dict) {
     for(size_t i=0;i<solv_syms.size();i++){
         if(solv_syms[i]) buckets[i]++;
     }
-    //sdsl::util::clear(solv_syms);
 
     induce_L_type<value_type>(sa, dict, buckets, solv_syms);
 
@@ -86,7 +85,7 @@ void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets, bv
 
     for(size_t i=0;i<sa.size();i++) {
 
-        pos = sa[i];
+        pos = sa.read(i);
         lcs = pos & 1UL;
         pos>>=1UL;
         if(pos==0) continue;
@@ -102,16 +101,16 @@ void induce_L_type(vector_t &sa, const dictionary &dict, value_type* buckets, bv
             continue;
         }*/
 
-        bck = dict.dict[pos-1];
-        l_sym = dict.dict[pos-2];
+        bck = dict.dict.read(pos-1);
+        l_sym = dict.dict.read(pos-2);
 
         if(!solved_sym[l_sym] && l_sym>=bck){
             if(!first_eq && l_sym==bck){
                 first_eq = true;
                 lcs = false;
             }
-            sa[buckets[l_sym]++] = (pos-1)<<1UL | (ind_bck[l_sym]>=lb && lcs);
-            ind_bck[l_sym] = i+1;
+            sa.write(buckets[l_sym]++, (pos-1)<<1UL | (ind_bck.read(l_sym)>=lb && lcs));
+            ind_bck.write(l_sym, i+1);
         }
     }
 }
@@ -126,11 +125,11 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets, bv
 
     for(size_t i=sa.size();i-->0;) {
 
-        pos = sa[i];
+        pos = sa.read(i);
         lcs = pos & 1UL;
         pos>>=1UL;
         if(pos==0){
-            sa[i+1] = sa[i+1] & ~1UL;
+            sa.write(i+1, sa.read(i+1) & ~1UL);
             p_lcs = false;
             continue;
         }
@@ -151,23 +150,23 @@ void induce_S_type(vector_t &sa, const dictionary &dict, value_type *buckets, bv
             continue;
         }*/
 
-        bck = dict.dict[pos-1];
-        l_sym = dict.dict[pos-2];
+        bck = dict.dict.read(pos-1);
+        l_sym = dict.dict.read(pos-2);
 
         if(!solved_sym[l_sym] && (l_sym < bck || (l_sym==bck && i >= buckets[bck]))){
 
             ind_pos = buckets[l_sym]--;
 
-            sa[ind_pos] = (pos-1)<<1UL | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
+            sa.write(ind_pos, (pos-1)<<1UL | (lcs && ind_pos>0 && sa.read(ind_pos-1)==0));
 
             new_break = !first_eq && l_sym==bck;
             if(new_break) first_eq = true;
 
-            if(ind_bck[l_sym]==0 || ind_bck[l_sym]>rb || new_break){
-                sa[ind_pos+1] = sa[ind_pos+1] & ~1UL;
+            if(ind_bck.read(l_sym)==0 || ind_bck.read(l_sym)>rb || new_break){
+                sa.write(ind_pos+1, sa.read(ind_pos+1) & ~1UL);
                 if(ind_pos+1==i) lcs=false;
             }
-            ind_bck[l_sym] = i+1;
+            ind_bck.write(l_sym, i+1);
         }
 
         p_lcs = lcs;
