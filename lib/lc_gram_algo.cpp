@@ -11,7 +11,7 @@
 #ifdef __linux__
 #include <malloc.h>
 #endif
-//#include "malloc_count.h"
+#include "malloc_count.h"
 
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws) {
@@ -69,16 +69,17 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
     sdsl::store_to_file(dict, dict_file);
 }
 
-void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsing_info& p_info, tmp_workspace& ws) {
+template<class value_type>
+void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol, parsing_info& p_info, tmp_workspace& ws) {
 
-    dict.dict_dummy = dict.alphabet+s_sa.size()+1;
+    dict.dict_dummy = dict.alphabet+sa_size+1;
     size_t pos, new_size=0, l_sym, r_sym;
-    vector_t new_dict(s_sa.size()*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
+    vector_t new_dict(sa_size*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
     std::cout<<"bytes compressed dict "<<INT_CEIL(new_dict.size()*new_dict.width(), 8)<<std::endl;
 
-    for(size_t u=0;u<s_sa.size();u++) {
-        pos = s_sa.read(u);
+    for(size_t u=0;u<sa_size;u++) {
+        pos = s_sa[u];
 
         if(dict.d_lim[pos]){
             l_sym = dict.dict.read(pos);
@@ -108,8 +109,10 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsin
     }
 
     dict.dict.swap(new_dict);
-    dict.n_phrases = s_sa.size();
+    dict.n_phrases = sa_size;
+
     sdsl::util::clear(dict.d_lim);
+    free(s_sa);
 
     std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
     sdsl::store_to_file(dict, dict_file);
@@ -144,7 +147,8 @@ void dict2gram2(dictionary &dict, vector_t& s_sa, vector_t& first_symbol, parsin
     //
 }
 
-void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_workspace& ws) {
+template<class value_type>
+size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws) {
 
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, phrase_frq;
@@ -160,12 +164,12 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
     vector_t ranks(dict.n_phrases, 0, width);
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
 
-    while(u<sa.size()) {
-        d_pos = (sa.read(u)>>1UL) - 1;
+    while(u<sa_size) {
+        d_pos = (sa[u]>>1UL) - 1;
 
         if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict.read(d_pos))){
             u++;
-            while(u<sa.size() && sa.read(u) & 1UL) u++;
+            while(u<sa_size && sa[u] & 1UL) u++;
         }else{
 
             f_sa_pos = d_pos;
@@ -189,8 +193,8 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
             }
 
             u++;
-            while(u<sa.size() && sa.read(u) & 1UL){
-                d_pos = (sa.read(u)>>1UL) - 1;
+            while(u<sa_size && sa[u] & 1UL){
+                d_pos = (sa[u]>>1UL) - 1;
                 phrase_frq = dict.freqs.read(d_lim_rs(d_pos));
                 freq += phrase_frq;
 
@@ -221,12 +225,12 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
                 if(u-bg_pos>1){
                     dict.phrases_has_hocc[rank] = true;
                     for(size_t j=bg_pos;j<u;j++){
-                        size_t pos = (sa.read(j)>>1UL)-1;
+                        size_t pos = (sa[j]>>1UL)-1;
                         assert(dict.dict.read(pos)==f_sym);
                         dict.dict.write(pos, dict.alphabet + rank);
                     }
                 }
-                sa.write(rank, f_sa_pos);
+                sa[rank] = f_sa_pos;
                 rank++;
             }else{
                 l_sym = dict.dict.read(f_sa_pos-1);
@@ -242,9 +246,22 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
         }
     }
 
+    std::cout<<"\nbytes SA "<<sa_size*sizeof(value_type)<<std::endl;
+    std::cout<<"bytes dict "<<INT_CEIL(dict.dict.size()*dict.dict.width(), 8)<<std::endl;
+    std::cout<<"bytes first_symbol "<<INT_CEIL(first_symbol.size()*first_symbol.width(), 8)<<std::endl;
+    std::cout<<"bytes freqs"<<INT_CEIL(dict.freqs.size()*dict.freqs.width(), 8)<<std::endl;
+    std::cout<<"bytes ranks"<<INT_CEIL(ranks.size()*ranks.width(), 8)<<std::endl;
+    std::cout<<"bytes has_hocc "<<INT_CEIL(dict.phrases_has_hocc.size(), 8)<<std::endl;
+    std::cout<<"bytes d_lim "<<INT_CEIL(dict.d_lim.size(), 8)<<std::endl;
+    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;
+
+    //TODO test malloc
+    malloc_count_print_status();
+    //
+
     assert(rank<dict.dict.size());
     pre_bwt.close();
-    sa.resize(rank);
+    sa = (value_type *)realloc(sa, rank*sizeof(value_type));
     first_symbol.resize(rank);
 
     dict.phrases_has_hocc.resize(rank);
@@ -257,10 +274,9 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
     malloc_trim(0);
 #endif
 
-    std::cout<<"\nbytes SA "<<INT_CEIL(sa.size()*sa.width(), 8)<<std::endl;
-    std::cout<<"bytes dict "<<INT_CEIL(dict.dict.size()*dict.dict.width(), 8)<<std::endl;
-    std::cout<<"bytes first_symbol "<<INT_CEIL(first_symbol.size()*first_symbol.width(), 8)<<std::endl;
-    dict2gram2(dict, sa, first_symbol, p_info, ws);
+    dict2gram2<value_type>(dict, sa, rank, first_symbol, p_info, ws);
+
+    return rank;
 }
 
 void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
@@ -380,28 +396,18 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
 #endif
 }
 
-size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+template<class value_type>
+size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    uint8_t width = sdsl::bits::hi(dict.dict.size())+1;
-
-    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
     std::cout<<"    Sorting the dictionary using suffix induction"<<std::flush;
     auto start = std::chrono::steady_clock::now();
-    if(width<=8){
-        suffix_induction<uint8_t>(sa, dict);
-    }else if(width<=16){
-        suffix_induction<uint16_t>(sa, dict);
-    }else if(width<=32){
-        suffix_induction<uint32_t>(sa, dict);
-    }else{
-        suffix_induction<uint64_t>(sa, dict);
-    }
+    auto * sa = suffix_induction<value_type>(dict);
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 4);
+    report_time(start, end, 17);
 
     std::cout<<"    Alternative solution"<<std::flush;
     start = std::chrono::steady_clock::now();
-    get_pre_bwt2(dict, sa, p_info,ws);
+    size_t n_phrases = get_pre_bwt2<value_type>(dict, sa, dict.dict.size(), p_info, ws);
     end = std::chrono::steady_clock::now();
     report_time(start, end, 17);
 
@@ -419,7 +425,24 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
     end = std::chrono::steady_clock::now();
     report_time(start, end, 14);*/
 
-    return sa.size();
+    return n_phrases;
+}
+
+size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+
+    uint8_t width = sym_width(dict.dict.size())+1;
+    size_t n_phrases;
+
+    if(width<=8){
+        n_phrases = process_dictionary_int<uint8_t>(dict, p_info, ws);
+    }else if(width<=16){
+        n_phrases = process_dictionary_int<uint16_t>(dict, p_info, ws);
+    }else if(width<=32){
+        n_phrases = process_dictionary_int<uint32_t>(dict, p_info, ws);
+    }else{
+        n_phrases = process_dictionary_int<uint64_t>(dict, p_info, ws);
+    }
+    return n_phrases;
 }
 
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
