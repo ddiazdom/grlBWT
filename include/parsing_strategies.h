@@ -48,10 +48,14 @@ template<typename parse_data_t,
         typename parser_t>
 struct counting_functor {
     void operator()(parse_data_t& data) {
-
+        vector_t map(data.ifs.size()+1, 0, 2);
         auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
-            size_t fingerprint = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8));
+            size_t bucket = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8)) % map.size();
+            size_t freq = map.read(bucket);
+            if(freq<=1){
+                map.write(bucket, freq+1);
+            }
         };
 
         auto init_str = [&](size_t str) -> std::pair<long, long>{
@@ -59,6 +63,14 @@ struct counting_functor {
         };
 
         parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
+
+        size_t uniq=0;
+        for(size_t i=0;i<map.size();i++){
+            if(map.read(i)==1){
+                uniq++;
+            }
+        }
+        std::cout<<"we have "<<uniq<<" estimated unique elements "<<std::endl;
     };
 };
 
@@ -467,7 +479,6 @@ struct st_parse_strat_t {//parse data for single thread
     typedef parser_type                    parser_t;
     typedef typename parser_t::stream_type istream_t;
     typedef typename parser_type::sym_type sym_type;
-
 
     istream_t           ifs;
     ostream_t           ofs;

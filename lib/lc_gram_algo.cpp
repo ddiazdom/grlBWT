@@ -11,6 +11,7 @@
 #ifdef __linux__
 #include <malloc.h>
 #endif
+//#include "malloc_count.h"
 
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws) {
@@ -157,7 +158,7 @@ void get_pre_bwt2(dictionary &dict, vector_t &sa, parsing_info& p_info, tmp_work
 
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
-    vector_t first_symbol(dict.n_phrases, sym_width(dict.alphabet));
+    vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
 
     while(u<sa.size()) {
         d_pos = (sa.read(u)>>1UL) - 1;
@@ -494,11 +495,16 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     malloc_trim(0);
 #endif
 
+   //std::cout<<"\n"<<std::endl;
+   //malloc_count_print_status();
+   //std::cout<<"Of that, "<<double(phrase_desc.size())/8<<" bytes are from the suffix info and "<<(p_info.str_ptrs.size()*sizeof(long))<<" are from the string pointers "<<std::endl;
+
     std::cout<< "    Computing the phrases in the text" << std::flush;
     auto start = std::chrono::steady_clock::now();
     auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 16);
+    //std::cout<<"\n We now have "<<malloc_count_current()<<" bytes after the hashing "<<std::endl;
 
     store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
@@ -512,7 +518,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     size_t psize=0;//<- for the iter stats
     if(map.size()!=p_info.lms_phrases) {
 
-        //size_t width = sdsl::bits::hi(phrase_desc.size())+1;
         size_t dict_sym = res.first;
         size_t max_freq = res.second;
 
@@ -603,6 +608,9 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         std::cout<<"      Number of symbols in the phrases: "<<dict_sym<<std::endl;
         std::cout<<"      Number of BWT blocks:             "<<p_info.tot_phrases<<std::endl;
         std::cout<<"      Parse size:                       "<<psize<<std::endl;
+
+        map.destroy_data();
+        map.destroy_table();
 
         if(psize==0){
             return 0;
