@@ -382,9 +382,9 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
     uint8_t width = sdsl::bits::hi(dict.dict.size())+1;
 
+    vector_t sa(dict.dict.size(), 0, sdsl::bits::hi(dict.dict.size())+2);
     std::cout<<"    Sorting the dictionary using suffix induction"<<std::flush;
     auto start = std::chrono::steady_clock::now();
     if(width<=8){
