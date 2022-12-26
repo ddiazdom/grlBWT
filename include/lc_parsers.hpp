@@ -54,9 +54,7 @@ struct lms_parsing{
                         curr_sym >>=1UL;
                     }
 
-                    if (curr_sym == prev_sym) {
-                        type = (type<<1UL) | (type & 1UL);
-                    }  else {
+                    if (curr_sym != prev_sym) {
                         type = (type<<1UL) | (curr_sym < prev_sym);
                         if ((type & 3U) == 2 && (rep & 3U)==3U) {//LMS suffix
                             //process the previous phrase
@@ -67,6 +65,8 @@ struct lms_parsing{
                             phrase.clear();
                             phrase.push_back(prev_sym);
                         }
+                    } else {
+                        type = (type<<1UL) | (type & 1UL);
                     }
 
                     phrase.push_back(curr_sym);
@@ -75,7 +75,6 @@ struct lms_parsing{
 
                 assert(!phrase.empty());
                 process_phrase(phrase);
-
                 phrase.clear();
             }
         }
