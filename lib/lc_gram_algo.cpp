@@ -499,7 +499,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
    //malloc_count_print_status();
    //std::cout<<"Of that, "<<double(phrase_desc.size())/8<<" bytes are from the suffix info and "<<(p_info.str_ptrs.size()*sizeof(long))<<" are from the string pointers "<<std::endl;
 
-    std::cout<< "    Computing the phrases in the text" << std::flush;
     auto start = std::chrono::steady_clock::now();
     auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();

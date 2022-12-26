@@ -48,6 +48,7 @@ template<typename parse_data_t,
         typename parser_t>
 struct counting_functor {
     void operator()(parse_data_t& data) {
+        std::cout<< "    Computing the phrases in the text" << std::flush;
         vector_t map(data.ifs.size()+1, 0, 2);
         auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
@@ -513,14 +514,13 @@ struct st_parse_strat_t {//parse data for single thread
     std::pair<size_t, size_t> get_phrases() {
 
         if(p_info.p_round>0 && p_info.p_round<3){
-            std::cout<<"\n      Estimating the number of phrases we need to hash "<<std::flush;
             auto s = std::chrono::steady_clock::now();
             counting_functor<st_parse_strat_t, parser_type>()(*this);
             auto e = std::chrono::steady_clock::now();
             report_time(s, e, 3);
         }
 
-        std::cout<<"\n      Creating the hash table "<<std::flush;
+        std::cout<<"      Creating the hash table "<<std::flush;
         auto s = std::chrono::steady_clock::now();
         hash_functor<st_parse_strat_t, parser_type>()(*this);
         auto e = std::chrono::steady_clock::now();
