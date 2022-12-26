@@ -44,7 +44,7 @@ struct dictionary {
         size_t j=0, k=0, freq;
 
         //TODO testing
-        size_t n_uniq=0;
+        size_t n_uniq=0, low=0;
         //
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
@@ -57,10 +57,12 @@ struct dictionary {
             mp_map.get_value_from(ptr, freq);
 
             n_uniq+=(freq==1);
+            low+=freq<=5;
             freqs[k++] = freq;
         }
 
         std::cout<<"\n"<<n_uniq<<" real unique phrases"<<std::endl;
+        std::cout<<low<<" ("<<double(low)/double(n_phrases)<<") real phrases with low freq"<<std::endl;
         assert(j==dict_syms);
     }
 
@@ -100,6 +102,12 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
 void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
                  phrase_map_t& new_phrases_ht, tmp_workspace& ws);
 
+template<class value_type>
+void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol, parsing_info& p_info, tmp_workspace& ws);
+
+template<class value_type>
+size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws);
+
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                      str_collection& str_coll, tmp_workspace &ws);
 
@@ -108,5 +116,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file, parse_strateg
                          parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
+
+template<class vector_type>
+size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H
