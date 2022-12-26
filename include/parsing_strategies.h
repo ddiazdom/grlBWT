@@ -48,14 +48,36 @@ template<typename parse_data_t,
         typename parser_t>
 struct counting_functor {
     void operator()(parse_data_t& data) {
+
         std::cout<< "    Computing the phrases in the text" << std::flush;
-        vector_t map(data.ifs.size()+1, 0, 2);
+
+        //
+        uint8_t width = 2;
+        uint8_t word_bits = std::numeric_limits<size_t>::digits;
+        uint8_t word_shift = __builtin_ctz(word_bits);
+        size_t n_buckets = (data.ifs.size()+1);
+        size_t n_cells = INT_CEIL( n_buckets * width, word_bits);
+        size_t start, bucket, cell, i_pos, freq;
+        auto * map = (size_t *)calloc(n_cells, sizeof(size_t));
+        //
+
         auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
-            size_t bucket = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8)) % map.size();
-            size_t freq = map.read(bucket);
+
+            bucket = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8)) % n_buckets;
+
+            //read the value
+            start = bucket * width;
+            cell = start >> word_shift;
+            i_pos = (start & (word_bits - 1UL));
+            freq = ((map[cell] >> i_pos) & 3UL);
+            //
+
             if(freq<=1){
-                map.write(bucket, freq+1);
+                //write
+                map[cell] &= ~(3UL << i_pos);
+                map[cell] |= (freq+1) << i_pos;
+                //
             }
         };
 
@@ -66,12 +88,14 @@ struct counting_functor {
         parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
 
         size_t uniq=0;
-        for(size_t i=0;i<map.size();i++){
-            if(map.read(i)==1){
+        for(size_t i=0;i<n_buckets*2;i+=2){
+            freq = ((map[(i >> word_shift)] >> (i & (word_bits - 1UL))) & 3UL);
+            if(freq==1){
                 uniq++;
             }
         }
         std::cout<<"we have "<<uniq<<" estimated unique elements "<<std::endl;
+        free(map);
     };
 };
 
@@ -536,7 +560,6 @@ struct st_parse_strat_t {//parse data for single thread
             assert(freq>0);
             if(freq>max_freq) max_freq = freq;
         }
-
         return {n_syms, max_freq};
     }
 
