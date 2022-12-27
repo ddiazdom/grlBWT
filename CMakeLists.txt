@@ -46,7 +46,8 @@ target_link_libraries(grlbwt LINK_PUBLIC
         z
         pthread
         #${LIBSDSL_LIBRARIES}
-        cdt)
+        cdt
+        dl)
 
 target_include_directories(grlbwt
         PUBLIC
