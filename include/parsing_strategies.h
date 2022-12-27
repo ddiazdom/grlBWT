@@ -50,34 +50,23 @@ struct counting_functor {
     void operator()(parse_data_t& data) {
 
         std::cout<< "    Computing the phrases in the text" << std::flush;
+        //std::vector<std::pair<size_t, size_t>> tails;
 
-        //
-        uint8_t width = 2;
-        uint8_t word_bits = std::numeric_limits<size_t>::digits;
-        uint8_t word_shift = __builtin_ctz(word_bits);
-        size_t n_buckets = (data.ifs.size()+1);
-        size_t n_cells = INT_CEIL( n_buckets * width, word_bits);
-        size_t start, bucket, cell, i_pos, freq;
-        auto * map = (size_t *)calloc(n_cells, sizeof(size_t));
-        //
+        o_file_stream<size_t> breaks_list("breaks.txt", BUFFER_SIZE, std::ios::out);
 
-        auto hash_phrase = [&](string_t& phrase) -> void {
-            phrase.mask_tail();
+        string_t suffix(2, sym_width(data.max_symbol));
+        phrase_map_t map(0, "", 0.8, nullptr, 8);
 
-            bucket = XXH3_64bits(phrase.data(), INT_CEIL(phrase.n_bits(), 8)) % n_buckets;
-
-            //read the value
-            start = bucket * width;
-            cell = start >> word_shift;
-            i_pos = (start & (word_bits - 1UL));
-            freq = ((map[cell] >> i_pos) & 3UL);
-            //
-
-            if(freq<=1){
-                //write
-                map[cell] &= ~(3UL << i_pos);
-                map[cell] |= (freq+1) << i_pos;
-                //
+        auto record_break = [&](size_t id) -> void {
+            //tails.emplace_back(data.ifs.read(id-1), data.ifs.read(id));
+            breaks_list.push_back(id);
+            suffix.write(0, data.ifs.read(id-1));
+            suffix.write(1, data.ifs.read(id));
+            auto res = map.insert(suffix.data(), suffix.n_bits(), id<<1UL);
+            if(!res.second){
+                size_t first_occ = 0;
+                map.get_value_from(res.first, first_occ);
+                map.insert_value_at(res.first, first_occ | 1UL);
             }
         };
 
@@ -85,17 +74,66 @@ struct counting_functor {
             return {data.str_ptr[str], data.str_ptr[str+1]-1};
         };
 
-        parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
+        parser_t::compute_breaks(data.ifs, data.start, data.end, record_break, init_str);
+        breaks_list.close();
 
-        size_t uniq=0;
-        for(size_t i=0;i<n_buckets*2;i+=2){
-            freq = ((map[(i >> word_shift)] >> (i & (word_bits - 1UL))) & 3UL);
-            if(freq==1){
-                uniq++;
+        o_file_stream<size_t> new_breaks_list("breaks_tmp.txt", BUFFER_SIZE, std::ios::out);
+        i_file_stream<size_t> old_breaks_list("breaks.txt", BUFFER_SIZE);
+
+        size_t pos, n_uniq=0, j=0;
+        for(auto const &ptr : map ){
+            pos=0;
+            map.get_value_from(ptr, pos);
+            if(!(pos & 1UL)){
+                pos >>=1UL;
+                while(j<old_breaks_list.size() && old_breaks_list.read(j)!=pos){
+                    new_breaks_list.push_back(old_breaks_list.read(j));
+                    j++;
+                }
+                j++;
+                n_uniq++;
             }
         }
-        std::cout<<"we have "<<uniq<<" estimated unique elements "<<std::endl;
-        free(map);
+        while(j<old_breaks_list.size()){
+            new_breaks_list.push_back(old_breaks_list.read(j));
+            j++;
+        }
+        assert(new_breaks_list.size()==(old_breaks_list.size()-n_uniq));
+        old_breaks_list.close();
+        std::cout<<"There are "<<n_uniq<<" unnecessary breaks out of "<<new_breaks_list.size()<<std::endl;
+        exit(0);
+
+        /*std::sort(tails.begin(), tails.end(), [&](auto a, auto b){
+            if(a.second!=b.second){
+                return a.second < b.second;
+            }else{
+                return a.first < b.first;
+            }
+        });
+
+        size_t l_sym = tails[0].second;
+        size_t r_sym = tails[1].first;
+        size_t freq=1, pos=0;
+
+        for(size_t i=1;i<tails.size();i++) {
+            if(tails[i].second!=l_sym){
+                if(freq==1) tails[pos++] = tails[i-1];
+                freq=0;
+                r_sym = tails[i].first;
+                l_sym = tails[i].second;
+            }else{
+                if(tails[i].first!=r_sym){
+                    if(freq<=10) tails[pos++] = tails[i-1];
+                    r_sym = tails[i].first;
+                    freq=0;
+                }
+            }
+            freq++;
+            //std::cout<<tails[i].first<<" "<<tails[i].second<<std::endl;
+        }
+        if(freq==10) tails[pos++] = tails.back();
+        tails.resize(pos);
+        std::cout<<"\nThere are "<<tails.size()<<" we can avoid "<<std::endl;*/
     };
 };
 
@@ -536,12 +574,13 @@ struct st_parse_strat_t {//parse data for single thread
 
     std::pair<size_t, size_t> get_phrases() {
 
-        /*if(p_info.p_round>0 && p_info.p_round<3){
+        //if(p_info.p_round>0 && p_info.p_round<3){
+        if(p_info.p_round==1){
             auto s = std::chrono::steady_clock::now();
             counting_functor<st_parse_strat_t, parser_type>()(*this);
             auto e = std::chrono::steady_clock::now();
             report_time(s, e, 3);
-        }*/
+        }
 
         std::cout<<"      Creating the hash table "<<std::flush;
         auto s = std::chrono::steady_clock::now();
