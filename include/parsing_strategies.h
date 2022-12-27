@@ -574,15 +574,6 @@ struct st_parse_strat_t {//parse data for single thread
 
     std::pair<size_t, size_t> get_phrases() {
 
-        //if(p_info.p_round>0 && p_info.p_round<3){
-        if(p_info.p_round==1){
-            auto s = std::chrono::steady_clock::now();
-            counting_functor<st_parse_strat_t, parser_type>()(*this);
-            auto e = std::chrono::steady_clock::now();
-            report_time(s, e, 3);
-        }
-
-        std::cout<<"      Creating the hash table "<<std::flush;
         auto s = std::chrono::steady_clock::now();
         hash_functor<st_parse_strat_t, parser_type>()(*this);
         auto e = std::chrono::steady_clock::now();

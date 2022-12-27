@@ -76,7 +76,9 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     size_t pos, new_size=0, l_sym, r_sym;
     vector_t new_dict(sa_size*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
-    std::cout<<"bytes compressed dict "<<INT_CEIL(new_dict.size()*new_dict.width(), 8)<<std::endl;
+    //TODO testing
+    std::vector<bool> tmp_vector(sa_size, false);
+    //
 
     for(size_t u=0;u<sa_size;u++) {
         pos = s_sa[u];
@@ -100,6 +102,11 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
             if(r_sym>=dict.alphabet){
                 new_dict.write(new_size++, l_sym);
                 new_dict.write(new_size++, r_sym);
+
+                //TODO testing
+                tmp_vector[r_sym-dict.alphabet] = true;
+                //
+
             }else{
                 if(r_sym >= dict.alphabet) r_sym = first_symbol.read(r_sym-dict.alphabet);
                 new_dict.write(new_size++, dict.dict_dummy);
@@ -107,6 +114,16 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
             }
         }
     }
+
+    //TODO testing
+    size_t nested=0;
+    for(size_t i=0;i<tmp_vector.size();i++){
+        if(tmp_vector[i]){
+            nested++;
+        }
+    }
+    std::cout<<"There are nested "<<nested<<" symbols"<<std::endl;
+    //
 
     dict.dict.swap(new_dict);
     dict.n_phrases = sa_size;
@@ -163,6 +180,10 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
+
+    //TODO test
+    size_t tmp_counter=0;
+    //
 
     while(u<sa_size) {
         d_pos = (sa[u]>>1UL) - 1;
@@ -230,6 +251,14 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                         dict.dict.write(pos, dict.alphabet + rank);
                     }
                 }
+
+                //TODO testing
+                if(u-bg_pos==1 && dict.freqs[d_lim_rs(f_sa_pos)]>1){
+                    assert(!is_maximal && exist_as_phrase);
+                    tmp_counter++;
+                }
+                //
+
                 sa[rank] = f_sa_pos;
                 rank++;
             }else{
@@ -246,16 +275,17 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         }
     }
 
-    std::cout<<"\nbytes SA "<<sa_size*sizeof(value_type)<<std::endl;
+    /*std::cout<<"\nbytes SA "<<sa_size*sizeof(value_type)<<std::endl;
     std::cout<<"bytes dict "<<INT_CEIL(dict.dict.size()*dict.dict.width(), 8)<<std::endl;
     std::cout<<"bytes first_symbol "<<INT_CEIL(first_symbol.size()*first_symbol.width(), 8)<<std::endl;
     std::cout<<"bytes freqs"<<INT_CEIL(dict.freqs.size()*dict.freqs.width(), 8)<<std::endl;
     std::cout<<"bytes ranks"<<INT_CEIL(ranks.size()*ranks.width(), 8)<<std::endl;
     std::cout<<"bytes has_hocc "<<INT_CEIL(dict.phrases_has_hocc.size(), 8)<<std::endl;
     std::cout<<"bytes d_lim "<<INT_CEIL(dict.d_lim.size(), 8)<<std::endl;
-    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;
+    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;*/
 
     //TODO test malloc
+    std::cout<<"There are "<<tmp_counter<<" phrases that are not contained by other phrases"<<std::endl;
     malloc_count_print_status();
     //
 
@@ -448,7 +478,7 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
 template<class value_type>
 void sort_dictionary_int(dictionary &dict, tmp_workspace& ws) {
     auto * sa = suffix_induction<value_type>(dict);
-    size_t pos, rank=0, phrase;
+    size_t pos, rank=0, phrase, new_pos=0;
     bv_rs_t dict_rs(&dict.d_lim);
     size_t width = sdsl::bits::hi(dict.dict.size())+1;
     vector_t ranks(dict.n_phrases, 0, width);
@@ -463,18 +493,18 @@ void sort_dictionary_int(dictionary &dict, tmp_workspace& ws) {
             ranks[phrase] = rank;
             new_freqs[rank] = dict.freqs[phrase];
             do{
-                new_dict[pos] = dict.dict[pos];
-            }while(dict.d_lim[pos++]);
-            new_d_lim[pos-1] = true;
+                new_dict[new_pos++] = dict.dict[pos];
+            }while(!dict.d_lim[pos++]);
+            new_d_lim[new_pos-1] = true;
             rank++;
         }
     }
+    assert(new_dict.size()==dict.dict.size());
     dict.dict.swap(new_dict);
     dict.d_lim.swap(new_d_lim);
     dict.freqs.swap(new_freqs);
-
-    assert(new_dict.size()==dict.dict.size());
     store_to_file(ws.get_file("phr_ranks"), ranks);
+    free(sa);
 }
 
 void sort_dictionary(dictionary &dict, tmp_workspace& ws){
@@ -490,12 +520,61 @@ void sort_dictionary(dictionary &dict, tmp_workspace& ws){
     }
 }
 
-void get_greedy_phrases(){
+template<class parse_strategy_t>
+void get_greedy_phrases(parse_strategy_t& p_strategy, dictionary& dict, parsing_info& p_info){
+    i_file_stream<size_t> ifs(p_strategy.o_file, BUFFER_SIZE);
+    size_t start, end, freq, prev_freq, sym, len, prev_pos;
+    std::vector<size_t> smaller(dict.alphabet, 0);
 
+    for(size_t str=0;str<p_info.str_ptrs.size()-1;str++){
+        start = p_info.str_ptrs[str];
+        end = p_info.str_ptrs[str+1]-1;
+        prev_freq = dict.freqs[ifs.read(start)];
+        prev_pos = start;
+        len=1;
+
+        for(size_t i=start+1;i<=end;i++){
+            sym = ifs.read(i);
+            freq = dict.freqs[sym];
+            if(freq!=prev_freq){
+                if(len>1){
+                    bool is_run = true;
+                    for(size_t j=prev_pos+1;j<i;j++){
+                        if(ifs.read(j)!=ifs.read(j-1)){
+                            is_run = false;
+                        }
+                    }
+                    if(!is_run){
+                        for(size_t j=prev_pos;j<i;j++){
+                            std::cout<<ifs.read(j)<<" ";
+                        }
+                        std::cout<<" -> "<<ifs.read(i)<<" is run? "<<is_run<<" "<<prev_freq<<std::endl;
+                    }
+                }
+                prev_pos = i;
+                prev_freq = freq;
+                len = 0;
+            }
+            len++;
+
+            if(i<end && sym<=ifs.read(i+1)){
+                smaller[sym]++;
+            }
+        }
+    }
+
+    size_t n_smaller=0, n_uniq=0;
+    for(size_t i=0;i<dict.n_phrases;i++){
+        if(smaller[i]==dict.freqs[i]){
+            n_uniq += dict.freqs[i]==1;
+            n_smaller++;
+        }
+    }
+    std::cout<<"There are "<<n_smaller<<" symbols of "<<dict.n_phrases<<" "<<n_uniq<<std::endl;
 }
 
 template<class parse_strategy_t>
-size_t pre_parsing(parse_strategy_t& p_strategy, parsing_info &p_info,
+void pre_parsing(parse_strategy_t& p_strategy, parsing_info &p_info,
                    bv_t &phrase_desc, tmp_workspace &ws) {
 
     auto start = std::chrono::steady_clock::now();
@@ -517,20 +596,17 @@ size_t pre_parsing(parse_strategy_t& p_strategy, parsing_info &p_info,
 
     //temporal unload of the hash table (not the data)
     map.destroy_table();
-    size_t tot_phrases=0;
 
-    {
-        //create a dictionary from where the ids will be computed
-        std::cout << "    Creating the dictionary from the hash table" << std::flush;
-        start = std::chrono::steady_clock::now();
-        dictionary dict(map, dict_sym, max_freq, phrase_desc,
-                        p_strategy.text_size, p_info.prev_alph,
-                        p_info.max_sym_freq, p_info.tot_phrases);
-        end = std::chrono::steady_clock::now();
-        map.destroy_data();
-        sort_dictionary(dict, ws);
-        report_time(start, end, 6);
-    }
+    //create a dictionary from where the ids will be computed
+    std::cout << "    Creating the dictionary from the hash table" << std::flush;
+    start = std::chrono::steady_clock::now();
+    dictionary dict(map, dict_sym, max_freq, phrase_desc,
+                    p_strategy.text_size, p_info.prev_alph,
+                    p_info.max_sym_freq, p_info.tot_phrases);
+    end = std::chrono::steady_clock::now();
+    map.destroy_data();
+    sort_dictionary(dict, ws);
+    report_time(start, end, 6);
 
     //reload the hash table
     map.load_data_from_file(ht_file);
@@ -559,6 +635,11 @@ size_t pre_parsing(parse_strategy_t& p_strategy, parsing_info &p_info,
     size_t psize = p_strategy.parse_text();
     end = std::chrono::steady_clock::now();
     report_time(start, end, 19);
+
+    std::cout<<"    Computing greedy phrases"<<std::flush;
+    start = std::chrono::steady_clock::now();
+    get_greedy_phrases(p_strategy, dict, p_info);
+    end = std::chrono::steady_clock::now();
 }
 
 size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
@@ -586,7 +667,11 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     size_t iter=1;
     size_t rem_phrases=0;
 
-    /*std::cout<<"  Parsing round "<<iter++<<std::endl;
+    //st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info);
+    //pre_parsing(p_strat, p_info, symbol_desc, ws);
+    //exit(0);
+
+    std::cout<<"  Parsing round "<<iter++<<std::endl;
     auto start = std::chrono::steady_clock::now();
     if(n_threads>1) {
         {
@@ -595,14 +680,13 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
         }
     }else{
         {
-            st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, symbol_desc);
+            st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info);
             rem_phrases = build_lc_gram_int<st_byte_parse_strategy>(i_file, tmp_i_file, p_strat, p_info, symbol_desc, ws);
         }
     }
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 4);*/
+    report_time(start, end, 4);
 
-    exit(0);
 
     while (rem_phrases > 0) {
         auto start = std::chrono::steady_clock::now();
