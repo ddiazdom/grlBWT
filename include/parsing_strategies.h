@@ -574,10 +574,7 @@ struct st_parse_strat_t {//parse data for single thread
 
     std::pair<size_t, size_t> get_phrases() {
 
-        auto s = std::chrono::steady_clock::now();
         hash_functor<st_parse_strat_t, parser_type>()(*this);
-        auto e = std::chrono::steady_clock::now();
-        report_time(s, e, 3);
 
         map.shrink_databuff();
         key_wrapper key_w{sym_width(max_symbol), map.description_bits(), map.get_data()};

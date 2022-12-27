@@ -76,10 +76,6 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     size_t pos, new_size=0, l_sym, r_sym;
     vector_t new_dict(sa_size*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
-    //TODO testing
-    std::vector<bool> tmp_vector(sa_size, false);
-    //
-
     for(size_t u=0;u<sa_size;u++) {
         pos = s_sa[u];
 
@@ -102,11 +98,6 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
             if(r_sym>=dict.alphabet){
                 new_dict.write(new_size++, l_sym);
                 new_dict.write(new_size++, r_sym);
-
-                //TODO testing
-                tmp_vector[r_sym-dict.alphabet] = true;
-                //
-
             }else{
                 if(r_sym >= dict.alphabet) r_sym = first_symbol.read(r_sym-dict.alphabet);
                 new_dict.write(new_size++, dict.dict_dummy);
@@ -114,16 +105,6 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
             }
         }
     }
-
-    //TODO testing
-    size_t nested=0;
-    for(size_t i=0;i<tmp_vector.size();i++){
-        if(tmp_vector[i]){
-            nested++;
-        }
-    }
-    std::cout<<"There are nested "<<nested<<" symbols"<<std::endl;
-    //
 
     dict.dict.swap(new_dict);
     dict.n_phrases = sa_size;
@@ -180,10 +161,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
     vector_t ranks(dict.n_phrases, 0, width);
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
-
-    //TODO test
-    size_t tmp_counter=0;
-    //
 
     while(u<sa_size) {
         d_pos = (sa[u]>>1UL) - 1;
@@ -252,13 +229,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     }
                 }
 
-                //TODO testing
-                if(u-bg_pos==1 && dict.freqs[d_lim_rs(f_sa_pos)]>1){
-                    assert(!is_maximal && exist_as_phrase);
-                    tmp_counter++;
-                }
-                //
-
                 sa[rank] = f_sa_pos;
                 rank++;
             }else{
@@ -283,11 +253,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     std::cout<<"bytes has_hocc "<<INT_CEIL(dict.phrases_has_hocc.size(), 8)<<std::endl;
     std::cout<<"bytes d_lim "<<INT_CEIL(dict.d_lim.size(), 8)<<std::endl;
     std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;*/
-
-    //TODO test malloc
-    std::cout<<"There are "<<tmp_counter<<" phrases that are not contained by other phrases"<<std::endl;
-    malloc_count_print_status();
-    //
 
     assert(rank<dict.dict.size());
     pre_bwt.close();
@@ -385,12 +350,6 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
                     }
                 }
 
-                //TODO testing
-                if(p_info.p_round==4){
-                    std::cout<<rank<<" -> "<<f_sa_pos<<std::endl;
-                }
-                //
-
                 pre_bwt.push_back(dummy_sym, freq);
                 sa[rank] = f_sa_pos;
                 rank++;
@@ -406,10 +365,6 @@ void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr
     }
     assert(rank<dict.dict.size());
     pre_bwt.close();
-
-    //TODO testing
-    std::cout<<"\n "<<rank<<" "<<dict.alphabet<<std::endl;
-    //
 
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
@@ -433,9 +388,9 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     auto start = std::chrono::steady_clock::now();
     auto * sa = suffix_induction<value_type>(dict);
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 17);
+    report_time(start, end, 4);
 
-    std::cout<<"    Alternative solution"<<std::flush;
+    std::cout<<"    Constructing the preliminary BWT"<<std::flush;
     start = std::chrono::steady_clock::now();
     size_t n_phrases = get_pre_bwt2<value_type>(dict, sa, dict.dict.size(), p_info, ws);
     end = std::chrono::steady_clock::now();
@@ -524,7 +479,6 @@ template<class parse_strategy_t>
 void get_greedy_phrases(parse_strategy_t& p_strategy, dictionary& dict, parsing_info& p_info){
     i_file_stream<size_t> ifs(p_strategy.o_file, BUFFER_SIZE);
     size_t start, end, freq, prev_freq, sym, len, prev_pos;
-    std::vector<size_t> smaller(dict.alphabet, 0);
 
     for(size_t str=0;str<p_info.str_ptrs.size()-1;str++){
         start = p_info.str_ptrs[str];
@@ -557,20 +511,20 @@ void get_greedy_phrases(parse_strategy_t& p_strategy, dictionary& dict, parsing_
             }
             len++;
 
-            if(i<end && sym<=ifs.read(i+1)){
+            /*if(i<end && sym<=ifs.read(i+1)){
                 smaller[sym]++;
-            }
+            }*/
         }
     }
 
-    size_t n_smaller=0, n_uniq=0;
+    /*size_t n_smaller=0, n_uniq=0;
     for(size_t i=0;i<dict.n_phrases;i++){
         if(smaller[i]==dict.freqs[i]){
             n_uniq += dict.freqs[i]==1;
             n_smaller++;
         }
     }
-    std::cout<<"There are "<<n_smaller<<" symbols of "<<dict.n_phrases<<" "<<n_uniq<<std::endl;
+    std::cout<<"There are "<<n_smaller<<" symbols of "<<dict.n_phrases<<" "<<n_uniq<<std::endl;*/
 }
 
 template<class parse_strategy_t>
@@ -719,11 +673,11 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     malloc_trim(0);
 #endif
 
+    std::cout<<"    Hashing the phrases"<<std::flush;
     auto start = std::chrono::steady_clock::now();
     auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 16);
-    //std::cout<<"\n We now have "<<malloc_count_current()<<" bytes after the hashing "<<std::endl;
 
     store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
@@ -825,7 +779,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         std::cout<<"    Stats:"<<std::endl;
         std::cout<<"      Parsing phrases:                  "<<p_info.lms_phrases<<std::endl;
         std::cout<<"      Number of symbols in the phrases: "<<dict_sym<<std::endl;
-        std::cout<<"      Number of BWT blocks:             "<<p_info.tot_phrases<<std::endl;
+        std::cout<<"      Number of unsolved BWT blocks:    "<<p_info.tot_phrases<<std::endl;
         std::cout<<"      Parse size:                       "<<psize<<std::endl;
 
         map.destroy_data();

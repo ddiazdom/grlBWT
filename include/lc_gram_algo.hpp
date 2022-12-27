@@ -83,16 +83,6 @@ struct dictionary {
             if(phrase_uniq){
                 n_uniq++;
                 if(freqs[phrase]>1) n_rep++;
-                if(n_phrases==8036990){
-                    size_t tmp=i-2;
-                    while(tmp>0 && !d_lim[tmp]) tmp--;
-                    if(tmp>0) tmp++;
-                    assert(tmp==0 || d_lim[tmp-1]);
-                    do{
-                        std::cout<<dict[tmp]<<" ";
-                    }while(!d_lim[tmp++]);
-                    std::cout<<" - > "<<freqs[phrase]<<std::endl;
-                }
             }
             phrase++;
         }
