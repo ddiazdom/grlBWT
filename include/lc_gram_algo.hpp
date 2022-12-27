@@ -43,9 +43,6 @@ struct dictionary {
         key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
         size_t j=0, k=0, freq;
 
-        //TODO testing
-        size_t n_uniq=0, low=0;
-        //
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i);
@@ -55,15 +52,52 @@ struct dictionary {
 
             freq = 0;
             mp_map.get_value_from(ptr, freq);
-
-            n_uniq+=(freq==1);
-            low+=freq<=5;
             freqs[k++] = freq;
         }
-
-        std::cout<<"\n"<<n_uniq<<" real unique phrases"<<std::endl;
-        std::cout<<low<<" ("<<double(low)/double(n_phrases)<<") real phrases with low freq"<<std::endl;
         assert(j==dict_syms);
+
+        //TODO testing
+        std::vector<size_t> g_freqs(alphabet, 0);
+        for(size_t i=0;i<dict.size();i++){
+            if(!d_lim[i] || (d_lim[i] && is_suffix(dict[i]))){
+                g_freqs[dict[i]]++;
+            }
+        }
+        size_t i=0;
+        bool phrase_uniq;
+        size_t n_uniq=0, phrase=0, n_rep=0;
+        while(i<dict.size()){
+            assert(i==0 || d_lim[i-1]);
+            phrase_uniq=true;
+            while(!d_lim[i]){
+                if(g_freqs[dict[i]]>1){
+                    phrase_uniq=false;
+                }
+                i++;
+            }
+            assert(d_lim[i]);
+            if(is_suffix(dict[i]) && g_freqs[dict[i]]>1){
+                phrase_uniq = false;
+            }
+            i++;
+            if(phrase_uniq){
+                n_uniq++;
+                if(freqs[phrase]>1) n_rep++;
+                if(n_phrases==8036990){
+                    size_t tmp=i-2;
+                    while(tmp>0 && !d_lim[tmp]) tmp--;
+                    if(tmp>0) tmp++;
+                    assert(tmp==0 || d_lim[tmp-1]);
+                    do{
+                        std::cout<<dict[tmp]<<" ";
+                    }while(!d_lim[tmp++]);
+                    std::cout<<" - > "<<freqs[phrase]<<std::endl;
+                }
+            }
+            phrase++;
+        }
+        std::cout<<"\nThere are "<<n_uniq<<" phrases that have a unique context. From them, "<<n_rep<<" are repeated in the text"<<std::endl;
+        //
     }
 
     [[nodiscard]] inline bool is_suffix(size_t sym) const{
