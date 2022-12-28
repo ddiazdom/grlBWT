@@ -57,7 +57,7 @@ struct dictionary {
         assert(j==dict_syms);
 
         //TODO testing
-        std::vector<size_t> g_freqs(alphabet, 0);
+        /*std::vector<size_t> g_freqs(alphabet, 0);
         for(size_t i=0;i<dict.size();i++){
             if(!d_lim[i] || (d_lim[i] && is_suffix(dict[i]))){
                 g_freqs[dict[i]]++;
@@ -86,7 +86,7 @@ struct dictionary {
             }
             phrase++;
         }
-        std::cout<<"\nThere are "<<n_uniq<<" phrases that have a unique context. From them, "<<n_rep<<" are repeated in the text"<<std::endl;
+        std::cout<<"\nThere are "<<n_uniq<<" phrases that have a unique context. From them, "<<n_rep<<" are repeated in the text"<<std::endl;*/
         //
     }
 
