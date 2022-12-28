@@ -25,10 +25,6 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
     for(size_t u=0;u<s_sa.size();u++) {
         pos = s_sa[u];
 
-        if(p_info.p_round==1 && u==1633){
-            std::cout<<"holaa "<<dict.dict[pos]<<std::endl;
-        }
-
         if(dict.d_lim[pos]){
             new_dict[new_size++] = dict.dict_dummy;
             new_dict[new_size++] = dict.dict[pos];
@@ -70,7 +66,8 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
 }
 
 template<class value_type>
-void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol, parsing_info& p_info, tmp_workspace& ws) {
+void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol,
+                parsing_info& p_info, tmp_workspace& ws) {
 
     dict.dict_dummy = dict.alphabet+sa_size+1;
     size_t pos, new_size=0, l_sym, r_sym;
@@ -149,7 +146,7 @@ template<class value_type>
 size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws) {
 
     bool is_maximal, exist_as_phrase;
-    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, phrase_frq;
+    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, phrase_frq, metasymbol=0;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
@@ -159,89 +156,102 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
-    vector_t ranks(dict.n_phrases, 0, width);
+    vector_t new_metasymbols(dict.n_phrases, 0, width);
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
 
     while(u<sa_size) {
-        d_pos = (sa[u]>>1UL) - 1;
 
-        if(dict.d_lim[d_pos] && !dict.is_suffix(dict.dict.read(d_pos))){
-            u++;
-            while(u<sa_size && sa[u] & 1UL) u++;
-        }else{
+        if((sa[u] & 2UL)==0) { //phrase's suffix is within a phrase that does not expand to a string suffix
 
-            f_sa_pos = d_pos;
-            freq = dict.freqs.read(d_lim_rs(d_pos));
-            bg_pos = u;
-            is_maximal = false;
-
-            if(d_pos==0 || dict.d_lim[d_pos-1]){
-                pl_sym = dummy_sym;
+            d_pos = (sa[u]>>2UL) - 1;
+            if(dict.d_lim[d_pos]) {
+                u++;
+                while(u<sa_size && sa[u] & 1UL) u++;
             }else{
-                pl_sym = dict.dict[d_pos-1];
-                if(pl_sym>=dict.alphabet) pl_sym = first_symbol[pl_sym-dict.alphabet];
-            }
-
-            if(pl_sym==dummy_sym){
-                exist_as_phrase = true;
-                d_rank = d_lim_rs(d_pos);
-                ranks.write(d_rank, (rank<<1UL) | (dict.freqs[d_rank]>1));
-            }else{
-                exist_as_phrase = false;
-            }
-
-            u++;
-            while(u<sa_size && sa[u] & 1UL){
-                d_pos = (sa[u]>>1UL) - 1;
-                phrase_frq = dict.freqs.read(d_lim_rs(d_pos));
-                freq += phrase_frq;
+                f_sa_pos = d_pos;
+                freq = dict.freqs.read(d_lim_rs(d_pos));
+                bg_pos = u;
+                is_maximal = false;
 
                 if(d_pos==0 || dict.d_lim[d_pos-1]){
-                    l_sym = dummy_sym;
+                    pl_sym = dummy_sym;
                 }else{
-                    l_sym = dict.dict.read(d_pos-1);
-                    if(l_sym>=dict.alphabet) l_sym = first_symbol.read(l_sym-dict.alphabet);
+                    pl_sym = dict.dict[d_pos-1];
+                    if(pl_sym>=dict.alphabet) pl_sym = first_symbol[pl_sym-dict.alphabet];
                 }
 
-                if(!is_maximal && l_sym!=pl_sym) is_maximal = true;
-                if(!exist_as_phrase && l_sym==dummy_sym){
+                if(pl_sym==dummy_sym){
                     exist_as_phrase = true;
                     d_rank = d_lim_rs(d_pos);
-                    ranks.write(d_rank, (rank << 1UL) | (dict.freqs.read(d_rank)>1));
+                    new_metasymbols.write(d_rank, (metasymbol<<1UL) | (dict.freqs[d_rank]>1));
+                }else{
+                    exist_as_phrase = false;
                 }
-                pl_sym = l_sym;
+
                 u++;
-            }
+                while(u<sa_size && sa[u] & 1UL){
+                    d_pos = (sa[u]>>2UL) - 1;
+                    phrase_frq = dict.freqs.read(d_lim_rs(d_pos));
+                    freq += phrase_frq;
 
-            if(is_maximal || exist_as_phrase) {
+                    if(d_pos==0 || dict.d_lim[d_pos-1]){
+                        l_sym = dummy_sym;
+                    }else{
+                        l_sym = dict.dict.read(d_pos-1);
+                        if(l_sym>=dict.alphabet) l_sym = first_symbol.read(l_sym-dict.alphabet);
+                    }
 
-                pre_bwt.push_back(dummy_sym, freq);
+                    if(!is_maximal && l_sym!=pl_sym) is_maximal = true;
+                    if(!exist_as_phrase && l_sym==dummy_sym){
+                        exist_as_phrase = true;
+                        d_rank = d_lim_rs(d_pos);
+                        new_metasymbols.write(d_rank, (metasymbol << 1UL) | (dict.freqs.read(d_rank)>1));
+                    }
+                    pl_sym = l_sym;
+                    u++;
+                }
 
-                size_t f_sym = dict.dict.read(f_sa_pos);
-                first_symbol.push_back(f_sym);
+                if(is_maximal || exist_as_phrase) {
 
-                if(u-bg_pos>1){
-                    dict.phrases_has_hocc[rank] = true;
-                    for(size_t j=bg_pos;j<u;j++){
-                        size_t pos = (sa[j]>>1UL)-1;
-                        assert(dict.dict.read(pos)==f_sym);
-                        dict.dict.write(pos, dict.alphabet + rank);
+                    pre_bwt.push_back(dummy_sym, freq);
+
+                    size_t f_sym = dict.dict.read(f_sa_pos);
+                    first_symbol.push_back(f_sym);
+
+                    if(u-bg_pos>1){
+                        dict.phrases_has_hocc[rank] = true;
+                        for(size_t j=bg_pos;j<u;j++){
+                            size_t pos = (sa[j]>>2UL)-1;
+                            assert(dict.dict.read(pos)==f_sym);
+                            dict.dict.write(pos, dict.alphabet + rank);
+                        }
+                    }
+
+                    sa[rank] = f_sa_pos;
+                    rank++;
+                    metasymbol++;
+                }else{
+                    l_sym = dict.dict.read(f_sa_pos-1);
+                    if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
+
+                    assert(l_sym<dict.alphabet);
+                    if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
+                        pre_bwt.inc_freq_last(freq);
+                    }else{
+                        pre_bwt.push_back(l_sym, freq);
                     }
                 }
-
-                sa[rank] = f_sa_pos;
-                rank++;
-            }else{
-                l_sym = dict.dict.read(f_sa_pos-1);
-                if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
-
-                assert(l_sym<dict.alphabet);
-                if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
-                    pre_bwt.inc_freq_last(freq);
-                }else{
-                    pre_bwt.push_back(l_sym, freq);
-                }
             }
+        } else {
+            do{
+                d_pos = (sa[u]>>2UL) - 1;
+                if(d_pos==0 || dict.d_lim[d_pos-1]) {
+                    d_rank = d_lim_rs(d_pos);
+                    new_metasymbols.write(d_rank, (metasymbol<<1UL) | (dict.freqs[d_rank]>1));
+                    exist_as_phrase = true;
+                    metasymbol++;
+                }
+            }while(++u<sa_size && (sa[u] & 1UL));
         }
     }
 
@@ -262,8 +272,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
     dict.freqs.erase();
-    store_to_file(ws.get_file("phr_ranks"), ranks);
-    ranks.erase();
+    store_to_file(ws.get_file("phr_ranks"), new_metasymbols);
+    new_metasymbols.erase();
 
 #ifdef __linux__
     malloc_trim(0);
@@ -271,7 +281,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
     dict2gram2<value_type>(dict, sa, rank, first_symbol, p_info, ws);
 
-    return rank;
+    return metasymbol;
 }
 
 void get_pre_bwt(dictionary &dict, vector_t &sa, parsing_info& p_info, bv_t& phr_marks,
@@ -415,7 +425,7 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    uint8_t width = sym_width(dict.dict.size())+1;
+    uint8_t width = sym_width(dict.dict.size())+2;
     size_t n_phrases;
 
     if(width<=8){

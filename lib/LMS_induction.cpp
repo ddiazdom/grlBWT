@@ -25,16 +25,19 @@ value_type * suffix_induction(const dictionary &dict) {
 
     vector_t freqs(dict.alphabet+1, 0, sdsl::bits::hi(max_freq)+1);
     bv_t solv_syms(dict.alphabet+1, false);
-    size_t sym;
+    size_t sym, is_suffix=0;
 
-    for(size_t i=0;i<dict.dict.size();i++) {
+    for(size_t i=dict.dict.size();i-->0;) {
         sym = dict.dict[i];
         freq = buckets[sym+1]-buckets[sym];
+        if(dict.d_lim[i]) is_suffix = dict.is_suffix(sym) ? 2 : 0;
+
         if(freq==1){
-            sa[buckets[sym]] = (i+1)<<1UL;
+            //if it is a suffix of a phrase, we don't need to mark it
+            sa[buckets[sym]] = ((i+1)<<2UL) | is_suffix;
             solv_syms[sym]= true;
         }else if(dict.d_lim[i]){
-            sa[buckets[sym+1]-1-freqs[sym]++] = ((i+1)<<1UL) | 1UL;
+            sa[buckets[sym+1]-1-freqs[sym]++] = ((i+1)<<2UL) | (is_suffix | 1UL);
         }
     }
 
@@ -65,13 +68,13 @@ value_type * suffix_induction(const dictionary &dict) {
     induce_S_type<value_type>(sa, sa_size, dict, buckets, solv_syms);
 
     //TODO testing
-    /*for(size_t i=0;i<sa.size();i++){
-        pos = (sa[i]>>1UL)-1;
-        std::cout<<(sa[i] & 1UL)<<" | ";
+    /*for(size_t i=0;i<sa_size;i++){
+        pos = (sa[i]>>2UL)-1;
+        std::cout<<pos<<" : "<<(sa[i] & 1UL)<<" | "<<((sa[i] & 2UL)!=0)<<" -> ";
         do{
             std::cout<<dict.dict[pos]<<" ";
         }while(!dict.d_lim[pos++]);
-        std::cout<<" -> "<<dict.is_suffix(dict.dict[pos-1])<<std::endl;
+        std::cout<<""<<std::endl;
     }*/
     //
     free(buckets);
@@ -84,13 +87,15 @@ void induce_L_type(value_type* sa, size_t sa_size, const dictionary &dict, value
     size_t pos, l_sym, bck;
     auto * ind_bck = (value_type*) calloc(dict.alphabet+1, sizeof(value_type));
     bool lcs, first_eq=false;
-    size_t lb=1;
+    size_t lb=1, is_suffix, flag;
 
     for(size_t i=0;i<sa_size;i++) {
 
         pos = sa[i];
         lcs = pos & 1UL;
-        pos>>=1UL;
+        is_suffix = pos & 2UL;
+        assert(is_suffix==2 || is_suffix==0);
+        pos>>=2UL;
         if(pos==0) continue;
 
         if(!lcs) {
@@ -112,7 +117,9 @@ void induce_L_type(value_type* sa, size_t sa_size, const dictionary &dict, value
                 first_eq = true;
                 lcs = false;
             }
-            sa[buckets[l_sym]++] = ((pos-1)<<1UL) | (ind_bck[l_sym]>=lb && lcs);
+
+            flag = is_suffix | (ind_bck[l_sym]>=lb && lcs);
+            sa[buckets[l_sym]++] = ((pos-1)<<2UL) | flag ;
             ind_bck[l_sym] = i+1;
         }
     }
@@ -125,13 +132,16 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
     size_t pos, bck, l_sym, ind_pos;
     auto * ind_bck = (value_type *) calloc(dict.alphabet+1, sizeof(value_type));
     bool lcs, first_eq, new_break, p_lcs=false;
-    size_t rb=sa_size;
+    size_t rb=sa_size, is_suffix, flag;
 
     for(size_t i=sa_size;i-->0;) {
 
         pos = sa[i];
         lcs = pos & 1UL;
-        pos>>=1UL;
+        is_suffix = pos & 2UL;
+        assert(is_suffix==2 || is_suffix==0);
+
+        pos>>=2UL;
         if(pos==0){
             sa[i+1] &=  ~1UL;
             p_lcs = false;
@@ -148,20 +158,14 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
             continue;
         }
 
-        /*if(dict.dict[pos-2]==dict.dict_dummy ||
-           (pos>2 && dict.dict[pos-3]==dict.dict_dummy)){
-            p_lcs = lcs;
-            continue;
-        }*/
-
         bck = dict.dict.read(pos-1);
         l_sym = dict.dict.read(pos-2);
 
         if(!solved_sym[l_sym] && (l_sym < bck || (l_sym==bck && i >= buckets[bck]))){
 
             ind_pos = buckets[l_sym]--;
-
-            sa[ind_pos] = ((pos-1)<<1UL) | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
+            flag = is_suffix | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
+            sa[ind_pos] = ((pos-1)<<2UL) | flag;
 
             new_break = !first_eq && l_sym==bck;
             if(new_break) first_eq = true;
@@ -172,7 +176,6 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
             }
             ind_bck[l_sym] = i+1;
         }
-
         p_lcs = lcs;
     }
     free(ind_bck);
