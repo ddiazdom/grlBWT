@@ -104,11 +104,6 @@ void induce_L_type(value_type* sa, size_t sa_size, const dictionary &dict, value
         }
         if(pos==1 || dict.d_lim[pos-2]) continue;
 
-        /*if(dict.dict[pos-2]==dict.dict_dummy ||
-           (pos>2 && dict.dict[pos-3]==dict.dict_dummy)){
-            continue;
-        }*/
-
         bck = dict.dict.read(pos-1);
         l_sym = dict.dict.read(pos-2);
 
