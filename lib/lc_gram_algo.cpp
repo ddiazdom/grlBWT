@@ -89,7 +89,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
         }else{
             if(r_sym >= dict.alphabet) r_sym = first_symbol.read(r_sym-dict.alphabet);
             new_dict.write(new_size++, dict.dict_dummy);
-            new_dict.write(new_size++, dict.is_suffix(r_sym) ? r_sym : l_sym);
+            new_dict.write(new_size++, dict.is_suffix(r_sym) ? dict.dict_dummy : l_sym);
         }
     }
 
@@ -264,9 +264,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 #ifdef __linux__
     malloc_trim(0);
 #endif
-
     dict2gram2<value_type>(dict, sa, rank, first_symbol, p_info, ws);
-
     return rank;
 }
 
@@ -405,7 +403,7 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     dict2gram(dict, new_phrases_ht, sa, phr_marks, p_info, ws);
     end = std::chrono::steady_clock::now();
     report_time(start, end, 14);*/
-
+    
     return n_phrases;
 }
 
@@ -639,7 +637,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
 
 
     while (rem_phrases > 0) {
-        auto start = std::chrono::steady_clock::now();
+        start = std::chrono::steady_clock::now();
         std::cout<<"  Parsing round "<<iter++<<std::endl;
         if(n_threads>1) {
             mt_int_parse_strategy p_strat( tmp_i_file, output_file, p_info, hbuff_size, n_threads);
@@ -648,7 +646,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
             st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info);
             rem_phrases = build_lc_gram_int<st_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
         }
-        auto end = std::chrono::steady_clock::now();
+        end = std::chrono::steady_clock::now();
         report_time(start, end,4);
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
@@ -683,8 +681,8 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 #endif
 
     phrase_map_t & map = p_strategy.map;
-
     size_t psize=0;//<- for the iter stats
+    assert(map.size()>0);
     if(map.size()!=p_info.lms_phrases) {
 
         size_t dict_sym = res.first;
