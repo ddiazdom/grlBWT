@@ -73,9 +73,13 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     size_t pos, new_size=0, l_sym, r_sym;
     vector_t new_dict(sa_size*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
+    if(std::is_same<value_type, uint16_t>::value){
+        std::cout<<"holaa"<<std::endl;
+    }
+
     for(size_t u=0;u<sa_size;u++) {
         pos = s_sa[u];
-        assert(!dict.d_lim[pos]);
+        assert(pos<dict.dict.size() && !dict.d_lim[pos]);
         pos++;
         while(dict.dict.read(pos)<dict.alphabet && !dict.d_lim[pos]) pos++;
 
@@ -85,7 +89,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
 
         assert(l_sym<dict.alphabet);
 
-        if(r_sym>=dict.alphabet){
+        if(r_sym>=dict.alphabet) {
             new_dict.write(new_size++, l_sym);
             new_dict.write(new_size++, r_sym);
         }else{
@@ -176,6 +180,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     }else{
                         l_sym = dict.dict[d_pos-1];
                         if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
+                        assert(l_sym<dict.alphabet);
                     }
                     n_breaks += (pl_sym!=l_sym);
                     pl_sym = l_sym;
@@ -198,7 +203,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                     sa[rank++] = f_sa_pos;
                 }else{
-                    assert(l_sym<dict.alphabet);
                     if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                         pre_bwt.inc_freq_last(freq);
                     }else{
@@ -209,6 +213,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         }else {
             assert((sa[u] & 2UL)!=0);
             f_sa_pos = d_pos;
+            size_t f_sym = dict.dict.read(f_sa_pos);
+            assert(f_sym<dict.alphabet);
             do{
                 d_pos = (sa[u]>>2UL) - 1;
                 size_t phrase = d_lim_rs(d_pos);
@@ -226,11 +232,14 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                      * Caveat: If the A expands to a full string, then we con append a dummy.
                      */
                     new_metasymbols.write(d_rank, (rank<<1UL) | (dict.freqs[d_rank]>1));
+                    first_symbol.push_back(f_sym);
+
                     sa[rank++] = f_sa_pos;
                 }else{
+                    //we don't compress any phrase that ends with a metasymbol
+                    // expanding to a string suffix
                     l_sym = dict.dict[d_pos-1];
                     assert(l_sym<dict.alphabet);
-                    //if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
                 }
                 /***NOTE: here it is unnecessary to check if the suffix is left-maximal as we can decide
                  * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
@@ -254,11 +263,11 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     std::cout<<"bytes d_lim "<<INT_CEIL(dict.d_lim.size(), 8)<<std::endl;
     std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;*/
 
+    assert(first_symbol.size()>=rank);
     assert(rank<dict.dict.size());
     pre_bwt.close();
     sa = (value_type *)realloc(sa, rank*sizeof(value_type));
     first_symbol.resize(rank);
-
     std::cout<<"\n alphabet "<<dict.alphabet<<" rank "<<rank<<" dummy "<<dummy_sym<<" next_dummy "<<(dict.alphabet+sa_size+1)<<std::endl;
 
     dict.phrases_has_hocc.resize(rank);
