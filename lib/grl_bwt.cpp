@@ -336,11 +336,14 @@ void parse2bwt(tmp_workspace& ws, size_t p_round) {
 void ind_phase(tmp_workspace& ws, size_t p_round){
     std::cout<<"Inferring the BWT"<<std::endl;
 
-    std::cout<<"  Computing the BWT for parse "<<p_round<<std::endl;
-    parse2bwt(ws, p_round);
+    //parse2bwt(ws, p_round);
+    std::string prev_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_round));
+    std::string new_bwt_file = ws.get_file("bwt_lev_"+std::to_string(p_round));
+
+    rename(prev_bwt_file.c_str(), new_bwt_file.c_str());
 
     while(p_round-->0){
-        std::cout<<"  Inducing the BWT for parse "<<p_round<<std::endl;
+        std::cout<<"  Inducing the BWT for parse "<<(p_round+1)<<std::endl;
         auto start = std::chrono::steady_clock::now();
         infer_lvl_bwt(ws, p_round);
         auto end = std::chrono::steady_clock::now();
@@ -356,7 +359,7 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_w
 
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
     size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
-    //ind_phase(tmp_ws, p_rounds);
+    ind_phase(tmp_ws, p_rounds);
     //std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     //std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
 }

@@ -83,11 +83,12 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
         if(l_sym >= dict.alphabet) l_sym = first_symbol.read(l_sym-dict.alphabet);
         r_sym = dict.dict.read(pos);
 
+        assert(l_sym<dict.alphabet);
+
         if(r_sym>=dict.alphabet){
             new_dict.write(new_size++, l_sym);
             new_dict.write(new_size++, r_sym);
         }else{
-            if(r_sym >= dict.alphabet) r_sym = first_symbol.read(r_sym-dict.alphabet);
             new_dict.write(new_size++, dict.dict_dummy);
             new_dict.write(new_size++, dict.is_suffix(r_sym) ? dict.dict_dummy : l_sym);
         }
@@ -136,7 +137,7 @@ template<class value_type>
 size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws) {
 
     bool is_maximal, exist_as_phrase;
-    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet+1, f_sa_pos, d_rank, n_breaks;
+    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet, f_sa_pos, d_rank, n_breaks;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
@@ -185,8 +186,9 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                     pre_bwt.push_back(dummy_sym, freq);
                     size_t f_sym = dict.dict.read(f_sa_pos);
+                    assert(f_sym<dict.alphabet);
                     first_symbol.push_back(f_sym);
-                    dict.phrases_has_hocc[rank] = (u-bg_pos>1);
+                    dict.phrases_has_hocc[rank] = (exist_as_phrase && (u-bg_pos>1));
 
                     for(size_t j=bg_pos;j<u;j++){
                         size_t pos = (sa[j]>>2UL)-1;
@@ -196,6 +198,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                     sa[rank++] = f_sa_pos;
                 }else{
+                    assert(l_sym<dict.alphabet);
                     if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                         pre_bwt.inc_freq_last(freq);
                     }else{
@@ -203,7 +206,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     }
                 }
             }
-        }else{
+        }else {
             assert((sa[u] & 2UL)!=0);
             f_sa_pos = d_pos;
             do{
@@ -226,7 +229,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     sa[rank++] = f_sa_pos;
                 }else{
                     l_sym = dict.dict[d_pos-1];
-                    if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
+                    assert(l_sym<dict.alphabet);
+                    //if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
                 }
                 /***NOTE: here it is unnecessary to check if the suffix is left-maximal as we can decide
                  * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
@@ -254,6 +258,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     pre_bwt.close();
     sa = (value_type *)realloc(sa, rank*sizeof(value_type));
     first_symbol.resize(rank);
+
+    std::cout<<"\n alphabet "<<dict.alphabet<<" rank "<<rank<<" dummy "<<dummy_sym<<" next_dummy "<<(dict.alphabet+sa_size+1)<<std::endl;
 
     dict.phrases_has_hocc.resize(rank);
     sdsl::util::clear(d_lim_rs);
@@ -403,7 +409,7 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     dict2gram(dict, new_phrases_ht, sa, phr_marks, p_info, ws);
     end = std::chrono::steady_clock::now();
     report_time(start, end, 14);*/
-    
+
     return n_phrases;
 }
 
@@ -683,108 +689,112 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     phrase_map_t & map = p_strategy.map;
     size_t psize=0;//<- for the iter stats
     assert(map.size()>0);
-    if(map.size()!=p_info.lms_phrases) {
 
-        size_t dict_sym = res.first;
-        size_t max_freq = res.second;
+    //if(map.size()!=p_info.lms_phrases) {
 
-        //save a copy of the hash table into a file
-        std::string ht_file = ws.get_file("ht_data");
-        map.store_data_to_file(ht_file);
+    size_t dict_sym = res.first;
+    size_t max_freq = res.second;
 
-        //temporal unload of the hash table (not the data)
-        map.destroy_table();
-        size_t tot_phrases=0;
-        {
-            //create a dictionary from where the ids will be computed
-            std::cout<<"    Creating the dictionary from the hash table"<<std::flush;
-            start = std::chrono::steady_clock::now();
-            dictionary dict(map, dict_sym, max_freq, phrase_desc,
-                            p_strategy.text_size, p_info.prev_alph,
-                            p_info.max_sym_freq, p_info.tot_phrases);
-            end = std::chrono::steady_clock::now();
-            map.destroy_data();
-            report_time(start, end, 6);
+    //save a copy of the hash table into a file
+    std::string ht_file = ws.get_file("ht_data");
+    map.store_data_to_file(ht_file);
 
-            //process the dictionary
-            tot_phrases = process_dictionary(dict, p_info, ws);
-        }
-
-        //reload the hash table
-        map.load_data_from_file(ht_file);
-        ws.remove_file("ht_data");
-
-        {
-            std::cout<<"    Assigning ranks to the new phrases"<<std::flush;
-            start = std::chrono::steady_clock::now();
-            bv_t new_phrase_desc(tot_phrases, false);
-            key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
-
-            size_t j=0;
-            vector_t ranks;
-            std::string ranks_file = ws.get_file("phr_ranks");
-            sdsl::load_from_file(ranks, ranks_file);
-            for(auto const& ptr : map){
-                phrase_map_t::val_type val=0;
-                map.get_value_from(ptr, val);
-                val = ranks[j++];
-                map.insert_value_at(ptr, val);
-                //the first bit marks if the phrase is repeated or not. We need to shift it to get the real id
-                new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
-
-                //todo testing
-                /*if(p_info.p_round>5){
-                    std::cout<<" phrase : "<<(val>>1UL)<<" -> ";
-                    for(size_t i=key_w.size(ptr);i-->0;){
-                        std::cout<<key_w.read(ptr, i)<<" ";
-                    }
-                    std::cout<<""<<std::endl;
-                }*/
-                //
-            }
-            ws.remove_file("phr_ranks");
-            std::string suffix_file = ws.get_file("suffix_file");
-            sdsl::store_to_file(new_phrase_desc, suffix_file);
-            end = std::chrono::steady_clock::now();
-            report_time(start, end, 15);
-        }
-
-        std::cout<<"    Creating the parse of the text"<<std::flush;
+    //temporal unload of the hash table (not the data)
+    map.destroy_table();
+    size_t tot_phrases;
+    {
+        //create a dictionary from where the ids will be computed
+        std::cout<<"    Creating the dictionary from the hash table"<<std::flush;
         start = std::chrono::steady_clock::now();
-        load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
-        psize = p_strategy.parse_text();
+        dictionary dict(map, dict_sym, max_freq, phrase_desc,
+                        p_strategy.text_size, p_info.prev_alph,
+                        p_info.max_sym_freq, p_info.tot_phrases);
         end = std::chrono::steady_clock::now();
-        report_time(start, end, 19);
-
-        {
-            //keep track of the phrases that have to be rephrased
-            std::string suffix_file = ws.get_file("suffix_file");
-            bv_t new_phrase_desc;
-            sdsl::load_from_file(new_phrase_desc, suffix_file);
-            p_info.prev_alph = phrase_desc.size();
-            phrase_desc.swap(new_phrase_desc);
-        }
-
-        p_info.max_sym_freq = max_freq;
-        p_info.lms_phrases = map.size();
-        p_info.tot_phrases = tot_phrases;
-        p_info.p_round++;
-
-        std::cout<<"    Stats:"<<std::endl;
-        std::cout<<"      Parsing phrases:                  "<<p_info.lms_phrases<<std::endl;
-        std::cout<<"      Number of symbols in the phrases: "<<dict_sym<<std::endl;
-        std::cout<<"      Number of unsolved BWT blocks:    "<<p_info.tot_phrases<<std::endl;
-        std::cout<<"      Parse size:                       "<<psize<<std::endl;
-
         map.destroy_data();
-        map.destroy_table();
+        report_time(start, end, 6);
 
-        if(psize==0){
-            return 0;
-        }else{
-            return p_info.lms_phrases;
+        //process the dictionary
+        tot_phrases = process_dictionary(dict, p_info, ws);
+    }
+
+    //reload the hash table
+    map.load_data_from_file(ht_file);
+    ws.remove_file("ht_data");
+
+    {
+        std::cout<<"    Assigning ranks to the new phrases"<<std::flush;
+        start = std::chrono::steady_clock::now();
+        bv_t new_phrase_desc(tot_phrases, false);
+        key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
+
+        size_t j=0;
+        vector_t ranks;
+        std::string ranks_file = ws.get_file("phr_ranks");
+        sdsl::load_from_file(ranks, ranks_file);
+        for(auto const& ptr : map){
+            phrase_map_t::val_type val=0;
+            map.get_value_from(ptr, val);
+            val = ranks[j++];
+            map.insert_value_at(ptr, val);
+            //the first bit marks if the phrase is repeated or not.
+            // We need to shift it to get the real id
+            new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
+
+            //todo testing
+            /*if(p_info.p_round>5){
+                std::cout<<" phrase : "<<(val>>1UL)<<" -> ";
+                for(size_t i=key_w.size(ptr);i-->0;){
+                    std::cout<<key_w.read(ptr, i)<<" ";
+                }
+                std::cout<<""<<std::endl;
+            }*/
+            //
         }
-    } else{ //just copy the input
+        ws.remove_file("phr_ranks");
+        std::string suffix_file = ws.get_file("suffix_file");
+        sdsl::store_to_file(new_phrase_desc, suffix_file);
+        end = std::chrono::steady_clock::now();
+        report_time(start, end, 15);
+    }
+
+    std::cout<<"    Creating the parse of the text"<<std::flush;
+    start = std::chrono::steady_clock::now();
+    load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
+    psize = p_strategy.parse_text();
+    end = std::chrono::steady_clock::now();
+    report_time(start, end, 19);
+
+    {
+        //keep track of the phrases that have to be rephrased
+        std::string suffix_file = ws.get_file("suffix_file");
+        bv_t new_phrase_desc;
+        sdsl::load_from_file(new_phrase_desc, suffix_file);
+        p_info.prev_alph = phrase_desc.size();
+        phrase_desc.swap(new_phrase_desc);
+    }
+
+    p_info.max_sym_freq = max_freq;
+    p_info.lms_phrases = map.size();
+    p_info.tot_phrases = tot_phrases;
+    p_info.p_round++;
+
+    std::cout<<"    Stats:"<<std::endl;
+    std::cout<<"      Parsing phrases:                  "<<p_info.lms_phrases<<std::endl;
+    std::cout<<"      Number of symbols in the phrases: "<<dict_sym<<std::endl;
+    std::cout<<"      Number of unsolved BWT blocks:    "<<p_info.tot_phrases<<std::endl;
+    std::cout<<"      Parse size:                       "<<psize<<std::endl;
+
+    map.destroy_data();
+    map.destroy_table();
+
+    if(psize==0){
+        return 0;
+    }else{
+        return p_info.lms_phrases;
+    }
+    //}
+
+    /*else{ //just copy the input
 
         std::ifstream in(i_file, std::ios_base::binary);
         std::ofstream out(o_file, std::ios_base::binary);
@@ -799,7 +809,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         p_strategy.remove_files();
         std::cout<<"    No new phrases found"<<std::endl;
         return 0;
-    }
+    }*/
 }
 
 template size_t build_lc_gram_int<st_byte_parse_strategy>(std::string &i_file, std::string &o_file, st_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
