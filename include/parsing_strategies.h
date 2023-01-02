@@ -23,20 +23,29 @@ template<typename parse_data_t,
 struct hash_functor{
     void operator()(parse_data_t& data) {
 
+        bool cover_an_string;
+        size_t str_len, val;
+
         auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
-            auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), 1);
-
+            cover_an_string = phrase.size()==str_len;
+            val = (4UL | cover_an_string<<1UL) | !cover_an_string;
+            auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), val);
             if(!res.second){
-                size_t val;
+                val=0;
                 data.inner_map.get_value_from(res.first, val);
-                val++;
+                size_t flag = ((val & 3UL) | (cover_an_string<<1UL)) | !cover_an_string;
+                assert(flag<=3);
+                val = (((val>>2UL) + 1)<<2UL) | flag;
                 data.inner_map.insert_value_at(res.first, val);
             }
         };
 
         auto init_str = [&](size_t str) -> std::pair<long, long>{
-            return {data.str_ptr[str], data.str_ptr[str+1]-1};
+            size_t start = data.str_ptr[str];
+            size_t end = data.str_ptr[str+1]-1;
+            str_len = end-start+1;
+            return {start, end};
         };
 
         parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
@@ -161,7 +170,6 @@ struct parse_functor{
             assert(str>=data.start && str<=data.end);
             size_t start = data.str_ptr[str];
             size_t end = data.str_ptr[str+1]-1;
-
             str_len = end-start+1;
 
             if((str+1)<=data.end){

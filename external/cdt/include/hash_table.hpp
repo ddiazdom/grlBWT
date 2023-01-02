@@ -587,6 +587,9 @@ public:
                 bck_offset = (table[idx] & 0xFFFFFFFFFFFul);
                 bck_dist = table[idx] >> 44UL;
 
+                //TODO here I can do better. Every time I evict an element,
+                // I check if it is equal to another pair that was assigned to the same bucket.
+                // That is unnecessary
                 if(!inserted && bck_dist==dist && equal(key, key_bits , bck_offset-1)){
                     return {bck_offset-1, false};
                 }else if(bck_dist<dist){ //steal to the rich

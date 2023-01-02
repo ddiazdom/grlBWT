@@ -52,6 +52,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
     for(size_t i=0;i<bwt_buff.size();i++) {
 
         sym=bwt_buff.read_sym(i);
+
         if(dict.phrases_has_hocc[sym]){
             ptr = hocc_counts + hocc_rs(sym)*bps;
             if(memcmp(ptr, &dummy_sym, al_b)!=0){
@@ -64,6 +65,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
 
         pos = 2*sym+1;
         sym = dict.dict[pos];
+
         while(sym>=dict.alphabet){
             sym -= dict.alphabet;
             left_sym = dict.dict[pos-1]+1;
@@ -102,10 +104,36 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
     sdsl::load_from_file(dict, dict_file);
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
+    //TODO testing
+    /*{
+        std::string tmp1 = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
+        std::string tmp2 = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
+        bwt_buff_reader bwt1(tmp1);
+        bwt_buff_reader bwt2(tmp2);
+        for (size_t i = 0; i < bwt1.size(); i++) {
+            size_t a, b;
+            bwt1.read_run(i, a, b);
+            std::cout << a << " -> " << b << std::endl;
+        }
+        std::cout <<" "<< std::endl;
+        for (size_t i = 0; i < bwt2.size(); i++) {
+            size_t a, b;
+            bwt2.read_run(i, a, b);
+            if(a==dict.sym_dummy){
+                std::cout <<  "*  -> " << b << std::endl;
+            }else{
+                std::cout << a << " -> " << b << std::endl;
+            }
+        }
+        std::cout << " fin " << std::endl;
+        bwt1.close();
+        bwt2.close();
+    }*/
+    //
+
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.alphabet+2;
 
     std::cout<<"    Computing the number of induced symbols"<<std::flush;
-
     auto start = std::chrono::steady_clock::now();
     vector_t hocc_buckets(hocc_rs(dict.phrases_has_hocc.size())+1, 0, sdsl::bits::hi(dict.t_size)+1);
     size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
@@ -169,7 +197,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
             pos = 2*sym+1;
             sym = dict.dict[pos];
         }
-        assert(dict.dict[pos-1]==dict.dict_dummy);
+        assert(dict.dict[pos-1]==dict.metasym_dummy);
         bwt_buff.write_sym(i, sym);
     }
 
@@ -203,9 +231,9 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 
         p_bwt.read_run(i, sym, pbwt_freq);
 
-        if(sym==(dummy_sym-1)) {
+        if(sym==dict.sym_dummy) {// an unsolved segment of the preliminary BWT
 
-            if(dict.phrases_has_hocc[rank]) {
+            if(dict.phrases_has_hocc[rank]) {// copy from the buffer of induced symbols
 
                 //copy from hocc+bwt
                 while(pbwt_freq>0) {
@@ -250,7 +278,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
                 new_bwt_size+=pbwt_freq;
             }
             rank++;
-        }else{
+        }else{// a segment in the preliminary BWT that was already solved
             if(new_bwt_buff.size()>0 && new_bwt_buff.last_sym()==sym){
                 new_bwt_buff.inc_freq_last(pbwt_freq);
             } else {
@@ -356,11 +384,11 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_w
                   str_collection& str_coll, float hbuff_frac) {
 
     std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
-
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
     size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
+    exit(0);
     ind_phase(tmp_ws, p_rounds);
-    //std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
-    //std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
+    std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
+    std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
 }
 

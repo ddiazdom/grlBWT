@@ -13,6 +13,7 @@
 #endif
 #include "malloc_count.h"
 
+/*
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws) {
 
@@ -64,18 +65,17 @@ void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t&
     std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
     sdsl::store_to_file(dict, dict_file);
 }
+*/
 
 template<class value_type>
 void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol,
                 parsing_info& p_info, tmp_workspace& ws) {
 
-    dict.dict_dummy = dict.alphabet+sa_size+1;
+    dict.metasym_dummy = dict.alphabet+sa_size+1;
     size_t pos, new_size=0, l_sym, r_sym;
-    vector_t new_dict(sa_size*2, 0, sdsl::bits::hi(dict.dict_dummy)+1);
 
-    if(std::is_same<value_type, uint16_t>::value){
-        std::cout<<"holaa"<<std::endl;
-    }
+    //I add one because I use a fake phrase for the dummy
+    vector_t new_dict((sa_size+1)*2, 0, sym_width(dict.metasym_dummy));
 
     for(size_t u=0;u<sa_size;u++) {
         pos = s_sa[u];
@@ -93,9 +93,16 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
             new_dict.write(new_size++, l_sym);
             new_dict.write(new_size++, r_sym);
         }else{
-            new_dict.write(new_size++, dict.dict_dummy);
-            new_dict.write(new_size++, dict.is_suffix(r_sym) ? dict.dict_dummy : l_sym);
+            new_dict.write(new_size++, dict.metasym_dummy);
+            new_dict.write(new_size++, dict.is_suffix(r_sym) ? dict.metasym_dummy : l_sym);
         }
+    }
+
+    new_dict.write(new_size++, dict.metasym_dummy);
+    if(p_info.p_round>0){
+        new_dict.write(new_size, dict.sym_dummy);
+    }else{
+        new_dict.write(new_size, 10);
     }
 
     dict.dict.swap(new_dict);
@@ -141,12 +148,15 @@ template<class value_type>
 size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws) {
 
     bool is_maximal, exist_as_phrase;
-    size_t u=0, d_pos, pl_sym, bg_pos, freq, rank=0, l_sym, dummy_sym = dict.alphabet, f_sa_pos, d_rank, n_breaks;
+    size_t u=0, d_pos, pl_sym, bg_pos, acc_freq, freq, rank=0, l_sym, f_sa_pos, d_rank, n_breaks, dummy_run=0, longest_dummy_run=0;
+
+    //now the dummy symbol is part of the alphabet
+    dict.alphabet++;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
     std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
-    size_t sb = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
+    size_t sb = INT_CEIL(sdsl::bits::hi(dict.sym_dummy)+1, 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
@@ -161,26 +171,26 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                 u++;
                 while(u<sa_size && sa[u] & 1UL) u++;
             }else if((sa[u] & 2UL)==0) {
-
                 f_sa_pos = d_pos;
                 bg_pos = u;
                 exist_as_phrase = false;
                 n_breaks = 0;
-                freq = 0;
+                acc_freq = 0;
                 pl_sym = std::numeric_limits<size_t>::max();
                 do{
                     d_pos = (sa[u]>>2UL) - 1;
-                    freq += dict.freqs.read(d_lim_rs(d_pos));
+                    freq = dict.freqs.read(d_lim_rs(d_pos));
+                    acc_freq += freq;
 
                     if(d_pos==0 || dict.d_lim[d_pos-1]){
-                        l_sym = dummy_sym;
+                        l_sym = dict.sym_dummy;
                         exist_as_phrase = true;
                         d_rank = d_lim_rs(d_pos);
                         new_metasymbols.write(d_rank, (rank<<1UL) | (dict.freqs[d_rank]>1));
                     }else{
                         l_sym = dict.dict[d_pos-1];
                         if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
-                        assert(l_sym<dict.alphabet);
+                        assert(l_sym<dict.sym_dummy);
                     }
                     n_breaks += (pl_sym!=l_sym);
                     pl_sym = l_sym;
@@ -189,12 +199,14 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                 if(is_maximal || exist_as_phrase) {
 
-                    pre_bwt.push_back(dummy_sym, freq);
-                    size_t f_sym = dict.dict.read(f_sa_pos);
-                    assert(f_sym<dict.alphabet);
-                    first_symbol.push_back(f_sym);
-                    dict.phrases_has_hocc[rank] = (exist_as_phrase && (u-bg_pos>1));
+                    pre_bwt.push_back(dict.sym_dummy, acc_freq);
+                    dummy_run+=acc_freq;
+                    if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
+                    size_t f_sym = dict.dict.read(f_sa_pos);
+                    assert(f_sym<dict.sym_dummy);
+                    first_symbol.push_back(f_sym);
+                    dict.phrases_has_hocc[rank] = (u-bg_pos>1);
                     for(size_t j=bg_pos;j<u;j++){
                         size_t pos = (sa[j]>>2UL)-1;
                         assert(dict.dict.read(pos)==f_sym);
@@ -204,25 +216,28 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     sa[rank++] = f_sa_pos;
                 }else{
                     if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
-                        pre_bwt.inc_freq_last(freq);
+                        pre_bwt.inc_freq_last(acc_freq);
                     }else{
-                        pre_bwt.push_back(l_sym, freq);
+                        pre_bwt.push_back(l_sym, acc_freq);
                     }
+                    dummy_run=0;
                 }
             }
         }else {
             assert((sa[u] & 2UL)!=0);
             f_sa_pos = d_pos;
             size_t f_sym = dict.dict.read(f_sa_pos);
-            assert(f_sym<dict.alphabet);
+            assert(f_sym<dict.sym_dummy);
             do{
                 d_pos = (sa[u]>>2UL) - 1;
                 size_t phrase = d_lim_rs(d_pos);
                 freq = dict.freqs.read(phrase);
 
                 if(d_pos==0 || dict.d_lim[d_pos-1]){//a full phrase expanding to a string suffix
-                    l_sym = dummy_sym;
+                    l_sym = dict.sym_dummy;
                     d_rank = d_lim_rs(d_pos);
+                    dummy_run +=freq;
+                    if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
                     /***
                      * We create a metasymbol for a suffix A if it is not proper.
@@ -239,7 +254,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     //we don't compress any phrase that ends with a metasymbol
                     // expanding to a string suffix
                     l_sym = dict.dict[d_pos-1];
-                    assert(l_sym<dict.alphabet);
+                    assert(l_sym<dict.sym_dummy);
+                    dummy_run=0;
                 }
                 /***NOTE: here it is unnecessary to check if the suffix is left-maximal as we can decide
                  * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
@@ -268,17 +284,22 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     pre_bwt.close();
     sa = (value_type *)realloc(sa, rank*sizeof(value_type));
     first_symbol.resize(rank);
-    std::cout<<"\n alphabet "<<dict.alphabet<<" rank "<<rank<<" dummy "<<dummy_sym<<" next_dummy "<<(dict.alphabet+sa_size+1)<<std::endl;
 
-    dict.phrases_has_hocc.resize(rank);
+    //I add one to the rank because the dummy is now part of the alphabet
+    dict.phrases_has_hocc.resize(rank+1);
     sdsl::util::clear(d_lim_rs);
     dict.freqs.erase();
     store_to_file(ws.get_file("phr_ranks"), new_metasymbols);
     new_metasymbols.erase();
 
+    dict.max_sym_freq = std::max<size_t>(dict.max_sym_freq, longest_dummy_run);
+    //std::cout<<"The longest is "<<longest_dummy_run<<std::endl;
+    //std::cout<<"\n alphabet "<<dict.alphabet<<" rank "<<rank<<" dummy "<<dummy_sym<<" next_dummy "<<(dict.alphabet+sa_size+1)<<" "<<dict.phrases_has_hocc.size()<<std::endl;
+
 #ifdef __linux__
     malloc_trim(0);
 #endif
+
     dict2gram2<value_type>(dict, sa, rank, first_symbol, p_info, ws);
     return rank;
 }
@@ -717,7 +738,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         start = std::chrono::steady_clock::now();
         dictionary dict(map, dict_sym, max_freq, phrase_desc,
                         p_strategy.text_size, p_info.prev_alph,
-                        p_info.max_sym_freq, p_info.tot_phrases);
+                        p_info.max_sym_freq);
         end = std::chrono::steady_clock::now();
         map.destroy_data();
         report_time(start, end, 6);
