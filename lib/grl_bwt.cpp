@@ -39,9 +39,9 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
     std::string prev_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round+1));
     bwt_buff_reader bwt_buff(prev_bwt_f);
 
-    size_t sym, pos, dummy_sym=dict.alphabet+2, left_sym, freq=0, al_b, fr_b, bps;
-    al_b = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
-    fr_b = INT_CEIL(sdsl::bits::hi(dict.max_sym_freq)+1,8);
+    size_t sym, pos, dummy_sym=dict.sym_dummy+2, left_sym, freq=0, al_b, fr_b, bps;
+    al_b = INT_CEIL(sym_width(dummy_sym), 8);
+    fr_b = INT_CEIL(sym_width(dict.max_sym_freq), 8);
     bps = al_b + fr_b;
     size_t tot_bytes = bps * hocc_rs(dict.phrases_has_hocc.size());
     auto * hocc_counts = (char *)malloc(tot_bytes);
@@ -64,11 +64,11 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
         }
 
         pos = 2*sym+1;
-        sym = dict.dict[pos];
+        sym = dict.dict.read(pos);
 
         while(sym>=dict.alphabet){
             sym -= dict.alphabet;
-            left_sym = dict.dict[pos-1]+1;
+            left_sym = dict.dict.read(pos-1)+1;
             ptr = hocc_counts + hocc_rs(sym)*bps;
             if(memcmp(ptr, &left_sym, al_b)!=0){
                 memcpy(ptr, &left_sym, al_b);
@@ -77,7 +77,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
                 memcpy(ptr+al_b, &freq, fr_b);
             }
             pos = 2*sym+1;
-            sym = dict.dict[pos];
+            sym = dict.dict.read(pos);
         }
     }
 
@@ -85,14 +85,14 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
     size_t acc=0;
     ptr = hocc_counts;
     for(size_t i=0;i<hocc_buckets.size()-1;i++){
-        hocc_buckets[i] = acc;
+        hocc_buckets.write(i, acc);
         memcpy(&freq,ptr+al_b, fr_b);
         acc+=freq;
         ptr+=bps;
     }
 
     assert(acc<=dict.t_size);
-    hocc_buckets[hocc_buckets.size()-1] = acc;
+    hocc_buckets.write(hocc_buckets.size()-1, acc);
     free(hocc_counts);
     return acc;
 }
@@ -105,7 +105,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
     //TODO testing
-    {
+    /*{
         std::string tmp1 = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
         std::string tmp2 = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
         bwt_buff_reader bwt1(tmp1);
@@ -130,18 +130,18 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
         std::cout << " fin " << std::endl;
         bwt1.close();
         bwt2.close();
-    }
+    }*/
     //
 
-    size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.alphabet+2;
+    size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.sym_dummy+2;
 
     std::cout<<"    Computing the number of induced symbols"<<std::flush;
     auto start = std::chrono::steady_clock::now();
     vector_t hocc_buckets(hocc_rs(dict.phrases_has_hocc.size())+1, 0, sdsl::bits::hi(dict.t_size)+1);
     size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
 
-    size_t al_b = INT_CEIL(sdsl::bits::hi(dummy_sym)+1, 8);
-    size_t fr_b = INT_CEIL(sdsl::bits::hi(dict.max_sym_freq)+1,8);
+    size_t al_b = INT_CEIL(sym_width(dummy_sym), 8);
+    size_t fr_b = INT_CEIL(sym_width(dict.max_sym_freq),8);
     size_t bps = al_b + fr_b;
 
     auto * hocc = (char *)malloc(n_runs*bps);
@@ -161,7 +161,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 
         if(dict.phrases_has_hocc[sym]){
             rank = hocc_rs(sym);
-            hocc_ptr = hocc + hocc_buckets[rank]*bps;
+            hocc_ptr = hocc + hocc_buckets.read(rank)*bps;
 
             if(hocc_ptr!=hocc && memcmp(hocc_ptr-bps, &dummy_sym, al_b)==0){
                 size_t new_freq=0;
@@ -176,10 +176,10 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
         }
 
         pos = 2*sym+1;
-        sym = dict.dict[pos];
+        sym = dict.dict.read(pos);
         while(sym>=dict.alphabet){
             sym -= dict.alphabet;
-            left_sym = dict.dict[pos-1];
+            left_sym = dict.dict.read(pos-1);
             assert(left_sym<dict.alphabet && dict.phrases_has_hocc[sym]);
 
             rank = hocc_rs(sym);
@@ -197,9 +197,9 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
                 hocc_buckets[rank]++;
             }
             pos = 2*sym+1;
-            sym = dict.dict[pos];
+            sym = dict.dict.read(pos);
         }
-        assert(dict.dict[pos-1]==dict.metasym_dummy);
+        assert(dict.dict.read(pos-1)==dict.metasym_dummy);
         bwt_buff.write_sym(i, sym);
     }
 
@@ -224,7 +224,6 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
     bwt_buff_reader p_bwt(p_bwt_file);
 
     size_t i=0, j=0, pbwt_freq, new_bwt_size=0;
-    rank = 0;
     hocc_ptr = hocc;
     char *last = hocc + n_runs*bps;
     freq=0;
@@ -263,7 +262,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
                     }
 
                     sym--;
-                    if(sym==dict.sym_dummy) {//from bwt
+                    if(sym==(dict.sym_dummy+1)) {//from bwt
                         extract_rl_syms(bwt_buff, new_bwt_buff, j, freq);
                     }else{
                         if(new_bwt_buff.size()>0 && new_bwt_buff.last_sym()==sym){
@@ -279,7 +278,6 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
                 extract_rl_syms(bwt_buff, new_bwt_buff, j, pbwt_freq);
                 new_bwt_size+=pbwt_freq;
             }
-            rank++;
         }else{// a segment in the preliminary BWT that was already solved
             if(new_bwt_buff.size()>0 && new_bwt_buff.last_sym()==sym){
                 new_bwt_buff.inc_freq_last(pbwt_freq);
