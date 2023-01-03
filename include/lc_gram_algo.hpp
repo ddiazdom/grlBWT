@@ -37,7 +37,7 @@ struct dictionary {
                                       max_sym_freq(_max_sym_freq),
                                       sym_end_string(alphabet),
                                       sym_dummy(alphabet+1),
-                                      dict(dict_syms, 0, sym_width(alphabet+dict_syms)),
+                                      dict(dict_syms, 0, sym_width(alphabet+3+dict_syms)),//the +3 corresponds to the extra symbols I use for the BWT induction
                                       freqs(n_phrases, 0, sym_width(max_freq)),
                                       d_lim(dict_syms, false),
                                       phrases_has_hocc(dict.size(), false),

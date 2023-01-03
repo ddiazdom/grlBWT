@@ -152,15 +152,15 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, acc_freq, freq, rank=0, l_sym, f_sa_pos, d_rank, n_breaks, dummy_run=0, longest_dummy_run=0;
 
-    //now the dummy symbol and the end-string symbol are part of the alphabet
-    dict.alphabet+=2;
+    //now the dummy symbols and the end-string symbol are part of the alphabet
+    dict.alphabet+=3;
     std::cout<<"The end of string symbol is "<<dict.sym_end_string<<std::endl;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
     std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
     size_t sb = INT_CEIL(sym_width(dict.alphabet), 8);
-    size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
+    size_t fb = INT_CEIL(sym_width(dict.t_size),8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
     size_t width = sdsl::bits::hi(dict.dict.size())+2;
@@ -202,7 +202,19 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                 if(is_maximal || exist_as_phrase) {
 
-                    pre_bwt.push_back(dict.sym_dummy, acc_freq);
+                    //TODO testing
+                    if(p_info.p_round==6){
+                        std::cout<<"* "<<" , "<<acc_freq<<" | "<<is_maximal<<" "<<exist_as_phrase<<" "<< rank <<std::endl;
+                        size_t tmp = f_sa_pos;
+                        do{
+                            size_t tmp2 = dict.dict[tmp];
+                            if(tmp2>=dict.alphabet) tmp2 = first_symbol[tmp2-dict.alphabet];
+                            std::cout<<tmp2<<" ";
+                        }while(!dict.d_lim[tmp++]);
+                        std::cout<<""<<std::endl;
+                    }
+
+                    pre_bwt.push_back(dict.sym_dummy+((u-bg_pos)>1), acc_freq);
                     dummy_run+=acc_freq;
                     if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
@@ -218,6 +230,11 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                     sa[rank++] = f_sa_pos;
                 }else{
+                    //TODO testing
+                    if(p_info.p_round==6){
+                        std::cout<<l_sym<<" , "<<acc_freq<<std::endl;
+                    }
+                    assert(l_sym<dict.sym_end_string);
                     if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                         pre_bwt.inc_freq_last(acc_freq);
                     }else{
@@ -239,6 +256,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                 size_t phrase_flag = freq & 3UL;
                 assert(phrase_flag!=0 && phrase_flag<=3);
                 freq>>=2UL;
+
 
                 if(d_pos==0 || dict.d_lim[d_pos-1]) {//a full phrase expanding to a string suffix
                     l_sym = dict.sym_dummy;
@@ -276,6 +294,17 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                  * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
                  * when it is not proper.
                 ***/
+                //TODO testing
+                if(p_info.p_round==6){
+                    if(l_sym==dict.sym_end_string){
+                        std::cout<<"$ | "<<freq<<" "<<(rank-1)<<std::endl;
+                    }else if(l_sym==dict.sym_dummy){
+                        std::cout<<"* | "<<freq<<" "<<(rank-1)<<std::endl;
+                    }else{
+
+                        std::cout<<l_sym<<" | "<<freq<<std::endl;
+                    }
+                }
                 if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(freq);
                 }else{
