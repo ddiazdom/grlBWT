@@ -233,9 +233,9 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
 
         p_bwt.read_run(i, sym, pbwt_freq);
 
-        if(sym==dict.sym_dummy) {// an unsolved segment of the preliminary BWT
+        if(sym>=dict.sym_dummy) {// an unsolved segment of the preliminary BWT
 
-            if(dict.phrases_has_hocc[rank]) {// copy from the buffer of induced symbols
+            if(sym==(dict.sym_dummy+1)) {// copy from the buffer of induced symbols
 
                 //copy from hocc+bwt
                 while(pbwt_freq>0) {
@@ -263,9 +263,9 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
                     }
 
                     sym--;
-                    if(sym==(dummy_sym-1)) {//from bwt
+                    if(sym==dict.sym_dummy) {//from bwt
                         extract_rl_syms(bwt_buff, new_bwt_buff, j, freq);
-                    }else{//from hocc
+                    }else{
                         if(new_bwt_buff.size()>0 && new_bwt_buff.last_sym()==sym){
                             new_bwt_buff.inc_freq_last(freq);
                         } else {
