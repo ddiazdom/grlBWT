@@ -105,7 +105,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
     //TODO testing
-    /*{
+    {
         std::string tmp1 = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
         std::string tmp2 = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
         bwt_buff_reader bwt1(tmp1);
@@ -121,14 +121,16 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
             bwt2.read_run(i, a, b);
             if(a==dict.sym_dummy){
                 std::cout <<  "*  -> " << b << std::endl;
-            }else{
+            } else if(a==dict.sym_end_string)
+                std::cout <<  "$  -> " << b << std::endl;
+            else{
                 std::cout << a << " -> " << b << std::endl;
             }
         }
         std::cout << " fin " << std::endl;
         bwt1.close();
         bwt2.close();
-    }*/
+    }
     //
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.alphabet+2;
@@ -386,7 +388,6 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_w
     std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
     size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
-    exit(0);
     ind_phase(tmp_ws, p_rounds);
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
