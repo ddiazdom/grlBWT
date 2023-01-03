@@ -13,17 +13,18 @@
 struct dictionary {
 
     typedef size_t size_type;
-    size_t alphabet{};       //alphabet of the dictionary
-    size_t p_alpha_size{};   //size of the previous alphabet
-    size_t n_phrases{};      //number of LMS phrases in the dictionary
-    size_t t_size{};         //size of the text from which the dictionary was generated
-    size_t max_sym_freq{};   //maximum symbol frequency in the parse from which the dictionary was created
-    size_t sym_dummy{};     //dummy symbol for the dictionary
+    size_t alphabet{};     //alphabet of the dictionary
+    size_t p_alpha_size{}; //size of the previous alphabet
+    size_t n_phrases{};    //number of LMS phrases in the dictionary
+    size_t t_size{};       //size of the text from which the dictionary was generated
+    size_t max_sym_freq{}; //maximum symbol frequency in the parse from which the dictionary was created
+    size_t sym_end_string{}; //symbol to mark the end of an string
+    size_t sym_dummy{};      //dummy symbol for the dictionary
     size_t metasym_dummy{};  //dummy metasymbol for the compressed suffixes
     vector_t dict;           //list of phrases in the dictionary
     vector_t freqs;          //frequency of every dictionary phrase in the original text
     bv_t     d_lim;
-    bv_t phrases_has_hocc;   //mark the phrases with hidden occurrences
+    bv_t phrases_has_hocc; //mark the phrases with hidden occurrences
     bv_t* desc_bv=nullptr;
 
     dictionary()=default;
@@ -34,7 +35,8 @@ struct dictionary {
                                       n_phrases(mp_map.size()),
                                       t_size(_t_size),
                                       max_sym_freq(_max_sym_freq),
-                                      sym_dummy(alphabet),
+                                      sym_end_string(alphabet),
+                                      sym_dummy(alphabet+1),
                                       dict(dict_syms, 0, sym_width(alphabet+dict_syms)),
                                       freqs(n_phrases, 0, sym_width(max_freq)),
                                       d_lim(dict_syms, false),
@@ -42,7 +44,7 @@ struct dictionary {
                                       desc_bv(&is_suffix_bv){
 
         key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
-        size_t j=0, k=0, freq, cont=0;
+        size_t j=0, k=0, freq;
         for (auto const &ptr : mp_map) {
             for(size_t i=key_w.size(ptr);i-->0;){
                 dict[j] = key_w.read(ptr, i);
@@ -52,14 +54,15 @@ struct dictionary {
 
             freq = 0;
             mp_map.get_value_from(ptr, freq);
-            freqs[k++] = freq>>2UL;
-            //TODO testing
-            if((freq & 2UL)!=0){
-                cont+= freq>>2UL;
-            }
-            //
+
+            //For the moment, I won't deal with this problem
+            assert((freq & 3UL)!=3);
+
+            if(!(*desc_bv)[dict[j-1]]) freq>>=2UL;
+            assert(freq<=max_freq);
+            freqs[k++] = freq;
         }
-        std::cout<<"There are "<<cont<<" phrases that cover an entire string"<<std::endl;
+        //std::cout<<"There are "<<cont<<" phrases that cover an entire string"<<std::endl;
         assert(j==dict_syms);
 
         //TODO testing
@@ -109,6 +112,7 @@ struct dictionary {
         written_bytes+= sdsl::write_member(max_sym_freq, out, child, "max_sym_freq");
         written_bytes+= sdsl::write_member(sym_dummy, out, child, "dummy_sym");
         written_bytes+= sdsl::write_member(metasym_dummy, out, child, "metasym_dummy");
+        written_bytes+= sdsl::write_member(sym_end_string, out, child, "sym_end_string");
         dict.serialize(out);
         phrases_has_hocc.serialize(out, child);
         return written_bytes;
@@ -122,11 +126,11 @@ struct dictionary {
         sdsl::read_member(max_sym_freq, in);
         sdsl::read_member(sym_dummy, in);
         sdsl::read_member(metasym_dummy, in);
+        sdsl::read_member(sym_end_string, in);
         dict.load(in);
         phrases_has_hocc.load(in);
     }
 };
-
 
 void dict2gram(dictionary &dict, phrase_map_t& phrases_ht, vector_t& s_sa, bv_t& phr_marks,
                parsing_info& p_info, tmp_workspace& ws);

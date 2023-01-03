@@ -100,7 +100,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
 
     new_dict.write(new_size++, dict.metasym_dummy);
     if(p_info.p_round>0){
-        new_dict.write(new_size, dict.sym_dummy);
+        new_dict.write(new_size, dict.sym_end_string);
     }else{
         new_dict.write(new_size, 10);
     }
@@ -113,6 +113,8 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
 
     std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
     sdsl::store_to_file(dict, dict_file);
+
+    std::cout<<"The new end of string symbol is "<<sa_size<<std::endl;
 
     //TODO testing
     /*std::cout<<"\nChecking if they are correct .."<<std::endl;
@@ -150,13 +152,14 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, acc_freq, freq, rank=0, l_sym, f_sa_pos, d_rank, n_breaks, dummy_run=0, longest_dummy_run=0;
 
-    //now the dummy symbol is part of the alphabet
-    dict.alphabet++;
+    //now the dummy symbol and the end-string symbol are part of the alphabet
+    dict.alphabet+=2;
+    std::cout<<"The end of string symbol is "<<dict.sym_end_string<<std::endl;
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
     std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
-    size_t sb = INT_CEIL(sdsl::bits::hi(dict.sym_dummy)+1, 8);
+    size_t sb = INT_CEIL(sym_width(dict.alphabet), 8);
     size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
@@ -179,18 +182,18 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                 pl_sym = std::numeric_limits<size_t>::max();
                 do{
                     d_pos = (sa[u]>>2UL) - 1;
-                    freq = dict.freqs.read(d_lim_rs(d_pos));
+                    d_rank = d_lim_rs(d_pos);
+                    freq = dict.freqs.read(d_rank);
                     acc_freq += freq;
 
                     if(d_pos==0 || dict.d_lim[d_pos-1]){
                         l_sym = dict.sym_dummy;
                         exist_as_phrase = true;
-                        d_rank = d_lim_rs(d_pos);
-                        new_metasymbols.write(d_rank, (rank<<1UL) | (dict.freqs[d_rank]>1));
+                        new_metasymbols.write(d_rank, (rank<<1UL) | (freq>1));
                     }else{
                         l_sym = dict.dict[d_pos-1];
                         if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
-                        assert(l_sym<dict.sym_dummy);
+                        assert(l_sym<dict.sym_end_string);
                     }
                     n_breaks += (pl_sym!=l_sym);
                     pl_sym = l_sym;
@@ -204,7 +207,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
                     size_t f_sym = dict.dict.read(f_sa_pos);
-                    assert(f_sym<dict.sym_dummy);
+                    assert(f_sym<dict.sym_end_string);
                     first_symbol.push_back(f_sym);
                     dict.phrases_has_hocc[rank] = (u-bg_pos>1);
                     for(size_t j=bg_pos;j<u;j++){
@@ -227,15 +230,26 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
             assert((sa[u] & 2UL)!=0);
             f_sa_pos = d_pos;
             size_t f_sym = dict.dict.read(f_sa_pos);
-            assert(f_sym<dict.sym_dummy);
+            assert(f_sym<dict.sym_end_string);
+
             do{
                 d_pos = (sa[u]>>2UL) - 1;
-                size_t phrase = d_lim_rs(d_pos);
-                freq = dict.freqs.read(phrase);
+                d_rank = d_lim_rs(d_pos);
+                freq = dict.freqs.read(d_rank);
+                size_t phrase_flag = freq & 3UL;
+                assert(phrase_flag!=0 && phrase_flag<=3);
+                freq>>=2UL;
 
-                if(d_pos==0 || dict.d_lim[d_pos-1]){//a full phrase expanding to a string suffix
+                if(d_pos==0 || dict.d_lim[d_pos-1]) {//a full phrase expanding to a string suffix
                     l_sym = dict.sym_dummy;
-                    d_rank = d_lim_rs(d_pos);
+
+                    if(phrase_flag==2){
+                        l_sym = dict.sym_end_string;
+                    }else if(phrase_flag==3){
+                        //TODO this is the case when a phrase occurs as a suffix but also as an entire string
+                        exit(0);
+                    }
+
                     dummy_run +=freq;
                     if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
@@ -246,7 +260,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                      * phrases preceding A in the text.
                      * Caveat: If the A expands to a full string, then we con append a dummy.
                      */
-                    new_metasymbols.write(d_rank, (rank<<1UL) | (dict.freqs[d_rank]>1));
+                    new_metasymbols.write(d_rank, (rank<<1UL) | (freq>1));
                     first_symbol.push_back(f_sym);
 
                     sa[rank++] = f_sa_pos;
@@ -254,9 +268,10 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     //we don't compress any phrase that ends with a metasymbol
                     // expanding to a string suffix
                     l_sym = dict.dict[d_pos-1];
-                    assert(l_sym<dict.sym_dummy);
+                    assert(l_sym<dict.sym_end_string);
                     dummy_run=0;
                 }
+
                 /***NOTE: here it is unnecessary to check if the suffix is left-maximal as we can decide
                  * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
                  * when it is not proper.
@@ -293,9 +308,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     new_metasymbols.erase();
 
     dict.max_sym_freq = std::max<size_t>(dict.max_sym_freq, longest_dummy_run);
-    //std::cout<<"The longest is "<<longest_dummy_run<<std::endl;
-    //std::cout<<"\n alphabet "<<dict.alphabet<<" rank "<<rank<<" dummy "<<dummy_sym<<" next_dummy "<<(dict.alphabet+sa_size+1)<<" "<<dict.phrases_has_hocc.size()<<std::endl;
-
 #ifdef __linux__
     malloc_trim(0);
 #endif
@@ -425,20 +437,6 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     size_t n_phrases = get_pre_bwt2<value_type>(dict, sa, dict.dict.size(), p_info, ws);
     end = std::chrono::steady_clock::now();
     report_time(start, end, 17);
-
-    /*std::cout<<"    Constructing the preliminary BWT"<<std::flush;
-    phrase_map_t new_phrases_ht;
-    bv_t phr_marks(dict.dict.size(), false);
-    start = std::chrono::steady_clock::now();
-    get_pre_bwt(dict, sa, p_info, phr_marks, new_phrases_ht, ws);
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 17);
-
-    std::cout<<"    Storing the dictionary as a grammar"<<std::flush;
-    start = std::chrono::steady_clock::now();
-    dict2gram(dict, new_phrases_ht, sa, phr_marks, p_info, ws);
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 14);*/
 
     return n_phrases;
 }
@@ -664,7 +662,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
         }
     }else{
         {
-            st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info);
+            st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, symbol_desc);
             rem_phrases = build_lc_gram_int<st_byte_parse_strategy>(i_file, tmp_i_file, p_strat, p_info, symbol_desc, ws);
         }
     }
@@ -679,7 +677,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
             mt_int_parse_strategy p_strat( tmp_i_file, output_file, p_info, hbuff_size, n_threads);
             rem_phrases = build_lc_gram_int<mt_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
         }else{
-            st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info);
+            st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info, symbol_desc);
             rem_phrases = build_lc_gram_int<st_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
         }
         end = std::chrono::steady_clock::now();

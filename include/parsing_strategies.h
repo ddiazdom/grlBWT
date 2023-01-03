@@ -28,6 +28,7 @@ struct hash_functor{
 
         auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
+
             cover_an_string = phrase.size()==str_len;
             val = (4UL | cover_an_string<<1UL) | !cover_an_string;
             auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), val);
@@ -299,10 +300,10 @@ struct mt_parse_strat_t {//multi thread strategy
 
     std::pair<size_t, size_t> join_thread_phrases() {
 
-        size_t dic_bits=0, freq, max_freq=0;
+        size_t dic_bits=0, freq, max_freq=0, flag;
         std::string file;
 
-        for(auto const& thread : threads_data){
+        for(auto const& thread : threads_data) {
 
             file = thread.inner_map.dump_file();
             std::ifstream text_i(file, std::ios_base::binary);
@@ -354,16 +355,27 @@ struct mt_parse_strat_t {//multi thread strategy
                 bits.read_chunk(key, next_bit, next_bit+key_bits-1);
                 next_bit+=key_bits;
                 freq = bits.read(next_bit, next_bit+value_bits-1);
+
                 next_bit+=value_bits+d_bits;
 
                 auto res = map.insert(key, key_bits, freq);
                 if(!res.second){
+
+                    flag = (freq & 3UL);
+                    freq>>=2UL;
+
                     size_t val;
                     map.get_value_from(res.first, val);
-                    val+=freq;
-                    if(val>max_freq) max_freq = val;
+
+                    flag |= (val & 3UL);
+                    freq += val>>2UL;
+                    assert(flag<=3);
+                    if(freq>max_freq) max_freq = freq;
+
+                    val = (freq << 2UL) | flag;
                     map.insert_value_at(res.first, val);
                 }else{
+                    freq>>=2UL;
                     if(freq>max_freq) max_freq = freq;
                     dic_bits+=key_bits;
                 }
@@ -562,9 +574,10 @@ struct st_parse_strat_t {//parse data for single thread
     size_t              max_symbol{};
     size_t              start;
     size_t              end;
+    bv_t&               is_suffix;
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
-                     parsing_info& p_info_): ifs(i_file_, BUFFER_SIZE),
+                     parsing_info& p_info_, bv_t& is_suffix_): ifs(i_file_, BUFFER_SIZE),
                                              o_file(o_file_),
                                              map(0, "", 0.8, nullptr, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                              inner_map(map),
@@ -573,8 +586,8 @@ struct st_parse_strat_t {//parse data for single thread
                                              text_size(ifs.size()),
                                              max_symbol(p_info.tot_phrases),
                                              start(0),
-                                             end(str_ptr.size()-2){
-
+                                             end(str_ptr.size()-2),
+                                             is_suffix(is_suffix_){
         std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
         tmp_o_file.append("_range_" + std::to_string(start) + "_" + std::to_string(end));
         ofs = ostream_t(tmp_o_file, BUFFER_SIZE, std::ios::out);
@@ -587,10 +600,21 @@ struct st_parse_strat_t {//parse data for single thread
         map.shrink_databuff();
         key_wrapper key_w{sym_width(max_symbol), map.description_bits(), map.get_data()};
         size_t n_syms=0, max_freq=0, freq;
+
         for(auto const &ptr : map){
             n_syms += key_w.size(ptr);
             freq = 0;
             map.get_value_from(ptr, freq);
+
+            //when a phrase F expands to a string suffix, the first 2 bits indicate the kind of the phrase F is:
+            // 01 : all its occurrences are encapsulated within a string
+            // 10 : all its occurrences cover a full string
+            // 11 : some occurrences cover a full string while other cover a partial string
+            // We will encode this information in the freq array in the dictionary.
+            // Here we are just computing the width for cells of that array.
+            //remember: the phrase are in reverse order. That is the reason
+            // why I am using the first symbol instead of the last one in the if below.
+            if(!is_suffix[key_w.read(ptr, 0)]) freq>>=2UL;
             assert(freq>0);
             if(freq>max_freq) max_freq = freq;
         }
