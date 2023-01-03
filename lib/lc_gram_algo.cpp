@@ -100,7 +100,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
 
     new_dict.write(new_size++, dict.metasym_dummy);
     if(p_info.p_round>0){
-        new_dict.write(new_size, dict.sym_end_string);
+        new_dict.write(new_size, dict.end_str_dummy);
     }else{
         new_dict.write(new_size, 10);
     }
@@ -183,13 +183,13 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     acc_freq += freq;
 
                     if(d_pos==0 || dict.d_lim[d_pos-1]){
-                        l_sym = dict.sym_dummy;
+                        l_sym = dict.bwt_dummy;
                         exist_as_phrase = true;
                         new_metasymbols.write(d_rank, (rank<<1UL) | (freq>1));
                     }else{
                         l_sym = dict.dict[d_pos-1];
                         if(l_sym>=dict.alphabet) l_sym = first_symbol[l_sym-dict.alphabet];
-                        assert(l_sym<dict.sym_end_string);
+                        assert(l_sym<dict.end_str_dummy);
                     }
                     n_breaks += (pl_sym!=l_sym);
                     pl_sym = l_sym;
@@ -210,12 +210,12 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                         std::cout<<""<<std::endl;
                     }*/
 
-                    pre_bwt.push_back(dict.sym_dummy+((u-bg_pos)>1), acc_freq);
+                    pre_bwt.push_back(dict.bwt_dummy+((u-bg_pos)>1), acc_freq);
                     dummy_run+=acc_freq;
                     if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
                     size_t f_sym = dict.dict.read(f_sa_pos);
-                    assert(f_sym<dict.sym_end_string);
+                    assert(f_sym<dict.end_str_dummy);
                     first_symbol.push_back(f_sym);
                     dict.phrases_has_hocc[rank] = (u-bg_pos>1);
                     for(size_t j=bg_pos;j<u;j++){
@@ -231,7 +231,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                         std::cout<<l_sym<<" , "<<acc_freq<<std::endl;
                     }*/
 
-                    assert(l_sym<dict.sym_end_string);
+                    assert(l_sym<dict.end_str_dummy);
                     if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                         pre_bwt.inc_freq_last(acc_freq);
                     }else{
@@ -244,7 +244,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
             assert((sa[u] & 2UL)!=0);
             f_sa_pos = d_pos;
             size_t f_sym = dict.dict.read(f_sa_pos);
-            assert(f_sym<dict.sym_end_string);
+            assert(f_sym<dict.end_str_dummy);
 
             do{
                 d_pos = (sa[u]>>2UL) - 1;
@@ -255,10 +255,10 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                 freq>>=2UL;
 
                 if(d_pos==0 || dict.d_lim[d_pos-1]) {//a full phrase expanding to a string suffix
-                    l_sym = dict.sym_dummy;
+                    l_sym = dict.bwt_dummy;
 
                     if(phrase_flag==2){
-                        l_sym = dict.sym_end_string;
+                        l_sym = dict.end_str_dummy;
                     }else if(phrase_flag==3){
                         //TODO this is the case when a phrase occurs as a suffix but also as an entire string
                         exit(0);
@@ -282,7 +282,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     //we don't compress any phrase that ends with a metasymbol
                     // expanding to a string suffix
                     l_sym = dict.dict[d_pos-1];
-                    assert(l_sym<dict.sym_end_string);
+                    assert(l_sym<dict.end_str_dummy);
                     dummy_run=0;
                 }
 

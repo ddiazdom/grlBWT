@@ -13,16 +13,17 @@
 struct dictionary {
 
     typedef size_t size_type;
-    size_t alphabet{};     //alphabet of the dictionary
-    size_t p_alpha_size{}; //size of the previous alphabet
-    size_t n_phrases{};    //number of LMS phrases in the dictionary
-    size_t t_size{};       //size of the text from which the dictionary was generated
-    size_t max_sym_freq{}; //maximum symbol frequency in the parse from which the dictionary was created
-    size_t sym_end_string{}; //symbol to mark the end of an string
-    size_t sym_dummy{};      //dummy symbol for the dictionary
-    size_t metasym_dummy{};  //dummy metasymbol for the compressed suffixes
-    vector_t dict;           //list of phrases in the dictionary
-    vector_t freqs;          //frequency of every dictionary phrase in the original text
+    size_t alphabet{};      //alphabet of the dictionary
+    size_t p_alpha_size{};  //size of the previous alphabet
+    size_t n_phrases{};     //number of LMS phrases in the dictionary
+    size_t t_size{};        //size of the text from which the dictionary was generated
+    size_t max_sym_freq{};  //maximum symbol frequency in the parse from which the dictionary was created
+    size_t end_str_dummy{}; //symbol to mark the end of a string
+    size_t bwt_dummy{};     //dummy symbol indicating that the induction is from the BWT i+1
+    size_t hocc_dummy{};    //dummy symbol indicating that the induction is from the hocc array
+    size_t metasym_dummy{}; //dummy metasymbol for the compressed suffixes
+    vector_t dict;          //list of phrases in the dictionary
+    vector_t freqs;         //frequency of every dictionary phrase in the original text
     bv_t     d_lim;
     bv_t phrases_has_hocc; //mark the phrases with hidden occurrences
     bv_t* desc_bv=nullptr;
@@ -35,8 +36,9 @@ struct dictionary {
                                       n_phrases(mp_map.size()),
                                       t_size(_t_size),
                                       max_sym_freq(_max_sym_freq),
-                                      sym_end_string(alphabet),
-                                      sym_dummy(alphabet+1),
+                                      end_str_dummy(alphabet),
+                                      bwt_dummy(alphabet+1),
+                                      hocc_dummy(alphabet+2),
                                       dict(dict_syms, 0, sym_width(alphabet+3+dict_syms)),//the +3 corresponds to the extra symbols I use for the BWT induction
                                       freqs(n_phrases, 0, sym_width(max_freq)),
                                       d_lim(dict_syms, false),
@@ -110,9 +112,10 @@ struct dictionary {
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
         written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
         written_bytes+= sdsl::write_member(max_sym_freq, out, child, "max_sym_freq");
-        written_bytes+= sdsl::write_member(sym_dummy, out, child, "dummy_sym");
+        written_bytes+= sdsl::write_member(end_str_dummy, out, child, "end_str_dummy");
+        written_bytes+= sdsl::write_member(bwt_dummy, out, child, "bwt_dummy");
+        written_bytes+= sdsl::write_member(hocc_dummy, out, child, "hocc_dummy");
         written_bytes+= sdsl::write_member(metasym_dummy, out, child, "metasym_dummy");
-        written_bytes+= sdsl::write_member(sym_end_string, out, child, "sym_end_string");
         dict.serialize(out);
         phrases_has_hocc.serialize(out, child);
         return written_bytes;
@@ -124,9 +127,10 @@ struct dictionary {
         sdsl::read_member(n_phrases, in);
         sdsl::read_member(t_size, in);
         sdsl::read_member(max_sym_freq, in);
-        sdsl::read_member(sym_dummy, in);
+        sdsl::read_member(end_str_dummy, in);
+        sdsl::read_member(bwt_dummy, in);
+        sdsl::read_member(hocc_dummy, in);
         sdsl::read_member(metasym_dummy, in);
-        sdsl::read_member(sym_end_string, in);
         dict.load(in);
         phrases_has_hocc.load(in);
     }
