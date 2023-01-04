@@ -14,7 +14,7 @@ struct dictionary {
 
     typedef size_t size_type;
     size_t alphabet{};      //alphabet of the dictionary
-    size_t p_alpha_size{};  //size of the previous alphabet
+    size_t prev_alphabet{};  //size of the previous alphabet
     size_t n_phrases{};     //number of LMS phrases in the dictionary
     size_t t_size{};        //size of the text from which the dictionary was generated
     size_t max_sym_freq{};  //maximum symbol frequency in the parse from which the dictionary was created
@@ -32,7 +32,7 @@ struct dictionary {
     dictionary(phrase_map_t &mp_map, size_t dict_syms,
                size_t max_freq, bv_t& is_suffix_bv, size_t _t_size, size_t _p_alph_size,
                size_t _max_sym_freq): alphabet(is_suffix_bv.size()),
-                                      p_alpha_size(_p_alph_size),
+                                      prev_alphabet(_p_alph_size),
                                       n_phrases(mp_map.size()),
                                       t_size(_t_size),
                                       max_sym_freq(_max_sym_freq),
@@ -108,7 +108,7 @@ struct dictionary {
     size_type serialize(std::ostream& out, sdsl::structure_tree_node * v=nullptr, std::string name="") const{
         sdsl::structure_tree_node* child = sdsl::structure_tree::add_child( v, name, sdsl::util::class_name(*this));
         size_type written_bytes = sdsl::write_member(alphabet, out, child, "alphabet");
-        written_bytes+= sdsl::write_member(p_alpha_size, out, child, "p_alpha_size");
+        written_bytes+= sdsl::write_member(prev_alphabet, out, child, "p_alpha_size");
         written_bytes+= sdsl::write_member(n_phrases, out, child, "n_phrases");
         written_bytes+= sdsl::write_member(t_size, out, child, "t_size");
         written_bytes+= sdsl::write_member(max_sym_freq, out, child, "max_sym_freq");
@@ -123,7 +123,7 @@ struct dictionary {
 
     void load(std::istream& in){
         sdsl::read_member(alphabet, in);
-        sdsl::read_member(p_alpha_size, in);
+        sdsl::read_member(prev_alphabet, in);
         sdsl::read_member(n_phrases, in);
         sdsl::read_member(t_size, in);
         sdsl::read_member(max_sym_freq, in);

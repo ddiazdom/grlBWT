@@ -7,6 +7,7 @@
 #ifdef __linux__
 #include <malloc.h>
 #endif
+#include "malloc_count.h"
 
 //extract freq symbols from bwt[j] onwards and put them in new_bwt
 void extract_rl_syms(bwt_buff_writer& bwt_buff, bwt_buff_writer& new_bwt_buff, size_t& j, size_t freq){
@@ -218,8 +219,7 @@ void infer_lvl_bwt(tmp_workspace& ws, size_t p_round) {
     start = std::chrono::steady_clock::now();
     std::string new_bwt_f = ws.get_file("bwt_lev_"+std::to_string(p_round));
 
-    //note: I don't remember why I add +2
-    uint8_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.p_alpha_size)+2), 8);
+    uint8_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
     bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, fr_b);
 
     std::string p_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_round));
@@ -379,6 +379,8 @@ void ind_phase(tmp_workspace& ws, size_t p_round){
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 4);
         report_mem_peak();
+        malloc_count_print_status();
+        malloc_count_reset_peak();
     }
 }
 
