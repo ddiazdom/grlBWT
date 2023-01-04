@@ -155,7 +155,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     bv_rs_t d_lim_rs(&dict.d_lim);
 
     std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
-    size_t sb = INT_CEIL(sym_width(dict.alphabet), 8);
+
+    size_t sb = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
     size_t fb = INT_CEIL(sym_width(dict.t_size),8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
@@ -336,7 +337,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 #ifdef __linux__
     malloc_trim(0);
 #endif
-
     dict2gram2<value_type>(dict, sa, rank, first_symbol, p_info, ws);
     return rank;
 }
@@ -693,6 +693,8 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     }
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
+    malloc_count_print_status();
+    malloc_count_reset_peak();
 
 
     while (rem_phrases > 0) {
@@ -709,6 +711,8 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
         report_time(start, end,4);
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
+        malloc_count_print_status();
+        malloc_count_reset_peak();
     }
 
     sdsl::util::clear(symbol_desc);
@@ -768,6 +772,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
 
         //process the dictionary
         tot_phrases = process_dictionary(dict, p_info, ws);
+        p_info.prev_alph = dict.alphabet;
     }
 
     //reload the hash table
@@ -822,7 +827,6 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
         std::string suffix_file = ws.get_file("suffix_file");
         bv_t new_phrase_desc;
         sdsl::load_from_file(new_phrase_desc, suffix_file);
-        p_info.prev_alph = phrase_desc.size();
         phrase_desc.swap(new_phrase_desc);
     }
 
