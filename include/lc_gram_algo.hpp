@@ -66,7 +66,6 @@ struct dictionary {
         }
         //std::cout<<"There are "<<cont<<" phrases that cover an entire string"<<std::endl;
         assert(j==dict_syms);
-
         //TODO testing
         /*std::vector<size_t> g_freqs(alphabet, 0);
         for(size_t i=0;i<dict.size();i++){
