@@ -126,7 +126,7 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
 
     size_t pos, bck, l_sym, ind_pos;
     auto * ind_bck = (value_type *) calloc(dict.alphabet+1, sizeof(value_type));
-    bool lcs, first_eq, new_break, p_lcs=false;
+    bool lcs, first_eq=true, new_break, p_lcs=false;
     size_t rb=sa_size, is_suffix, flag;
 
     for(size_t i=sa_size;i-->0;) {
@@ -137,39 +137,32 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
         assert(is_suffix==2 || is_suffix==0);
 
         pos>>=2UL;
-        if(pos==0){
-            sa[i+1] &=  ~1UL;
-            p_lcs = false;
-            continue;
-        }
+        assert(pos>0);
 
         if(!p_lcs) {
             first_eq = false;
             rb = i+1;
         }
 
-        if(pos==1 || dict.d_lim[pos-2]){
-            p_lcs = lcs;
-            continue;
-        }
+        if(!(pos==1 || dict.d_lim[pos-2])){
+            bck = dict.dict.read(pos-1);
+            l_sym = dict.dict.read(pos-2);
 
-        bck = dict.dict.read(pos-1);
-        l_sym = dict.dict.read(pos-2);
+            if(!solved_sym[l_sym] && (l_sym < bck || (l_sym==bck && i >= buckets[bck]))){
 
-        if(!solved_sym[l_sym] && (l_sym < bck || (l_sym==bck && i >= buckets[bck]))){
+                ind_pos = buckets[l_sym]--;
+                flag = is_suffix | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
+                sa[ind_pos] = ((pos-1)<<2UL) | flag;
 
-            ind_pos = buckets[l_sym]--;
-            flag = is_suffix | (lcs && ind_pos>0 && sa[ind_pos-1]==0);
-            sa[ind_pos] = ((pos-1)<<2UL) | flag;
+                new_break = !first_eq && l_sym==bck;
+                if(new_break) first_eq = true;
 
-            new_break = !first_eq && l_sym==bck;
-            if(new_break) first_eq = true;
-
-            if(ind_bck[l_sym]==0 || ind_bck[l_sym]>rb || new_break){
-                sa[ind_pos+1] &= ~1UL;
-                if(ind_pos+1==i) lcs=false;
+                if(ind_bck[l_sym]==0 || ind_bck[l_sym]>rb || new_break){
+                    sa[ind_pos+1] &= ~1UL;
+                    if(ind_pos+1==i) lcs=false;
+                }
+                ind_bck[l_sym] = i+1;
             }
-            ind_bck[l_sym] = i+1;
         }
         p_lcs = lcs;
     }

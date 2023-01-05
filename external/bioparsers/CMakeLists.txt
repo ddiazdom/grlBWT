@@ -10,7 +10,7 @@ add_library(biopar
 target_compile_options(biopar
         PUBLIC
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-deprecated-copy -Wno-unused-function
-        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
         )
 
 # this extra flags only applies to clang compilers
