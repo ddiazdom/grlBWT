@@ -160,16 +160,20 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     size_t fb = INT_CEIL(sym_width(dict.t_size),8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
-    size_t width = sdsl::bits::hi(dict.dict.size())+2;
+    size_t width = sym_width(dict.dict.size())+1;
     vector_t new_metasymbols(dict.n_phrases, 0, width);
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
+    size_t cont=0;
 
     while(u<sa_size) {
         d_pos = (sa[u]>>2UL) - 1;
         if((sa[u] & 2UL)==0) {
             if(dict.d_lim[d_pos]) {
                 u++;
-                while(u<sa_size && sa[u] & 1UL) u++;
+                while(u<sa_size && sa[u] & 1UL){
+                    cont++;
+                    u++;
+                }
             }else if((sa[u] & 2UL)==0) {
                 f_sa_pos = d_pos;
                 bg_pos = u;
@@ -227,11 +231,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                     sa[rank++] = f_sa_pos;
                 }else{
-                    //TODO testing
-                    /*if(p_info.p_round==6){
-                        std::cout<<l_sym<<" , "<<acc_freq<<std::endl;
-                    }*/
-
                     assert(l_sym<dict.end_str_dummy);
                     if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
                         pre_bwt.inc_freq_last(acc_freq);
@@ -242,7 +241,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                 }
             }
         }else {
-            assert((sa[u] & 2UL)!=0);
             f_sa_pos = d_pos;
             size_t f_sym = dict.dict.read(f_sa_pos);
             assert(f_sym<dict.end_str_dummy);
@@ -311,14 +309,25 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         }
     }
 
-    /*std::cout<<"\nbytes SA "<<sa_size*sizeof(value_type)<<std::endl;
+    size_t tmp=sa_size*sizeof(value_type);
+    tmp+=INT_CEIL(dict.dict.size()*dict.dict.width(), 8);
+    tmp+=INT_CEIL(first_symbol.size()*first_symbol.width(), 8);
+    tmp+=INT_CEIL(dict.freqs.size()*dict.freqs.width(), 8);
+    tmp+=INT_CEIL(new_metasymbols.size()*new_metasymbols.width(), 8);
+    tmp+=INT_CEIL(dict.phrases_has_hocc.size(), 8);
+    tmp+=INT_CEIL(dict.d_lim.size(), 8);
+    tmp+=INT_CEIL(dict.desc_bv->size(), 8);
+    std::cout<<"\nspace reduction: "<<double((tmp-cont*sizeof(value_type)))/double(tmp)<<" "<<tmp<<std::endl;
+
+    std::cout<<"unusued cells "<<cont<<" "<<sa_size<<std::endl;
+    std::cout<<"bytes SA "<<sa_size*sizeof(value_type)<<std::endl;
     std::cout<<"bytes dict "<<INT_CEIL(dict.dict.size()*dict.dict.width(), 8)<<std::endl;
     std::cout<<"bytes first_symbol "<<INT_CEIL(first_symbol.size()*first_symbol.width(), 8)<<std::endl;
     std::cout<<"bytes freqs"<<INT_CEIL(dict.freqs.size()*dict.freqs.width(), 8)<<std::endl;
-    std::cout<<"bytes ranks"<<INT_CEIL(ranks.size()*ranks.width(), 8)<<std::endl;
+    std::cout<<"bytes ranks"<<INT_CEIL(new_metasymbols.size()*new_metasymbols.width(), 8)<<std::endl;
     std::cout<<"bytes has_hocc "<<INT_CEIL(dict.phrases_has_hocc.size(), 8)<<std::endl;
     std::cout<<"bytes d_lim "<<INT_CEIL(dict.d_lim.size(), 8)<<std::endl;
-    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;*/
+    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;
 
     assert(first_symbol.size()>=rank);
     assert(rank<dict.dict.size());
