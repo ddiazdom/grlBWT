@@ -95,6 +95,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
     assert(acc<=dict.t_size);
     hocc_buckets.write(hocc_buckets.size()-1, acc);
     free(hocc_counts);
+    
     return acc;
 }
 
