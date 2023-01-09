@@ -558,6 +558,83 @@ public:
         }
     }
 
+    std::pair<size_t, bool> insert_new(const void* key, const size_t& key_bits, const value_t& val){
+
+        size_t hash;
+        if constexpr(short_key){
+            hash = (*(reinterpret_cast<const size_t*>(key)));
+            hash =  hash & bitstream<buffer_t>::masks[key_bits];
+        }else{
+            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        }
+
+        size_t idx = hash & (n_buckets - 1), dist=0, bck_dist = table[idx]>>44UL, in_offset, bck_offset;
+
+        while(table[idx]!=0 && bck_dist>dist){
+            idx = (idx+1) & (n_buckets-1);
+            bck_dist = table[idx] >> 44UL;
+            dist++;
+        }
+
+        if(table[idx]==0){
+            assert(bck_dist<=dist);
+            auto res  = insert_int(key, key_bits, val);
+            in_offset = res.first;
+            table[idx] =  (dist<<44UL) | in_offset;
+            if(dist>max_bck_dist) max_bck_dist = dist;
+        }else{
+            while(bck_dist==dist){
+                bck_offset = table[idx] & 0xFFFFFFFFFFFul;
+                if(equal(key, key_bits , bck_offset-1)){
+                    return {bck_offset-1, false};
+                }
+                dist++;
+                idx = (idx+1) & (n_buckets-1);
+                bck_dist = table[idx] >> 44UL;
+            }
+
+            assert(dist>0 && bck_dist<dist);
+            auto res = insert_int(key, key_bits, val);
+            in_offset = res.first;
+            size_t tmp_offset = table[idx] & 0xFFFFFFFFFFFul;
+            table[idx] = (dist<<44UL) | in_offset;
+            if(dist>max_bck_dist) max_bck_dist = dist;
+
+            dist = bck_dist+1;
+            idx = (idx+1) & (n_buckets-1);
+
+            while(true){
+                if(table[idx]==0){
+                    table[idx] = (dist<<44UL) | tmp_offset;
+                    if(dist>max_bck_dist) max_bck_dist = dist;
+                    break;
+                }else{
+                    bck_dist = table[idx] >> 44UL;
+                    if(bck_dist<dist){
+                        bck_offset = table[idx] & 0xFFFFFFFFFFFul;
+                        table[idx] = (dist<<44UL) | tmp_offset;
+                        if(dist>max_bck_dist) max_bck_dist = dist;
+
+                        dist = bck_dist;
+                        tmp_offset = bck_offset;
+                    }
+                    dist++;
+                    idx = (idx+1) & (n_buckets-1);
+                }
+            }
+        }
+
+        n_elms++;
+        m_load_factor = float(n_elms) / n_buckets;
+
+        if(m_load_factor>=m_max_load_factor){
+            size_t new_size = new_table_size();
+            assert(new_size<=av_tb_bytes());
+            resize_table(new_size);
+        }
+        return {in_offset-1, true};
+    }
+
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
         assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
@@ -718,33 +795,6 @@ public:
     inline size_t max_bucket_dist() const {
         return max_bck_dist;
     }
-
-    /*inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
-
-        size_t hash;
-        if constexpr(short_key){
-            hash = (*(reinterpret_cast<const size_t*>(key))) & ((1UL<<key_bits)-1UL);
-        }else{
-            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
-        }
-
-        size_t idx = hash & (n_buckets - 1);
-
-        if(table[idx]==0){
-            return {0, false};
-        }else{
-            size_t offset, i=0;
-            while(i<=max_bck_dist && table[idx]!=0){
-                offset = (table[idx] & 0xFFFFFFFFFFFul);
-                if(equal(key, key_bits, offset-1)){
-                    return {offset - 1, true};
-                }
-                idx = (idx+1) & (n_buckets - 1);
-                i++;
-            }
-            return {0, false};
-        }
-    }*/
 
     inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
 

@@ -26,12 +26,28 @@ struct hash_functor{
         bool cover_an_string;
         size_t str_len, val;
 
+        //TODO testing
+        //phrase_map_t tmp_ht(0, "", 0.8, nullptr, data.inner_map.description_bits());
+        //
+
         auto hash_phrase = [&](string_t& phrase) -> void {
             phrase.mask_tail();
 
             cover_an_string = phrase.size()==str_len;
             val = (4UL | cover_an_string<<1UL) | !cover_an_string;
-            auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), val);
+
+            auto res = data.inner_map.insert_new(phrase.data(), phrase.n_bits(), val);
+
+            //todo testing
+            //auto res2 = tmp_ht.insert_new(phrase.data(), phrase.n_bits(), val);
+            //std::cout<<res2.second<<" "<<res.second<<std::endl;
+            //std::cout<<res2.first<<" "<<res.first<<std::endl;
+            //auto res3 = tmp_ht.find(phrase.data(), phrase.n_bits());
+            //assert(res2.first == res.first);
+            //assert(res2.second == res.second);
+            //assert(res3.second);
+            //
+
             if(!res.second){
                 val=0;
                 data.inner_map.get_value_from(res.first, val);
