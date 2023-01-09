@@ -568,60 +568,51 @@ public:
             hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
         }
 
-        size_t idx = hash & (n_buckets - 1), dist=0, bck_dist = table[idx]>>44UL, in_offset, bck_offset;
-
-        while(table[idx]!=0 && bck_dist>dist){
-            idx = (idx+1) & (n_buckets-1);
-            bck_dist = table[idx] >> 44UL;
-            dist++;
-        }
+        size_t idx = hash & (n_buckets - 1), in_offset;
 
         if(table[idx]==0){
-            assert(bck_dist<=dist);
             auto res  = insert_int(key, key_bits, val);
             in_offset = res.first;
-            table[idx] =  (dist<<44UL) | in_offset;
-            if(dist>max_bck_dist) max_bck_dist = dist;
+            table[idx] =  in_offset;
         }else{
-            while(bck_dist==dist){
+            size_t bck_dist = table[idx]>>44UL, bck_offset, dist=0;
+            while(table[idx]!=0 && bck_dist>dist){
+                idx = (idx+1) & (n_buckets-1);
+                bck_dist = table[idx] >> 44UL;
+                dist++;
+            }
+            while(table[idx]!=0 && bck_dist==dist){
                 bck_offset = table[idx] & 0xFFFFFFFFFFFul;
                 if(equal(key, key_bits , bck_offset-1)){
                     return {bck_offset-1, false};
                 }
-                dist++;
                 idx = (idx+1) & (n_buckets-1);
                 bck_dist = table[idx] >> 44UL;
+                dist++;
             }
 
             assert(dist>0 && bck_dist<dist);
             auto res = insert_int(key, key_bits, val);
-            in_offset = res.first;
-            size_t tmp_offset = table[idx] & 0xFFFFFFFFFFFul;
-            table[idx] = (dist<<44UL) | in_offset;
-            if(dist>max_bck_dist) max_bck_dist = dist;
+            size_t tmp_offset = res.first;
+            in_offset = tmp_offset;
 
-            dist = bck_dist+1;
-            idx = (idx+1) & (n_buckets-1);
-
-            while(true){
-                if(table[idx]==0){
+            while(table[idx]!=0){
+                bck_dist = table[idx] >> 44UL;
+                if(bck_dist<dist){
+                    bck_offset = table[idx] & 0xFFFFFFFFFFFul;
                     table[idx] = (dist<<44UL) | tmp_offset;
                     if(dist>max_bck_dist) max_bck_dist = dist;
-                    break;
-                }else{
-                    bck_dist = table[idx] >> 44UL;
-                    if(bck_dist<dist){
-                        bck_offset = table[idx] & 0xFFFFFFFFFFFul;
-                        table[idx] = (dist<<44UL) | tmp_offset;
-                        if(dist>max_bck_dist) max_bck_dist = dist;
 
-                        dist = bck_dist;
-                        tmp_offset = bck_offset;
-                    }
-                    dist++;
-                    idx = (idx+1) & (n_buckets-1);
+                    dist = bck_dist;
+                    tmp_offset = bck_offset;
                 }
+                dist++;
+                idx = (idx+1) & (n_buckets-1);
             }
+
+            assert(table[idx]==0);
+            table[idx] = (dist<<44UL) | tmp_offset;
+            if(dist>max_bck_dist) max_bck_dist = dist;
         }
 
         n_elms++;
