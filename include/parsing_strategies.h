@@ -38,7 +38,6 @@ struct hash_functor{
 
             auto res = data.inner_map.insert_new(phrase.data(), phrase.n_bits(), val);
 
-            //todo testing
             //auto res2 = tmp_ht.insert_new(phrase.data(), phrase.n_bits(), val);
             //std::cout<<res2.second<<" "<<res.second<<std::endl;
             //std::cout<<res2.first<<" "<<res.first<<std::endl;
