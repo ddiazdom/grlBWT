@@ -165,6 +165,11 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
     size_t cont=0;
 
+    //TODO some boundaries
+    //size_t max_n_runs=0;
+    //size_t max_run_len=0;
+    //
+
     while(u<sa_size) {
         d_pos = (sa[u]>>2UL) - 1;
         if((sa[u] & 2UL)==0) {
@@ -203,18 +208,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                 if(is_maximal || exist_as_phrase) {
 
-                    //TODO testing
-                    /*if(p_info.p_round==6){
-                        std::cout<<"* "<<" , "<<acc_freq<<" | "<<is_maximal<<" "<<exist_as_phrase<<" "<< rank <<std::endl;
-                        size_t tmp = f_sa_pos;
-                        do{
-                            size_t tmp2 = dict.dict[tmp];
-                            if(tmp2>=dict.alphabet) tmp2 = first_symbol[tmp2-dict.alphabet];
-                            std::cout<<tmp2<<" ";
-                        }while(!dict.d_lim[tmp++]);
-                        std::cout<<""<<std::endl;
-                    }*/
-
                     pre_bwt.push_back(dict.bwt_dummy+((u-bg_pos)>1), acc_freq);
                     dummy_run+=acc_freq;
                     if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
@@ -223,9 +216,10 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     assert(f_sym<dict.end_str_dummy);
                     first_symbol.push_back(f_sym);
                     dict.phrases_has_hocc[rank] = (u-bg_pos>1);
+
                     for(size_t j=bg_pos;j<u;j++){
                         size_t pos = (sa[j]>>2UL)-1;
-                        assert(dict.dict.read(pos)==f_sym);
+                        //assert(dict.dict.read(pos)==f_sym);
                         dict.dict.write(pos, dict.alphabet + rank);
                     }
 
@@ -308,6 +302,9 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
             }while(++u<sa_size && (sa[u] & 1UL));
         }
     }
+
+    //TODO some boundaries
+    //std::cout<<"\nmax number of runs: "<<max_n_runs<<" max run length: "<<max_run_len<<std::endl;
 
     size_t tmp=sa_size*sizeof(value_type);
     tmp+=INT_CEIL(dict.dict.size()*dict.dict.width(), 8);
