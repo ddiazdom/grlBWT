@@ -10,8 +10,12 @@
 
 size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buckets, size_t p_round, tmp_workspace & ws);
 void infer_lvl_bwt(tmp_workspace& ws, size_t p_round);
-void parse2bwt(tmp_workspace& ws, size_t p_round);
+template<uint8_t b_f_r>
+void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round);
+template<uint8_t b_f_r>
 void ind_phase(tmp_workspace& ws, size_t p_round);
+
+void parse2bwt(tmp_workspace& ws, size_t p_round);
 
 /***
  *
@@ -20,5 +24,5 @@ void ind_phase(tmp_workspace& ws, size_t p_round);
  * @param hbuff_size : buffer size for the hashing step
  */
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace & tmp_ws,
-                  size_t n_threads, str_collection& str_coll, float hbuff_frac);
+                  size_t n_threads, str_collection& str_coll, float hbuff_frac, uint8_t b_f_r);
 #endif //GRLBWT_HPP

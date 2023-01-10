@@ -11,6 +11,7 @@ struct arguments{
 
     std::string tmp_dir;
     size_t n_threads{};
+    uint8_t b_f_r=1;
     float hbuff_frac=0.5;
     bool ver=false;
     bool rev_comp=false;
@@ -44,6 +45,10 @@ static void parse_app(CLI::App& app, struct arguments& args){
                       args.hbuff_frac,
                       "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->
             check(CLI::Range(0.0,1.0))->default_val(0.15);
+    app.add_option("-b,--run-len-bytes",
+                   args.b_f_r,
+                   "Number of bytes to encode the length of the BWT runs. Possible values are [0..5], and 0 means the program will estimate it (def. 1)")->
+            check(CLI::Range(0,5))->default_val(1);
     app.add_option("-T,--tmp",
                       args.tmp_dir,
                       "Temporary folder (def. /tmp/grl.bwt.xxxx)")->
@@ -67,8 +72,7 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    //tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
-    tmp_workspace tmp_ws("/Users/ddiaz/CLionProjects/grlBWT/data/bug_folder", "EjZ", false);
+    tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
 
     std::cout << "Input file:       "<<args.input_file<<std::endl;
     std::cout << "Temporary folder: "<<tmp_ws.folder()<<std::endl;
@@ -110,6 +114,6 @@ int main(int argc, char** argv) {
     std::cout<<"  Number of characters : "<<str_coll.n_char<<std::endl;
 
     grl_bwt_algo(input_collection, args.output_file, tmp_ws, args.n_threads,
-                 str_coll, args.hbuff_frac);
+                 str_coll, args.hbuff_frac, args.b_f_r);
     return 0;
 }

@@ -216,6 +216,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
     return acc;
 }
 
+template<uint8_t b_f_r>
 void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
 
     dictionary dict;
@@ -223,7 +224,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
     sdsl::load_from_file(dict, dict_file);
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
-    size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy+1;
+    size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy+1, max_run_len = (1UL << (b_f_r*8))-1;
 
     std::cout<<"    Computing the number of induced symbols"<<std::flush;
     auto start = std::chrono::steady_clock::now();
@@ -234,7 +235,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
     size_t fr_b = 1;
     size_t bps = al_b + fr_b;
 
-    bit_hash_table<size_t> ht;
+    bit_hash_table<uintptr_t, sizeof(uintptr_t)*8, size_t, 8, true> ht;
 
     auto * hocc = (char *)malloc(n_runs*bps);
     memset(hocc, 0, n_runs*bps);
@@ -269,7 +270,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                     ht.insert_value_at(res.first, new_freq);
                 }else{
                     new_freq+=freq;
-                    if(new_freq>255){
+                    if(new_freq>max_run_len){
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr-bps);
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr)*8, new_freq);
                         if(!res.second){
@@ -279,14 +280,13 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                             ht.insert_value_at(res.first, new_freq);
                         }
                         new_freq = 0;
-                        //std::cout<<ptr_addr<<std::endl;
                     }
                     memcpy(hocc_ptr-fr_b, &new_freq, fr_b);
                 }
             }else{
                 memcpy(hocc_ptr, &dummy_sym, al_b);
                 size_t new_freq=freq;
-                if(new_freq>255){
+                if(new_freq>max_run_len){
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                     auto res = ht.insert(&ptr_addr, sizeof(ptr_addr)*8, new_freq);
                     assert(res.second);
@@ -313,7 +313,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                 size_t new_freq=0;
                 memcpy(&new_freq, hocc_ptr-fr_b, fr_b);
 
-                if(new_freq==0){
+                if(new_freq==0) [[unlikely]] {
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr-bps);
                     auto res = ht.find(&ptr_addr, sizeof(ptr_addr)*8);
                     assert(res.second);
@@ -323,7 +323,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                     ht.insert_value_at(res.first, new_freq);
                 }else{
                     new_freq+=freq;
-                    if(new_freq>255){
+                    if(new_freq>max_run_len) [[unlikely]] {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr-bps);
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr)*8, new_freq);
                         if(!res.second){
@@ -332,7 +332,6 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                             new_freq +=tmp;
                             ht.insert_value_at(res.first, new_freq);
                         }
-                        //std::cout<<ptr_addr<<std::endl;
                         new_freq = 0;
                     }
                     memcpy(hocc_ptr-fr_b, &new_freq, fr_b);
@@ -340,7 +339,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
             }else{
                 memcpy(hocc_ptr, &left_sym, al_b);
                 size_t new_freq=freq;
-                if(new_freq>255){
+                if(new_freq>max_run_len) [[unlikely]] {
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                     auto res = ht.insert(&ptr_addr, sizeof(ptr_addr)*8, new_freq);
                     assert(res.second);
@@ -406,7 +405,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                     assert(sym>0);
 
                     freq_in_ht = freq==0;
-                    if(freq_in_ht){
+                    if(freq_in_ht) [[unlikely]] {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                         auto res = ht.find(&ptr_addr, sizeof(ptr_addr)*8);
                         assert(res.second);
@@ -419,10 +418,10 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                         hocc_ptr+=bps;
                     }else{
                         freq-=pbwt_freq;
-                        if(freq_in_ht){
+                        if(freq_in_ht) [[unlikely]] {
                             ht.insert_value_at(ht_addr, freq);
                         }else{
-                            assert(freq<=255);
+                            assert(freq<=max_run_len);
                             memcpy(hocc_ptr+al_b, &freq, fr_b);
                         }
                         freq = std::exchange(pbwt_freq, 0);
@@ -467,12 +466,17 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
     report_time(start, end, 26);
 
     std::cout<<"    Stats:       "<<std::endl;
-    std::cout<<"      BWT size (n):       "<<new_bwt_size<<std::endl;
-    std::cout<<"      Number of runs (r): "<<new_bwt_buff.size()<<std::endl;
-    std::cout<<"      n/r:                "<<double(new_bwt_size)/double(new_bwt_buff.size())<<std::endl;
-    std::cout<<"      Bytes per run:      "<<bps<<std::endl;
-    std::cout<<"        Bytes per symbol: "<<al_b<<std::endl;
-    std::cout<<"        Bytes per freq.:  "<<fr_b<<std::endl;
+    std::cout<<"      BWT size (n):                  "<<new_bwt_size<<std::endl;
+    std::cout<<"      Number of runs (r):            "<<new_bwt_buff.size()<<std::endl;
+    std::cout<<"      n/r:                           "<<double(new_bwt_size)/double(new_bwt_buff.size())<<std::endl;
+    std::cout<<"      Run stats:                     "<<std::endl;
+    std::cout<<"        Bytes for the symbol:        "<<(int)new_al_b<<std::endl;
+    std::cout<<"        Bytes for the length:        "<<(int)new_fr_b<<std::endl;
+    if(ht.size()>0){
+        std::cout<<"        Runs with length overflow:   "<<ht.size()<<" ("<<(double(ht.size())/double(new_bwt_buff.size()))*100<<"%)"<<std::endl;
+    }else{
+        std::cout<<"        Runs with length overflow:   0"<<std::endl;
+    }
     free(hocc);
 }
 
@@ -742,19 +746,23 @@ void parse2bwt(tmp_workspace& ws, size_t p_round) {
     std::cout<<"        Bytes per freq.:  "<<fb<<std::endl;
 }
 
+template<uint8_t b_f_r>//b_f_r = number of bytes to encode the length of a BWT run
 void ind_phase(tmp_workspace& ws, size_t p_round){
-    std::cout<<"Inferring the BWT"<<std::endl;
+    static_assert(b_f_r>=0 && b_f_r<=5);
 
-    //parse2bwt(ws, p_round);
+    std::cout<<"Inferring the BWT"<<std::endl;
     std::string prev_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_round));
     std::string new_bwt_file = ws.get_file("bwt_lev_"+std::to_string(p_round));
-
     rename(prev_bwt_file.c_str(), new_bwt_file.c_str());
 
     while(p_round-->0){
         std::cout<<"  Inducing the BWT for parse "<<(p_round+1)<<std::endl;
         auto start = std::chrono::steady_clock::now();
-        infer_lvl_bwt_ht(ws, p_round);
+        if constexpr (b_f_r==0){
+            infer_lvl_bwt(ws, p_round);
+        }else{
+            infer_lvl_bwt_ht<b_f_r>(ws, p_round);
+        }
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 4);
         report_mem_peak();
@@ -764,13 +772,30 @@ void ind_phase(tmp_workspace& ws, size_t p_round){
 }
 
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_ws, size_t n_threads,
-                  str_collection& str_coll, float hbuff_frac) {
+                  str_collection& str_coll, float hbuff_frac, uint8_t b_p_r) {
 
-    //std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
-    //auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
-    //size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
-    size_t p_rounds = 6;
-    ind_phase(tmp_ws, p_rounds);
+    std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
+    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
+    size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
+    switch (b_p_r) {
+        case 0:
+            ind_phase<0>(tmp_ws, p_rounds);
+            break;
+        case 1:
+            ind_phase<1>(tmp_ws, p_rounds);
+            break;
+        case 2:
+            ind_phase<2>(tmp_ws, p_rounds);
+            break;
+        case 3:
+            ind_phase<3>(tmp_ws, p_rounds);
+            break;
+        case 4:
+            ind_phase<4>(tmp_ws, p_rounds);
+            break;
+        default:
+            ind_phase<5>(tmp_ws, p_rounds);
+    };
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
 }
