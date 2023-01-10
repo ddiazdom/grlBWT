@@ -218,12 +218,9 @@ void invert_data(tmp_workspace& ws){
     //TODO testing
     size_t p_sym, p_len;
     pre_bwt.read_run(0, p_sym, p_len);
-    std::cout<<"just checking"<<std::endl;
     for(size_t i=1;i<pre_bwt.size();i++){
         pre_bwt.read_run(i, sym, len);
-        if(sym==p_sym && sym <87 ){
-            std::cout<<i<<" "<<sym<<" "<<len<<std::endl;
-        }
+        assert(sym!=p_sym);
         p_sym = sym;
     }
     //
@@ -256,7 +253,7 @@ void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& d
             assert(bwt_sym<dict.end_str_dummy);
         }
 
-        if(pre_bwt.size()>1 && pre_bwt.last_sym() == bwt_sym){
+        if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
             global_cont++;
             pre_bwt.inc_freq_last(acc_freq);
         }else{
@@ -285,7 +282,7 @@ void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& d
                 assert(bwt_sym < dict.end_str_dummy);
             }
 
-            if(pre_bwt.size()>1 && pre_bwt.last_sym() == bwt_sym){
+            if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
                 global_cont++;
                 pre_bwt.inc_freq_last(freq);
             }else{

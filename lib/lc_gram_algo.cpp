@@ -182,7 +182,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     dummy_run=0;
                 }
 
-                if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
+                if(pre_bwt.size()>0 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(acc_freq);
                     hits++;
                 }else{
@@ -250,7 +250,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                         std::cout<<l_sym<<" | "<<freq<<std::endl;
                     }
                 }*/
-                if(pre_bwt.size()>1 && pre_bwt.last_sym() == l_sym){
+                if(pre_bwt.size()>0 && pre_bwt.last_sym() == l_sym){
                     hits++;
                     pre_bwt.inc_freq_last(freq);
                 }else{
@@ -289,14 +289,14 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     //TODO test
     size_t r_sym, r_len, r_sym2, r_len2;
     bwt_buff_reader pre_bwt2(ws.get_file("pre_bwt"));
-    std::cout<<"test "<<pre_bwt.size()<<" "<<pre_bwt2.size()<<" there are "<<hits<<" hits "<<std::endl;
-    //assert(pre_bwt2.size()==pre_bwt.size());
-    //for(size_t i=pre_bwt.size();i-->0;){
-    //    pre_bwt.read_run(i, r_sym, r_len);
-    //    pre_bwt2.read_run(i, r_sym2, r_len2);
-    //    std::cout<<i<<"-> ("<<r_sym<<", "<<r_len<<") "<<" ("<<r_sym2<<", "<<r_len2<<") "<<std::endl;
-    //    assert(r_sym==r_sym2 && r_len==r_len2);
-    //}
+    //std::cout<<"test "<<pre_bwt.size()<<" "<<pre_bwt2.size()<<" there are "<<hits<<" hits "<<std::endl;
+    assert(pre_bwt2.size()==pre_bwt.size());
+    for(size_t i=pre_bwt.size();i-->0;){
+        pre_bwt.read_run(i, r_sym, r_len);
+        pre_bwt2.read_run(i, r_sym2, r_len2);
+        //std::cout<<i<<"-> ("<<r_sym<<", "<<r_len<<") "<<" ("<<r_sym2<<", "<<r_len2<<") "<<std::endl;
+        assert(r_sym==r_sym2 && r_len==r_len2);
+    }
     //
 
     pre_bwt.close();
