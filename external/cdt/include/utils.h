@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <filesystem>
 #include <fstream>
+#include <cassert>
 
 #ifdef __APPLE__
 #include <unistd.h>

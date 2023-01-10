@@ -3,8 +3,6 @@
 //
 #include "LMS_induction.h"
 
-size_t global_cont=0;
-
 template <class value_type>
 value_type * suffix_induction(const dictionary &dict, tmp_workspace& ws) {
 
@@ -133,12 +131,13 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
     size_t rb=sa_size, is_suffix, flag;
 
     //TODO testing
-    size_t n_breaks=0, n_phrases=0, dummy_sym = std::numeric_limits<size_t>::max(), pl_sym = dummy_sym, fe=sa_size-1;
-    bool is_full_phrase;
+    size_t n_breaks=0, n_phrases=0, null_sym = std::numeric_limits<size_t>::max(), pl_sym = null_sym, fe=sa_size-1;
+    bool is_full_phrase, is_gr_phrase;
     size_t sb = INT_CEIL(sym_width(std::max(dict.alphabet+3, dict.prev_alphabet)), 8);
     size_t fb = INT_CEIL(sym_width(dict.t_size),8);
     bwt_buff_writer pre_bwt(ws.get_file("inv_pre_bwt"), std::ios::out, sb, fb);
     bv_rs_t d_lim_rs(&dict.d_lim);
+    size_t prev_pos=dict.dict.size(), prev_is_suffix=false, acc_freq=0;
     //
 
     for(size_t i=sa_size;i-->0;) {
@@ -157,11 +156,12 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
         }
 
         is_full_phrase = pos==1 || dict.d_lim[pos-2];
+        l_sym = dict.bwt_dummy;
 
-        l_sym = dict.alphabet;
         if(!is_full_phrase){
             bck = dict.dict.read(pos-1);
             l_sym = dict.dict.read(pos-2);
+            assert(l_sym<dict.end_str_dummy);
 
             if(!solved_sym[l_sym] && (l_sym < bck || (l_sym==bck && i >= buckets[bck]))){
 
@@ -180,12 +180,23 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
             }
         }
 
+        if(prev_is_suffix){
+            assert(pl_sym!=null_sym);
+            insert_bwt_sym_for_suffix(prev_pos-1, pl_sym, dict, d_lim_rs, pre_bwt);
+        }
+
         if(i<(sa_size-1) && !(sa[i+1] & 1UL)){
-            increment_bwt(i+1, fe, sa, dict, n_phrases, n_breaks, d_lim_rs, pre_bwt);
+            if(!prev_is_suffix && !dict.d_lim[prev_pos-1]){
+                [[likely]]
+                assert(n_phrases<=1);
+                is_gr_phrase = n_phrases==1 || (n_breaks>1);
+                increment_bwt(i+1, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
+            }
             fe = i;
             n_phrases = 0;
             n_breaks = 0;
-            pl_sym = dummy_sym;
+            acc_freq = 0;
+            pl_sym = null_sym;
         }
 
         p_lcs = lcs;
@@ -193,22 +204,36 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
         n_breaks +=pl_sym!=l_sym;
         n_phrases += is_full_phrase;
         pl_sym = l_sym;
+        if(!is_suffix && !dict.d_lim[pos-1]) acc_freq+= dict.freqs.read(d_lim_rs(pos));
+        prev_pos = pos;
+        prev_is_suffix = is_suffix;
     }
 
+    if(prev_is_suffix){
+        assert(pl_sym!=null_sym);
+        insert_bwt_sym_for_suffix(prev_pos-1, pl_sym, dict, d_lim_rs, pre_bwt);
+    }
 
     if(!(sa[0] & 1UL)){
-        increment_bwt(0, fe, sa, dict, n_phrases, n_breaks, d_lim_rs, pre_bwt);
+        if(!prev_is_suffix && !dict.d_lim[prev_pos-1]) {
+            assert(n_phrases<=1);
+            is_gr_phrase = n_phrases==1 || (n_breaks>1);
+            increment_bwt(0, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
+        }
     }
     free(ind_bck);
-
 
     pre_bwt.close();
     invert_data(ws);
 }
 
-void invert_data(tmp_workspace& ws){
+void invert_data(tmp_workspace& ws) {
+
     bwt_buff_reader pre_bwt_inv(ws.get_file("inv_pre_bwt"));
-    bwt_buff_writer pre_bwt(ws.get_file("pre_bwt"), std::ios::out, pre_bwt_inv.bytes_per_rsym(), pre_bwt_inv.bytes_per_rlen());
+    bwt_buff_writer pre_bwt(ws.get_file("pre_bwt"),
+                            std::ios::out,
+                            pre_bwt_inv.bytes_per_rsym(),
+                            pre_bwt_inv.bytes_per_rlen());
     size_t sym, len;
     for(size_t i=pre_bwt_inv.size();i-->0;){
         pre_bwt_inv.read_run(i, sym, len);
@@ -229,67 +254,44 @@ void invert_data(tmp_workspace& ws){
     pre_bwt.close();
 }
 
-template <class value_type>
-void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& dict,
-                   size_t n_phrases, size_t n_breaks, bv_rs_t& d_lim_rs, bwt_buff_writer& pre_bwt){
+void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dict, bv_rs_t& d_lim_rs, bwt_buff_writer& pre_bwt){
 
-    size_t sa_pos = (sa[start]>>2UL)-1, acc_freq, bwt_sym, freq, d_rank, phrase_flag;
-    bool is_suffix = (sa[start] & 2UL) != 0;
+    size_t d_rank = d_lim_rs(pos);
+    size_t freq = dict.freqs.read(d_rank);
+    size_t phrase_flag = freq & 3UL;
+    assert(phrase_flag!=0 && phrase_flag<=3);
+    freq>>=2UL;
 
-    if(!is_suffix){
-        if(dict.d_lim[sa_pos]) return;
-
-        acc_freq=0;
-        for(size_t i=end+1;i-->start;){
-            sa_pos = (sa[i]>>2UL) - 1;
-            d_rank = d_lim_rs(sa_pos);
-            acc_freq += dict.freqs.read(d_rank);
+    if(bwt_sym==dict.bwt_dummy){
+        if(bwt_sym==dict.bwt_dummy && phrase_flag==2){
+            bwt_sym = dict.end_str_dummy;
+        }else if(bwt_sym==dict.bwt_dummy && phrase_flag==3) [[unlikely]] {
+            //TODO this is the case when a phrase occurs as a suffix but also as an entire string
+            exit(0);
         }
+    }
 
-        if (n_phrases == 1 || n_breaks > 1) {
-            bwt_sym = dict.bwt_dummy+((end-start+1)>1);
-        }else{
-            bwt_sym = dict.dict[sa_pos-1];
-            assert(bwt_sym<dict.end_str_dummy);
-        }
-
-        if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
-            global_cont++;
-            pre_bwt.inc_freq_last(acc_freq);
-        }else{
-            pre_bwt.push_back(bwt_sym, acc_freq);
-        }
+    if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
+        pre_bwt.inc_freq_last(freq);
     }else{
-        [[unlikely]]
-        for(size_t i=end+1;i-->start;) {
-            sa_pos = (sa[i]>>2UL)-1;
-            d_rank = d_lim_rs(sa_pos);
-            freq = dict.freqs.read(d_rank);
-            phrase_flag = freq & 3UL;
-            assert(phrase_flag!=0 && phrase_flag<=3);
-            freq>>=2UL;
+        pre_bwt.push_back(bwt_sym, freq);
+    }
+}
 
-            if(sa_pos==0 || dict.d_lim[sa_pos-1]){
-                bwt_sym = dict.bwt_dummy;
-                if(phrase_flag==2){
-                    bwt_sym = dict.end_str_dummy;
-                }else if(phrase_flag==3){
-                    //TODO this is the case when a phrase occurs as a suffix but also as an entire string
-                    exit(0);
-                }
-            }else {
-                bwt_sym = dict.dict[sa_pos - 1];
-                assert(bwt_sym < dict.end_str_dummy);
-            }
+template <class value_type>
+void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& dict, bool gr_phrase, size_t acc_freq, size_t bwt_sym, bwt_buff_writer& pre_bwt){
+    if(gr_phrase) {
+        bwt_sym = dict.bwt_dummy+((end-start+1)>1);
+    }/*else{
+        size_t sa_pos = (sa[start]>>2UL)-1;
+        assert(bwt_sym==dict.dict[sa_pos-1]);
+        assert(bwt_sym<dict.end_str_dummy);
+    }*/
 
-            if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
-                global_cont++;
-                pre_bwt.inc_freq_last(freq);
-            }else{
-                //std::cout<<" * "<<i+1<<" ["<<end<<", "<<start<<"]"<<std::endl;
-                pre_bwt.push_back(bwt_sym, freq);
-            }
-        }
+    if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
+        pre_bwt.inc_freq_last(acc_freq);
+    }else{
+        pre_bwt.push_back(bwt_sym, acc_freq);
     }
 }
 

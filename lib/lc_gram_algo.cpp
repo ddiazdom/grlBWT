@@ -387,12 +387,12 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     if(n_threads>1) {
         {
             mt_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, hbuff_size, n_threads);
-            rem_phrases = build_lc_gram_int<mt_byte_parse_strategy>(i_file, tmp_i_file, p_strat, p_info, symbol_desc, ws);
+            rem_phrases = build_lc_gram_int<mt_byte_parse_strategy>(p_strat, p_info, symbol_desc, ws);
         }
     }else{
         {
             st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, symbol_desc);
-            rem_phrases = build_lc_gram_int<st_byte_parse_strategy>(i_file, tmp_i_file, p_strat, p_info, symbol_desc, ws);
+            rem_phrases = build_lc_gram_int<st_byte_parse_strategy>(p_strat, p_info, symbol_desc, ws);
         }
     }
     auto end = std::chrono::steady_clock::now();
@@ -406,10 +406,10 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
         std::cout<<"  Parsing round "<<iter++<<std::endl;
         if(n_threads>1) {
             mt_int_parse_strategy p_strat( tmp_i_file, output_file, p_info, hbuff_size, n_threads);
-            rem_phrases = build_lc_gram_int<mt_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
+            rem_phrases = build_lc_gram_int<mt_int_parse_strategy>(p_strat, p_info, symbol_desc, ws);
         }else{
             st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info, symbol_desc);
-            rem_phrases = build_lc_gram_int<st_int_parse_strategy>(tmp_i_file, output_file, p_strat, p_info, symbol_desc, ws);
+            rem_phrases = build_lc_gram_int<st_int_parse_strategy>(p_strat, p_info, symbol_desc, ws);
         }
         end = std::chrono::steady_clock::now();
         report_time(start, end,4);
@@ -426,9 +426,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
 }
 
 template<class parse_strategy_t>
-size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
-                         parse_strategy_t& p_strategy, parsing_info &p_info,
-                         bv_t &phrase_desc, tmp_workspace &ws) {
+size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws) {
 
 #ifdef __linux__
     malloc_trim(0);
@@ -573,7 +571,7 @@ size_t build_lc_gram_int(std::string &i_file, std::string &o_file,
     }*/
 }
 
-template size_t build_lc_gram_int<st_byte_parse_strategy>(std::string &i_file, std::string &o_file, st_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-template size_t build_lc_gram_int<st_int_parse_strategy>(std::string &i_file, std::string &o_file, st_int_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-template size_t build_lc_gram_int<mt_byte_parse_strategy>(std::string &i_file, std::string &o_file, mt_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-template size_t build_lc_gram_int<mt_int_parse_strategy>(std::string &i_file, std::string &o_file, mt_int_parse_strategy& p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<st_byte_parse_strategy>(st_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<st_int_parse_strategy>(st_int_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<mt_byte_parse_strategy>(mt_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+template size_t build_lc_gram_int<mt_int_parse_strategy>(mt_int_parse_strategy& p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
