@@ -67,7 +67,8 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
+    //tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
+    tmp_workspace tmp_ws("/Users/ddiaz/CLionProjects/grlBWT/data/bug_folder", "EjZ", false);
 
     std::cout << "Input file:       "<<args.input_file<<std::endl;
     std::cout << "Temporary folder: "<<tmp_ws.folder()<<std::endl;

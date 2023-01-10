@@ -602,7 +602,6 @@ public:
                     bck_offset = table[idx] & 0xFFFFFFFFFFFul;
                     table[idx] = (dist<<44UL) | tmp_offset;
                     if(dist>max_bck_dist) max_bck_dist = dist;
-
                     dist = bck_dist;
                     tmp_offset = bck_offset;
                 }
