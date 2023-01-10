@@ -187,7 +187,7 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
 
         if(i<(sa_size-1) && !(sa[i+1] & 1UL)){
             if(!prev_is_suffix && !dict.d_lim[prev_pos-1]){
-                [[likely]]
+                /*[[likely]]*/
                 assert(n_phrases<=1);
                 is_gr_phrase = n_phrases==1 || (n_breaks>1);
                 increment_bwt(i+1, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
@@ -265,7 +265,7 @@ void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dic
     if(bwt_sym==dict.bwt_dummy){
         if(bwt_sym==dict.bwt_dummy && phrase_flag==2){
             bwt_sym = dict.end_str_dummy;
-        }else if(bwt_sym==dict.bwt_dummy && phrase_flag==3) [[unlikely]] {
+        }else if(bwt_sym==dict.bwt_dummy && phrase_flag==3) /*[[unlikely]]*/ {
             //TODO this is the case when a phrase occurs as a suffix but also as an entire string
             exit(0);
         }

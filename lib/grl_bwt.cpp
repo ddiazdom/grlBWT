@@ -313,7 +313,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                 size_t new_freq=0;
                 memcpy(&new_freq, hocc_ptr-fr_b, fr_b);
 
-                if(new_freq==0) [[unlikely]] {
+                if(new_freq==0) /*[[unlikely]]*/ {
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr-bps);
                     auto res = ht.find(&ptr_addr, sizeof(ptr_addr)*8);
                     assert(res.second);
@@ -323,7 +323,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                     ht.insert_value_at(res.first, new_freq);
                 }else{
                     new_freq+=freq;
-                    if(new_freq>max_run_len) [[unlikely]] {
+                    if(new_freq>max_run_len) /*[[unlikely]]*/ {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr-bps);
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr)*8, new_freq);
                         if(!res.second){
@@ -339,7 +339,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
             }else{
                 memcpy(hocc_ptr, &left_sym, al_b);
                 size_t new_freq=freq;
-                if(new_freq>max_run_len) [[unlikely]] {
+                if(new_freq>max_run_len) /*[[unlikely]]*/ {
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                     auto res = ht.insert(&ptr_addr, sizeof(ptr_addr)*8, new_freq);
                     assert(res.second);
@@ -405,7 +405,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                     assert(sym>0);
 
                     freq_in_ht = freq==0;
-                    if(freq_in_ht) [[unlikely]] {
+                    if(freq_in_ht) /*[[unlikely]]*/ {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                         auto res = ht.find(&ptr_addr, sizeof(ptr_addr)*8);
                         assert(res.second);
@@ -418,7 +418,7 @@ void infer_lvl_bwt_ht(tmp_workspace& ws, size_t p_round) {
                         hocc_ptr+=bps;
                     }else{
                         freq-=pbwt_freq;
-                        if(freq_in_ht) [[unlikely]] {
+                        if(freq_in_ht) /*[[unlikely]]*/ {
                             ht.insert_value_at(ht_addr, freq);
                         }else{
                             assert(freq<=max_run_len);
