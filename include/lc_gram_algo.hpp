@@ -151,8 +151,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size,
                      str_collection& str_coll, tmp_workspace &ws);
 
 template<class parse_strategy>
-size_t build_lc_gram_int(std::string &i_file, std::string &o_file, parse_strategy& p_strat,
-                         parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
+size_t build_lc_gram_int(parse_strategy& p_strat, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
 
