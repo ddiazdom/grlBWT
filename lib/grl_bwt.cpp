@@ -198,7 +198,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
         }
     }
 
-    hocc_buckets.set_width(sym_width(n_runs));
+    hocc_buckets.set_width(sym_width(std::max<size_t>(n_runs, 1)));
     hocc_buckets.resize(hocc_rs(dict.phrases_has_hocc.size())+1);
 
     bwt_buff.close();
@@ -766,9 +766,10 @@ void ind_phase(tmp_workspace& ws, size_t p_round){
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace& tmp_ws, size_t n_threads,
                   str_collection& str_coll, float hbuff_frac) {
 
-    std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
-    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
-    size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
+    //std::cout<<"Constructing the BCR BWT of "<<i_file<<std::endl;
+    //auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
+    //size_t p_rounds = build_lc_gram(i_file, n_threads, hbuff_size, str_coll, tmp_ws);
+    size_t p_rounds = 6;
     ind_phase(tmp_ws, p_rounds);
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
     std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;

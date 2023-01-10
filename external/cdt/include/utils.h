@@ -69,6 +69,14 @@ struct tmp_workspace{
         ext = random_string(3);
     }
 
+    explicit tmp_workspace(std::string folder,
+                           std::string ext_,
+                           bool rem_all) : tmp_folder(folder),
+                                           ext(ext_),
+                                           remove_all(rem_all){
+        assert(file_exists(tmp_folder));
+    }
+
     [[nodiscard]] std::string get_file(std::string const& prefix) const {
         return std::filesystem::path(tmp_folder) / std::string(prefix+"_"+ext);
     }

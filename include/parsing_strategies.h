@@ -36,7 +36,7 @@ struct hash_functor{
             cover_an_string = phrase.size()==str_len;
             val = (4UL | cover_an_string<<1UL) | !cover_an_string;
 
-            auto res = data.inner_map.insert_new(phrase.data(), phrase.n_bits(), val);
+            auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), val);
 
             //auto res2 = tmp_ht.insert_new(phrase.data(), phrase.n_bits(), val);
             //std::cout<<res2.second<<" "<<res.second<<std::endl;
