@@ -185,6 +185,7 @@ size_t compute_hocc_size(dictionary& dict, bv_rs_t& hocc_rs, vector_t& hocc_buck
         while(sym>=dict.alphabet){
             sym -= dict.alphabet;
             left_sym = dict.dict.read(pos-1)+1;
+            assert(sym<dict.phrases_has_hocc.size());
             ptr = hocc_counts + hocc_rs(sym)*bps;
             if(memcmp(ptr, &left_sym, al_b)!=0){
                 memcpy(ptr, &left_sym, al_b);
