@@ -138,7 +138,10 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
     bwt_buff_writer pre_bwt(ws.get_file("inv_pre_bwt"), std::ios::out, sb, fb);
     vector_t meta_sym_list(dict.n_phrases, 0, sym_width(dict.dict.size())+1);
     bv_rs_t d_lim_rs(&dict.d_lim);
-    size_t prev_pos=dict.dict.size(), prev_is_suffix=false, acc_freq=0, curr_phrase, curr_phrase_freq;
+    size_t prev_pos=dict.dict.size(), prev_is_suffix=false, acc_freq=0, curr_phrase=0, curr_phrase_freq=0;
+    o_file_stream<size_t> reduced_sa(ws.get_file("s_sa"), BUFFER_SIZE, std::ios::out);
+    o_file_stream<size_t> nested_phrases(ws.get_file("nested_phrases"), BUFFER_SIZE, std::ios::out);
+    bv_t meta_sym_marks(dict.dict.size(), false);
     //
 
     for(size_t i=sa_size;i-->0;) {
@@ -235,9 +238,12 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
     }
     free(ind_bck);
     pre_bwt.close();
+    reduced_sa.size();
+    nested_phrases.close();
 
     invert_data(ws, met_sym, meta_sym_list);
     store_to_file(ws.get_file("new_phrases"), meta_sym_list);
+    store_to_file(ws.get_file("meta_sym_marks"), meta_sym_marks);
 }
 
 void invert_data(tmp_workspace& ws, size_t n_meta_syms, vector_t& meta_sym_list) {
