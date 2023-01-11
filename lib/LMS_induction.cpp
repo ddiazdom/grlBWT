@@ -131,13 +131,14 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
     size_t rb=sa_size, is_suffix, flag;
 
     //TODO testing
-    size_t n_breaks=0, n_phrases=0, null_sym = std::numeric_limits<size_t>::max(), pl_sym = null_sym, fe=sa_size-1;
+    size_t n_breaks=0, n_phrases=0, null_sym = std::numeric_limits<size_t>::max(), pl_sym = null_sym, fe=sa_size-1, met_sym=0;
     bool is_full_phrase, is_gr_phrase;
     size_t sb = INT_CEIL(sym_width(std::max(dict.alphabet+3, dict.prev_alphabet)), 8);
     size_t fb = INT_CEIL(sym_width(dict.t_size),8);
     bwt_buff_writer pre_bwt(ws.get_file("inv_pre_bwt"), std::ios::out, sb, fb);
+    vector_t meta_sym_list(dict.n_phrases, 0, sym_width(dict.dict.size())+1);
     bv_rs_t d_lim_rs(&dict.d_lim);
-    size_t prev_pos=dict.dict.size(), prev_is_suffix=false, acc_freq=0;
+    size_t prev_pos=dict.dict.size(), prev_is_suffix=false, acc_freq=0, curr_phrase, curr_phrase_freq;
     //
 
     for(size_t i=sa_size;i-->0;) {
@@ -182,7 +183,7 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
 
         if(prev_is_suffix){
             assert(pl_sym!=null_sym);
-            insert_bwt_sym_for_suffix(prev_pos-1, pl_sym, dict, d_lim_rs, pre_bwt);
+            INSERT_BWT_SYM_FOR_SUFFIX(prev_pos-1, pl_sym);
         }
 
         if(i<(sa_size-1) && !(sa[i+1] & 1UL)){
@@ -190,7 +191,8 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
                 /*[[likely]]*/
                 assert(n_phrases<=1);
                 is_gr_phrase = n_phrases==1 || (n_breaks>1);
-                increment_bwt(i+1, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
+                INCREMENT_BWT((i+1), fe, pl_sym);
+                //increment_bwt(i+1, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
             }
             fe = i;
             n_phrases = 0;
@@ -201,34 +203,46 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
 
         p_lcs = lcs;
 
+        if(!is_suffix && !dict.d_lim[pos-1]){
+            size_t d_rank = d_lim_rs(pos);
+            size_t freq = dict.freqs.read(d_rank);
+            acc_freq+= freq;
+            if(is_full_phrase){
+                curr_phrase = d_rank;
+                curr_phrase_freq = freq;
+            }
+        }
         n_breaks +=pl_sym!=l_sym;
         n_phrases += is_full_phrase;
+
         pl_sym = l_sym;
-        if(!is_suffix && !dict.d_lim[pos-1]) acc_freq+= dict.freqs.read(d_lim_rs(pos));
         prev_pos = pos;
         prev_is_suffix = is_suffix;
     }
 
     if(prev_is_suffix){
         assert(pl_sym!=null_sym);
-        insert_bwt_sym_for_suffix(prev_pos-1, pl_sym, dict, d_lim_rs, pre_bwt);
+        INSERT_BWT_SYM_FOR_SUFFIX(prev_pos-1, pl_sym);
     }
 
     if(!(sa[0] & 1UL)){
         if(!prev_is_suffix && !dict.d_lim[prev_pos-1]) {
             assert(n_phrases<=1);
             is_gr_phrase = n_phrases==1 || (n_breaks>1);
-            increment_bwt(0, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
+            INCREMENT_BWT(0, fe, pl_sym);
+            //increment_bwt(0, fe, sa, dict, is_gr_phrase, acc_freq,  pl_sym, pre_bwt);
         }
     }
     free(ind_bck);
-
     pre_bwt.close();
-    invert_data(ws);
+
+    invert_data(ws, met_sym, meta_sym_list);
+    store_to_file(ws.get_file("new_phrases"), meta_sym_list);
 }
 
-void invert_data(tmp_workspace& ws) {
+void invert_data(tmp_workspace& ws, size_t n_meta_syms, vector_t& meta_sym_list) {
 
+    //invert the preliminary BWT
     bwt_buff_reader pre_bwt_inv(ws.get_file("inv_pre_bwt"));
     bwt_buff_writer pre_bwt(ws.get_file("pre_bwt"),
                             std::ios::out,
@@ -240,22 +254,23 @@ void invert_data(tmp_workspace& ws) {
         pre_bwt.push_back(sym, len);
     }
 
-    //TODO testing
-    size_t p_sym, p_len;
-    pre_bwt.read_run(0, p_sym, p_len);
-    for(size_t i=1;i<pre_bwt.size();i++){
-        pre_bwt.read_run(i, sym, len);
-        assert(sym!=p_sym);
-        p_sym = sym;
-    }
-    //
-
     pre_bwt_inv.close(true);
     pre_bwt.close();
+
+    //invert the metasymbols for the new phrases
+    size_t meta_sym, is_rep;
+    n_meta_syms--;
+    for(size_t i=0;i<meta_sym_list.size();i++){
+        meta_sym = meta_sym_list.read(i);
+        is_rep = meta_sym & 1UL;
+        meta_sym>>=1UL;
+        meta_sym = ((n_meta_syms-meta_sym) <<1UL) | is_rep;
+        meta_sym_list.write(i, meta_sym);
+    }
+    //invert the bit vector marking the suffix ranges
 }
 
-void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dict, bv_rs_t& d_lim_rs, bwt_buff_writer& pre_bwt){
-
+/*void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dict, bv_rs_t& d_lim_rs, bwt_buff_writer& pre_bwt){
     size_t d_rank = d_lim_rs(pos);
     size_t freq = dict.freqs.read(d_rank);
     size_t phrase_flag = freq & 3UL;
@@ -265,7 +280,7 @@ void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dic
     if(bwt_sym==dict.bwt_dummy){
         if(bwt_sym==dict.bwt_dummy && phrase_flag==2){
             bwt_sym = dict.end_str_dummy;
-        }else if(bwt_sym==dict.bwt_dummy && phrase_flag==3) /*[[unlikely]]*/ {
+        }else if(bwt_sym==dict.bwt_dummy && phrase_flag==3) {
             //TODO this is the case when a phrase occurs as a suffix but also as an entire string
             exit(0);
         }
@@ -282,18 +297,13 @@ template <class value_type>
 void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& dict, bool gr_phrase, size_t acc_freq, size_t bwt_sym, bwt_buff_writer& pre_bwt){
     if(gr_phrase) {
         bwt_sym = dict.bwt_dummy+((end-start+1)>1);
-    }/*else{
-        size_t sa_pos = (sa[start]>>2UL)-1;
-        assert(bwt_sym==dict.dict[sa_pos-1]);
-        assert(bwt_sym<dict.end_str_dummy);
-    }*/
-
+    }
     if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){
         pre_bwt.inc_freq_last(acc_freq);
     }else{
         pre_bwt.push_back(bwt_sym, acc_freq);
     }
-}
+}*/
 
 template uint8_t* suffix_induction<uint8_t>(const dictionary &dict, tmp_workspace& ws);
 template uint16_t* suffix_induction<uint16_t>(const dictionary &dict, tmp_workspace& ws);

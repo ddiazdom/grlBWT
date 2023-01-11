@@ -297,6 +297,12 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         //std::cout<<i<<"-> ("<<r_sym<<", "<<r_len<<") "<<" ("<<r_sym2<<", "<<r_len2<<") "<<std::endl;
         assert(r_sym==r_sym2 && r_len==r_len2);
     }
+    pre_bwt2.close();
+    vector_t alternative_ranks;
+    load_from_file(ws.get_file("new_phrases"), alternative_ranks);
+    for(size_t i=0;i<new_metasymbols.size();i++){
+        assert(alternative_ranks[i]==new_metasymbols[i]);
+    }
     //
 
     pre_bwt.close();
@@ -326,6 +332,8 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     auto * sa = suffix_induction<value_type>(dict, ws);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 4);
+    malloc_count_print_status();
+    malloc_count_reset_peak();
 
     std::cout<<"    Constructing the preliminary BWT"<<std::flush;
     start = std::chrono::steady_clock::now();
@@ -376,11 +384,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     p_info.longest_str = str_coll.longest_string;
 
     size_t iter=1;
-    size_t rem_phrases=0;
-
-    //st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info);
-    //pre_parsing(p_strat, p_info, symbol_desc, ws);
-    //exit(0);
+    size_t rem_phrases;
 
     std::cout<<"  Parsing round "<<iter++<<std::endl;
     auto start = std::chrono::steady_clock::now();
@@ -446,10 +450,8 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
 #endif
 
     phrase_map_t & map = p_strategy.map;
-    size_t psize=0;//<- for the iter stats
+    size_t psize;//<- for the iter stats
     assert(map.size()>0);
-
-    //if(map.size()!=p_info.lms_phrases) {
 
     size_t dict_sym = res.first;
     size_t max_freq = res.second;
