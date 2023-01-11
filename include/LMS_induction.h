@@ -20,7 +20,8 @@ if(bwt_sym==dict.bwt_dummy){\
     }else if(bwt_sym==dict.bwt_dummy && phrase_flag==3) /*[[unlikely]]*/ { \
         /*TODO this is the case when a phrase occurs as a suffix but also as an entire string*/\
         exit(0);\
-    }\
+    }                                                \
+    reduced_sa.push_back(pos);                \
     meta_sym_list.write(phrase, (met_sym<<1UL) | (freq>1)); \
     met_sym++;                                     \
 }\
@@ -32,10 +33,21 @@ if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){\
 
 #define INCREMENT_BWT(start, end,  bwt_sym)\
 if(is_gr_phrase) { \
-    bwt_sym = dict.bwt_dummy+((end-start+1)>1);\
-    for(size_t j=start;j<=end;j++){       \
-    }                                      \
-    if(n_phrases==1){                     \
+    bwt_sym = dict.bwt_dummy;\
+    size_t samp_pos = (sa[start]>>2UL)-1;  \
+    reduced_sa.push_back(samp_pos);           \
+    if((end-start+1)>1){                   \
+        bwt_sym++;                                   \
+        nested_phrases.push_back(met_sym);               \
+        while(!dict.d_lim[samp_pos]){                      \
+            nested_phrases.push_back(dict.dict[samp_pos++]<<1UL); \
+        }\
+        nested_phrases.push_back((dict.dict[samp_pos++]<<1UL) | 1UL); \
+        for(size_t j=start;j<=end;j++){           \
+            meta_sym_marks[(sa[j]>>2UL)-1] = true; \
+        }                                         \
+    }                                             \
+    if(n_phrases==1){                 \
         meta_sym_list.write(curr_phrase, (met_sym<<1UL) | (curr_phrase_freq>1));    \
     }                                      \
     met_sym++;                              \

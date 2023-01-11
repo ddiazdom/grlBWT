@@ -17,6 +17,13 @@ template<class value_type>
 void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol,
                 parsing_info& p_info, tmp_workspace& ws) {
 
+    //TODO testing
+    i_file_stream<size_t> reduced_sa(ws.get_file("s_sa"), BUFFER_SIZE);
+    size_t k=reduced_sa.size()-1;
+    vector_t alternative_new_dict;
+    load_from_file(ws.get_file("comp_dict"), alternative_new_dict);
+    //
+
     dict.metasym_dummy = dict.alphabet+sa_size+1;
     size_t pos, new_size=0, l_sym, r_sym;
 
@@ -25,6 +32,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
 
     for(size_t u=0;u<sa_size;u++) {
         pos = s_sa[u];
+        assert(pos==reduced_sa.read(k--));
         assert(pos<dict.dict.size() && !dict.d_lim[pos]);
         pos++;
         while(dict.dict.read(pos)<dict.alphabet && !dict.d_lim[pos]) pos++;
@@ -42,6 +50,9 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
             new_dict.write(new_size++, dict.metasym_dummy);
             new_dict.write(new_size++, dict.is_suffix(r_sym) ? dict.metasym_dummy : l_sym);
         }
+
+        assert(new_dict[new_size-2]==alternative_new_dict[new_size-2]);
+        assert(new_dict[new_size-1]==alternative_new_dict[new_size-1]);
     }
 
     new_dict.write(new_size++, dict.metasym_dummy);
@@ -50,6 +61,9 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     }else{
         new_dict.write(new_size, 10);
     }
+
+    assert(new_dict[new_size-1]==alternative_new_dict[new_size-1]);
+    assert(new_dict[new_size]==alternative_new_dict[new_size]);
 
     dict.dict.swap(new_dict);
     dict.n_phrases = sa_size;
@@ -90,10 +104,85 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     //
 }
 
+void produce_grammar(tmp_workspace& ws, dictionary& dict, parsing_info& p_info) {
+
+    i_file_stream<size_t> s_sa(ws.get_file("s_sa"), BUFFER_SIZE);
+    size_t alphabet = dict.alphabet+3;
+    size_t meta_sym_dummy = alphabet+s_sa.size()+1;
+
+    bit_hash_table<size_t> phrases_ht;
+    i_file_stream<size_t> nested_phrases(ws.get_file("nested_phrases"), BUFFER_SIZE);
+    size_t i=0, sym, meta_sym, offset = s_sa.size()-1;
+    bool is_last;
+    string_t phrase(2, sym_width(alphabet));
+    while(i<nested_phrases.size()){
+        meta_sym = offset - nested_phrases.read(i++);
+        do{
+            sym = nested_phrases.read(i++);
+            is_last = sym & 1UL;
+            phrase.push_back(sym>>1UL);
+        }while(!is_last);
+
+        phrase.mask_tail();
+        phrases_ht.insert(phrase.data(), phrase.n_bits(), (alphabet + meta_sym));
+        phrase.clear();
+    }
+    nested_phrases.close(true);
+
+    size_t pos, new_size=0, l_sym, r_sym;
+    vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(alphabet+s_sa.size()+1));
+    bv_t meta_sym_marks;
+    sdsl::load_from_file(meta_sym_marks, ws.get_file("meta_sym_marks"));
+
+    for(size_t u=s_sa.size();u-->0;) {
+        pos = s_sa.read(u);
+        assert(pos<dict.dict.size() && !dict.d_lim[pos]);
+        pos++;
+        while(!meta_sym_marks[pos] && !dict.d_lim[pos]) pos++;
+
+        l_sym = dict.dict.read(pos-1);
+        assert(l_sym<alphabet);
+
+        if(meta_sym_marks[pos]){
+            phrase.clear();
+            do{
+                phrase.push_back(dict.dict[pos]);
+            }while(!dict.d_lim[pos++]);
+            phrase.mask_tail();
+            assert(phrase.size()>1);
+            auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
+            assert(res.second);
+
+            r_sym = 0;
+            phrases_ht.get_value_from(res.first, r_sym);
+
+            new_dict.write(new_size++, l_sym);
+            new_dict.write(new_size++, r_sym);
+        }else{
+            r_sym = dict.dict.read(pos);
+            new_dict.write(new_size++, meta_sym_dummy);
+            new_dict.write(new_size++, dict.is_suffix(r_sym) ? meta_sym_dummy : l_sym);
+        }
+    }
+
+    new_dict.write(new_size++, meta_sym_dummy);
+    if(p_info.p_round>0){
+        new_dict.write(new_size, dict.end_str_dummy);
+    }else{
+        new_dict.write(new_size, 10);
+    }
+    //s_sa.close(true);
+    ws.remove_file("meta_sym_marks");
+    store_to_file(ws.get_file("comp_dict"), new_dict);
+}
+
 template<class value_type>
 size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws) {
 
-    size_t hits=0;
+    //TODO testing
+    produce_grammar(ws, dict, p_info);
+    //
+
     bool is_maximal, exist_as_phrase;
     size_t u=0, d_pos, pl_sym, bg_pos, acc_freq, freq, rank=0, l_sym, f_sa_pos, d_rank, n_breaks, dummy_run=0, longest_dummy_run=0;
 
@@ -110,12 +199,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     size_t width = sym_width(dict.dict.size())+1;
     vector_t new_metasymbols(dict.n_phrases, 0, width);
     vector_t first_symbol(size_t(double(dict.n_phrases)*1.2), sym_width(dict.alphabet));
-    size_t cont=0;
-
-    //TODO some boundaries
-    //size_t max_n_runs=0;
-    //size_t max_run_len=0;
-    //
 
     while(u<sa_size) {
         d_pos = (sa[u]>>2UL) - 1;
@@ -123,7 +206,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
             if(dict.d_lim[d_pos]) {
                 u++;
                 while(u<sa_size && sa[u] & 1UL){
-                    cont++;
                     u++;
                 }
             }else if((sa[u] & 2UL)==0) {
@@ -184,7 +266,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
                 if(pre_bwt.size()>0 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(acc_freq);
-                    hits++;
                 }else{
                     //std::cout<<"dif "<<bg_pos<<" ["<<bg_pos<<", "<<u-1<<"]"<<std::endl;
                     pre_bwt.push_back(l_sym, acc_freq);
@@ -194,6 +275,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
             f_sa_pos = d_pos;
             size_t f_sym = dict.dict.read(f_sa_pos);
             assert(f_sym<dict.end_str_dummy);
+
 
             do{
                 d_pos = (sa[u]>>2UL) - 1;
@@ -226,7 +308,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     new_metasymbols.write(d_rank, (rank<<1UL) | (freq>1));
                     first_symbol.push_back(f_sym);
 
-                    sa[rank++] = f_sa_pos;
+                    sa[rank++] = d_pos;
                 }else{
                     //we don't compress any phrase that ends with a metasymbol
                     // expanding to a string suffix
@@ -251,7 +333,6 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     }
                 }*/
                 if(pre_bwt.size()>0 && pre_bwt.last_sym() == l_sym){
-                    hits++;
                     pre_bwt.inc_freq_last(freq);
                 }else{
                     //std::cout<<"dif "<<u<<std::endl;
@@ -320,7 +401,10 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 #ifdef __linux__
     malloc_trim(0);
 #endif
+
+
     dict2gram2<value_type>(dict, sa, rank, first_symbol, p_info, ws);
+
     return rank;
 }
 
