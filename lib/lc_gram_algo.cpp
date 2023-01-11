@@ -13,6 +13,7 @@
 #endif
 #include "malloc_count.h"
 
+/*
 template<class value_type>
 void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& first_symbol,
                 parsing_info& p_info, tmp_workspace& ws) {
@@ -75,7 +76,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     sdsl::store_to_file(dict, dict_file);
 
     //TODO testing
-    /*std::cout<<"\nChecking if they are correct .."<<std::endl;
+    / *std::cout<<"\nChecking if they are correct .."<<std::endl;
     dictionary orig_dict;
     sdsl::load_from_file(orig_dict, "/Users/ddiaz/version_original_"+std::to_string(p_info.p_round));
     for (size_t i = 0; i < dict.dict.size(); i += 2) {
@@ -94,7 +95,7 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     for(size_t i=0;i<dict.phrases_has_hocc.size();i++){
         assert(dict.phrases_has_hocc[i]==orig_dict.phrases_has_hocc[i]);
     }
-    //*/
+    // * /
 #ifdef __linux__
     malloc_trim(0);
 #endif
@@ -102,13 +103,19 @@ void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t& fi
     //TODO testing
     //sdsl::store_to_file(dict, "/Users/ddiaz/version_nueva_"+std::to_string(p_info.p_round));
     //
-}
+}*/
 
 void produce_grammar(tmp_workspace& ws, dictionary& dict, parsing_info& p_info) {
 
     i_file_stream<size_t> s_sa(ws.get_file("s_sa"), BUFFER_SIZE);
-    size_t alphabet = dict.alphabet+3;
-    size_t meta_sym_dummy = alphabet+s_sa.size()+1;
+    dict.alphabet+=3;
+    dict.metasym_dummy= dict.alphabet+s_sa.size()+1;
+
+    size_t alphabet = dict.alphabet;
+    size_t meta_sym_dummy = dict.metasym_dummy;
+
+    dict.phrases_has_hocc.resize(s_sa.size()+1);
+    sdsl::util::set_to_value(dict.phrases_has_hocc, false);
 
     bit_hash_table<size_t> phrases_ht;
     i_file_stream<size_t> nested_phrases(ws.get_file("nested_phrases"), BUFFER_SIZE);
@@ -117,6 +124,7 @@ void produce_grammar(tmp_workspace& ws, dictionary& dict, parsing_info& p_info) 
     string_t phrase(2, sym_width(alphabet));
     while(i<nested_phrases.size()){
         meta_sym = offset - nested_phrases.read(i++);
+        dict.phrases_has_hocc[meta_sym] = true;
         do{
             sym = nested_phrases.read(i++);
             is_last = sym & 1UL;
@@ -130,7 +138,7 @@ void produce_grammar(tmp_workspace& ws, dictionary& dict, parsing_info& p_info) 
     nested_phrases.close(true);
 
     size_t pos, new_size=0, l_sym, r_sym;
-    vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(alphabet+s_sa.size()+1));
+    vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
     bv_t meta_sym_marks;
     sdsl::load_from_file(meta_sym_marks, ws.get_file("meta_sym_marks"));
 
@@ -171,11 +179,19 @@ void produce_grammar(tmp_workspace& ws, dictionary& dict, parsing_info& p_info) 
     }else{
         new_dict.write(new_size, 10);
     }
-    //s_sa.close(true);
+
+    dict.dict.swap(new_dict);
+    dict.n_phrases = s_sa.size();
+
+    s_sa.close(true);
     ws.remove_file("meta_sym_marks");
-    store_to_file(ws.get_file("comp_dict"), new_dict);
+
+    sdsl::util::clear(dict.d_lim);
+    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
+    sdsl::store_to_file(dict, dict_file);
 }
 
+/*
 template<class value_type>
 size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_info& p_info, tmp_workspace& ws) {
 
@@ -298,13 +314,13 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     dummy_run +=freq;
                     if(dummy_run>longest_dummy_run) longest_dummy_run = dummy_run;
 
-                    /***
-                     * We create a metasymbol for a suffix A if it is not proper.
-                     * Still, this is only because we need to access its left-context
-                     * symbols and because it serves to solve the relative order of the
-                     * phrases preceding A in the text.
-                     * Caveat: If the A expands to a full string, then we con append a dummy.
-                     */
+                     // ***
+                     // * We create a metasymbol for a suffix A if it is not proper.
+                     // * Still, this is only because we need to access its left-context
+                     // * symbols and because it serves to solve the relative order of the
+                     // * phrases preceding A in the text.
+                     // * Caveat: If the A expands to a full string, then we con append a dummy.
+                     //
                     new_metasymbols.write(d_rank, (rank<<1UL) | (freq>1));
                     first_symbol.push_back(f_sym);
 
@@ -317,21 +333,21 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                     dummy_run=0;
                 }
 
-                /***NOTE: here it is unnecessary to check if the suffix is left-maximal as we can decide
-                 * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
-                 * when it is not proper.
-                ***/
+                // * NOTE: here it is unnecessary to check if the suffix is left-maximal as we can decide
+                // * an arbitrary order for the symbols. For the same reason, we don't compress the suffix
+                // * when it is not proper.
+                //
                 //TODO testing
-                /*if(p_info.p_round==6){
-                    if(l_sym==dict.sym_end_string){
-                        std::cout<<"$ | "<<freq<<" "<<(rank-1)<<std::endl;
-                    }else if(l_sym==dict.sym_dummy){
-                        std::cout<<"* | "<<freq<<" "<<(rank-1)<<std::endl;
-                    }else{
-
-                        std::cout<<l_sym<<" | "<<freq<<std::endl;
-                    }
-                }*/
+                //if(p_info.p_round==6){
+                //    if(l_sym==dict.sym_end_string){
+                //        std::cout<<"$ | "<<freq<<" "<<(rank-1)<<std::endl;
+                //    }else if(l_sym==dict.sym_dummy){
+                //        std::cout<<"* | "<<freq<<" "<<(rank-1)<<std::endl;
+                //    }else{
+                //
+                //        std::cout<<l_sym<<" | "<<freq<<std::endl;
+                //}
+                //}
                 if(pre_bwt.size()>0 && pre_bwt.last_sym() == l_sym){
                     pre_bwt.inc_freq_last(freq);
                 }else{
@@ -344,7 +360,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
     //TODO some boundaries
     //std::cout<<"\nmax number of runs: "<<max_n_runs<<" max run length: "<<max_run_len<<std::endl;
-    /*size_t tmp=sa_size*sizeof(value_type);
+    size_t tmp=sa_size*sizeof(value_type);
     tmp+=INT_CEIL(dict.dict.size()*dict.dict.width(), 8);
     tmp+=INT_CEIL(first_symbol.size()*first_symbol.width(), 8);
     tmp+=INT_CEIL(dict.freqs.size()*dict.freqs.width(), 8);
@@ -362,7 +378,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
     std::cout<<"bytes ranks"<<INT_CEIL(new_metasymbols.size()*new_metasymbols.width(), 8)<<std::endl;
     std::cout<<"bytes has_hocc "<<INT_CEIL(dict.phrases_has_hocc.size(), 8)<<std::endl;
     std::cout<<"bytes d_lim "<<INT_CEIL(dict.d_lim.size(), 8)<<std::endl;
-    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;*/
+    std::cout<<"bytes is_suffix "<<INT_CEIL(dict.desc_bv->size(), 8)<<std::endl;
 
     assert(first_symbol.size()>=rank);
     assert(rank<dict.dict.size());
@@ -407,24 +423,71 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
     return rank;
 }
+*/
+
+void invert_data(tmp_workspace& ws, size_t n_meta_syms,  parsing_info& p_info) {
+
+    //invert the preliminary BWT
+    bwt_buff_reader pre_bwt_inv(ws.get_file("inv_pre_bwt"));
+
+    std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
+    bwt_buff_writer pre_bwt(pre_bwt_file,
+                            std::ios::out,
+                            pre_bwt_inv.bytes_per_rsym(),
+                            pre_bwt_inv.bytes_per_rlen());
+    size_t sym, len;
+    for(size_t i=pre_bwt_inv.size();i-->0;){
+        pre_bwt_inv.read_run(i, sym, len);
+        pre_bwt.push_back(sym, len);
+    }
+
+    pre_bwt_inv.close(true);
+    pre_bwt.close();
+
+    //invert the metasymbols for the new phrases
+    vector_t meta_sym_list;
+    load_from_file(ws.get_file("phr_ranks"), meta_sym_list);
+    size_t meta_sym, is_rep;
+    n_meta_syms--;
+    for(size_t i=0;i<meta_sym_list.size();i++){
+        meta_sym = meta_sym_list.read(i);
+        is_rep = meta_sym & 1UL;
+        meta_sym>>=1UL;
+        meta_sym = ((n_meta_syms-meta_sym) <<1UL) | is_rep;
+        meta_sym_list.write(i, meta_sym);
+    }
+    store_to_file(ws.get_file("phr_ranks"), meta_sym_list);
+    //invert the bit vector marking the suffix ranges
+}
 
 template<class value_type>
 size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-    std::cout<<"    Sorting the dictionary using suffix induction"<<std::flush;
+    std::cout<<"    Sorting the dictionary and constructing the preliminary BWT"<<std::flush;
     auto start = std::chrono::steady_clock::now();
-    auto * sa = suffix_induction<value_type>(dict, ws);
+    size_t n_phrases = suffix_induction<value_type>(dict, ws);
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 4);
+    report_time(start, end, 2);
     malloc_count_print_status();
     malloc_count_reset_peak();
 
-    std::cout<<"    Constructing the preliminary BWT"<<std::flush;
+    std::cout<<"    Finishing the preliminary BWT"<<std::flush;
     start = std::chrono::steady_clock::now();
-    size_t n_phrases = get_pre_bwt2<value_type>(dict, sa, dict.dict.size(), p_info, ws);
+    invert_data(ws, n_phrases, p_info);
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 17);
+    report_time(start, end, 32);
 
+
+    std::cout<<"    Compressing the dictionary"<<std::flush;
+    start = std::chrono::steady_clock::now();
+    //size_t n_phrases = get_pre_bwt2<value_type>(dict, sa, dict.dict.size(), p_info, ws);
+    produce_grammar(ws, dict, p_info);
+    end = std::chrono::steady_clock::now();
+    report_time(start, end, 35);
+
+#ifdef __linux__
+    malloc_trim(0);
+#endif
     return n_phrases;
 }
 
@@ -524,7 +587,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
     auto start = std::chrono::steady_clock::now();
     auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 16);
+    report_time(start, end, 42);
 
     store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
@@ -556,7 +619,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
                         p_info.max_sym_freq);
         end = std::chrono::steady_clock::now();
         map.destroy_data();
-        report_time(start, end, 6);
+        report_time(start, end, 18);
 
         //process the dictionary
         tot_phrases = process_dictionary(dict, p_info, ws);
@@ -600,7 +663,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
         std::string suffix_file = ws.get_file("suffix_file");
         sdsl::store_to_file(new_phrase_desc, suffix_file);
         end = std::chrono::steady_clock::now();
-        report_time(start, end, 15);
+        report_time(start, end, 27);
     }
 
     std::cout<<"    Creating the parse of the text"<<std::flush;
@@ -608,7 +671,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
     load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     psize = p_strategy.parse_text();
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 19);
+    report_time(start, end, 31);
 
     {
         //keep track of the phrases that have to be rephrased

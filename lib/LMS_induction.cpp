@@ -4,7 +4,7 @@
 #include "LMS_induction.h"
 
 template <class value_type>
-value_type * suffix_induction(const dictionary &dict, tmp_workspace& ws) {
+size_t suffix_induction(dictionary &dict, tmp_workspace& ws) {
 
     size_t sa_size = dict.dict.size();
     auto * sa = (value_type *)calloc(sa_size, sizeof(value_type));
@@ -65,7 +65,7 @@ value_type * suffix_induction(const dictionary &dict, tmp_workspace& ws) {
         buckets[bck] = ptr;
     }
 
-    induce_S_type<value_type>(sa, sa_size, dict, buckets, solv_syms, ws);
+    size_t n_phrases = induce_S_type<value_type>(sa, sa_size, dict, buckets, solv_syms, ws);
 
     //TODO testing
     /*for(size_t i=0;i<sa_size;i++){
@@ -78,7 +78,13 @@ value_type * suffix_induction(const dictionary &dict, tmp_workspace& ws) {
     }*/
     //
     free(buckets);
-    return sa;
+    free(sa);
+
+#ifdef __linux__
+    malloc_trim(0);
+#endif
+
+    return n_phrases;
 }
 
 template <class value_type>
@@ -123,7 +129,7 @@ void induce_L_type(value_type* sa, size_t sa_size, const dictionary &dict, value
 
 
 template <class value_type>
-void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, value_type *buckets, bv_t& solved_sym, tmp_workspace& ws) {
+size_t induce_S_type(value_type * sa, size_t sa_size, dictionary &dict, value_type *buckets, bv_t& solved_sym, tmp_workspace& ws) {
 
     size_t pos, bck, l_sym, ind_pos;
     auto * ind_bck = (value_type *) calloc(dict.alphabet+1, sizeof(value_type));
@@ -237,44 +243,19 @@ void induce_S_type(value_type * sa, size_t sa_size, const dictionary &dict, valu
         }
     }
     free(ind_bck);
+
     pre_bwt.close();
-    reduced_sa.size();
+    reduced_sa.close();
     nested_phrases.close();
+    dict.freqs.erase();
 
-    invert_data(ws, met_sym, meta_sym_list);
-    store_to_file(ws.get_file("new_phrases"), meta_sym_list);
+    store_to_file(ws.get_file("phr_ranks"), meta_sym_list);
     store_to_file(ws.get_file("meta_sym_marks"), meta_sym_marks);
+
+    return met_sym;
 }
 
-void invert_data(tmp_workspace& ws, size_t n_meta_syms, vector_t& meta_sym_list) {
 
-    //invert the preliminary BWT
-    bwt_buff_reader pre_bwt_inv(ws.get_file("inv_pre_bwt"));
-    bwt_buff_writer pre_bwt(ws.get_file("pre_bwt"),
-                            std::ios::out,
-                            pre_bwt_inv.bytes_per_rsym(),
-                            pre_bwt_inv.bytes_per_rlen());
-    size_t sym, len;
-    for(size_t i=pre_bwt_inv.size();i-->0;){
-        pre_bwt_inv.read_run(i, sym, len);
-        pre_bwt.push_back(sym, len);
-    }
-
-    pre_bwt_inv.close(true);
-    pre_bwt.close();
-
-    //invert the metasymbols for the new phrases
-    size_t meta_sym, is_rep;
-    n_meta_syms--;
-    for(size_t i=0;i<meta_sym_list.size();i++){
-        meta_sym = meta_sym_list.read(i);
-        is_rep = meta_sym & 1UL;
-        meta_sym>>=1UL;
-        meta_sym = ((n_meta_syms-meta_sym) <<1UL) | is_rep;
-        meta_sym_list.write(i, meta_sym);
-    }
-    //invert the bit vector marking the suffix ranges
-}
 
 /*void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dict, bv_rs_t& d_lim_rs, bwt_buff_writer& pre_bwt){
     size_t d_rank = d_lim_rs(pos);
@@ -311,7 +292,7 @@ void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& d
     }
 }*/
 
-template uint8_t* suffix_induction<uint8_t>(const dictionary &dict, tmp_workspace& ws);
-template uint16_t* suffix_induction<uint16_t>(const dictionary &dict, tmp_workspace& ws);
-template uint32_t* suffix_induction<uint32_t>(const dictionary &dict, tmp_workspace& ws);
-template uint64_t* suffix_induction<uint64_t>(const dictionary &dict, tmp_workspace& ws);
+template size_t suffix_induction<uint8_t>(dictionary &dict, tmp_workspace& ws);
+template size_t suffix_induction<uint16_t>(dictionary &dict, tmp_workspace& ws);
+template size_t suffix_induction<uint32_t>(dictionary &dict, tmp_workspace& ws);
+template size_t suffix_induction<uint64_t>(dictionary &dict, tmp_workspace& ws);

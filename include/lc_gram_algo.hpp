@@ -39,10 +39,9 @@ struct dictionary {
                                       end_str_dummy(alphabet),
                                       bwt_dummy(alphabet+1),
                                       hocc_dummy(alphabet+2),
-                                      dict(dict_syms, 0, sym_width(alphabet+3+dict_syms)),//the +3 corresponds to the extra symbols I use for the BWT induction
+                                      dict(dict_syms, 0, sym_width(alphabet)),//the +3 corresponds to the extra symbols I use for the BWT induction
                                       freqs(n_phrases, 0, sym_width(max_freq)),
                                       d_lim(dict_syms, false),
-                                      phrases_has_hocc(dict.size(), false),
                                       desc_bv(&is_suffix_bv){
 
         key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};

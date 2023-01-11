@@ -59,13 +59,13 @@ if(pre_bwt.size()>0 && pre_bwt.last_sym() == bwt_sym){\
 }\
 
 template <class value_type>
-value_type * suffix_induction(const dictionary &dict, tmp_workspace& ws);
+size_t suffix_induction(dictionary &dict, tmp_workspace& ws);
 
 template <class value_type>
 void induce_L_type(value_type *sa, size_t sa_size, const dictionary &dict, value_type *buckets, bv_t& solved_sym);
 
 template <class value_type>
-void induce_S_type(value_type *sa, size_t sa_size, const dictionary& dict, value_type *buckets, bv_t& solved_sym, tmp_workspace& ws);
+size_t induce_S_type(value_type *sa, size_t sa_size, dictionary& dict, value_type *buckets, bv_t& solved_sym, tmp_workspace& ws);
 
 //template <class value_type>
 //void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& dict, bool is_gr_phrase, size_t acc_freq, size_t bwt_sym, bwt_buff_writer& bwt_writer);
