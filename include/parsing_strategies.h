@@ -15,6 +15,7 @@ struct parsing_info{
     size_t prev_alph=0; //size of the alphabet in the previous parsing round
     size_t max_sym_freq=0; // most repeated symbol in the input text of the round
     size_t longest_str=0; //longest string in the parsing
+    size_t active_strings=0; //number of active strings
     std::vector<long> str_ptrs;
 };
 
@@ -48,6 +49,7 @@ struct hash_functor{
             size_t start = data.str_ptr[str];
             size_t end = data.str_ptr[str+1]-1;
             str_len = end-start+1;
+            data.active_strings += (start<=end);
             return {start, end};
         };
 
@@ -207,6 +209,7 @@ struct mt_parse_strat_t {//multi thread strategy
         phrase_map_t         inner_map;
         std::vector<long>&   str_ptr;
         size_t               max_symbol{};
+        size_t               active_strings=0;
 
         thread_worker_data_t(size_t start_, size_t end_, std::string& i_file, std::string& o_file,
                              phrase_map_t& map_, std::vector<long>& str_ptr_,
@@ -282,8 +285,10 @@ struct mt_parse_strat_t {//multi thread strategy
             threads[i].join();
         }
 
+        p_info.active_strings = 0;
         for (size_t i = 0; i < threads_data.size(); i++) {
             threads_data[i].inner_map.flush();
+            p_info.active_strings +=threads_data[i].active_strings;
         }
         free(buff_addr);
 
@@ -576,6 +581,7 @@ struct st_parse_strat_t {//parse data for single thread
     size_t              max_symbol{};
     size_t              start;
     size_t              end;
+    size_t              active_strings=0;
     bv_t&               is_suffix;
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
@@ -602,6 +608,7 @@ struct st_parse_strat_t {//parse data for single thread
         map.shrink_databuff();
         key_wrapper key_w{sym_width(max_symbol), map.description_bits(), map.get_data()};
         size_t n_syms=0, max_freq=0, freq;
+        p_info.active_strings = active_strings;
 
         for(auto const &ptr : map){
             n_syms += key_w.size(ptr);

@@ -154,7 +154,7 @@ size_t build_lc_gram_int(parse_strategy& p_strat, parsing_info &p_info, bv_t &ph
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
 
-template<class vector_type>
+template<class vector_type, class sa_type>
 size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
 
 #endif //LG_COMPRESSOR_LMS_ALGO_H

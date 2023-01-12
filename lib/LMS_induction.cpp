@@ -3,12 +3,20 @@
 //
 #include "LMS_induction.h"
 
-template <class value_type>
+/*
+template <class vector_type, class sa_type>
 size_t suffix_induction(dictionary &dict, tmp_workspace& ws) {
 
     size_t sa_size = dict.dict.size();
-    auto * sa = (value_type *)calloc(sa_size, sizeof(value_type));
-    auto * buckets = (value_type *) calloc((dict.alphabet+1), sizeof(value_type));
+    sa_type sa;
+    vector_type buckets(dict.alphabet-1, 0);
+
+    if constexpr (std::is_same<sa_type, vector_t>::value){
+
+    }else{
+        sa.resize(sa_size);
+        memset(sa.data(), 0, sa.size()*sizeof(typename vector_type::value_type));
+    }
 
     for(size_t i=0;i<dict.dict.size();i++){
         buckets[dict.dict[i]]++;
@@ -54,7 +62,7 @@ size_t suffix_induction(dictionary &dict, tmp_workspace& ws) {
         if(solv_syms[i]) buckets[i]++;
     }
 
-    induce_L_type<value_type>(sa, sa_size, dict, buckets, solv_syms);
+    induce_L_type<vector_type>(sa, sa_size, dict, buckets, solv_syms);
 
     //move the pointer of every bucket to the last S symbol
     for(size_t bck=0;bck<dict.alphabet;bck++){
@@ -65,20 +73,18 @@ size_t suffix_induction(dictionary &dict, tmp_workspace& ws) {
         buckets[bck] = ptr;
     }
 
-    size_t n_phrases = induce_S_type<value_type>(sa, sa_size, dict, buckets, solv_syms, ws);
+    size_t n_phrases = induce_S_type<vector_type>(sa, sa_size, dict, buckets, solv_syms, ws);
 
     //TODO testing
-    /*for(size_t i=0;i<sa_size;i++){
+    / *for(size_t i=0;i<sa_size;i++){
         pos = (sa[i]>>2UL)-1;
         std::cout<<pos<<" : "<<(sa[i] & 1UL)<<" | "<<((sa[i] & 2UL)!=0)<<" -> ";
         do{
             std::cout<<dict.dict[pos]<<" ";
         }while(!dict.d_lim[pos++]);
         std::cout<<""<<std::endl;
-    }*/
+    }* /
     //
-    free(buckets);
-    free(sa);
 
 #ifdef __linux__
     malloc_trim(0);
@@ -86,12 +92,14 @@ size_t suffix_induction(dictionary &dict, tmp_workspace& ws) {
 
     return n_phrases;
 }
+*/
 
-template <class value_type>
-void induce_L_type(value_type* sa, size_t sa_size, const dictionary &dict, value_type* buckets, bv_t& solved_sym) {
+/*
+template <class vector_type, class sa_type>
+void induce_L_type(sa_type& sa, size_t sa_size, const dictionary &dict, vector_type& buckets, bv_t& solved_sym) {
 
     size_t pos, l_sym, bck;
-    auto * ind_bck = (value_type*) calloc(dict.alphabet+1, sizeof(value_type));
+    vector_type ind_bck(dict.alphabet+1, 0);
     bool lcs, first_eq=false;
     size_t lb=1, is_suffix, flag;
 
@@ -126,13 +134,14 @@ void induce_L_type(value_type* sa, size_t sa_size, const dictionary &dict, value
     }
     free(ind_bck);
 }
+*/
 
-
-template <class value_type>
-size_t induce_S_type(value_type * sa, size_t sa_size, dictionary &dict, value_type *buckets, bv_t& solved_sym, tmp_workspace& ws) {
+/*
+template <class vector_type, class sa_type>
+size_t induce_S_type(sa_type& sa, size_t sa_size, dictionary &dict, vector_type& buckets, bv_t& solved_sym, tmp_workspace& ws) {
 
     size_t pos, bck, l_sym, ind_pos;
-    auto * ind_bck = (value_type *) calloc(dict.alphabet+1, sizeof(value_type));
+    vector_type ind_bck(dict.alphabet+1, 0);
     bool lcs, first_eq=true, new_break, p_lcs=false;
     size_t rb=sa_size, is_suffix, flag;
 
@@ -197,7 +206,7 @@ size_t induce_S_type(value_type * sa, size_t sa_size, dictionary &dict, value_ty
 
         if(i<(sa_size-1) && !(sa[i+1] & 1UL)){
             if(!prev_is_suffix && !dict.d_lim[prev_pos-1]){
-                /*[[likely]]*/
+                / *[[likely]]* /
                 assert(n_phrases<=1);
                 is_gr_phrase = n_phrases==1 || (n_breaks>1);
                 INCREMENT_BWT((i+1), fe, pl_sym);
@@ -253,7 +262,7 @@ size_t induce_S_type(value_type * sa, size_t sa_size, dictionary &dict, value_ty
     store_to_file(ws.get_file("meta_sym_marks"), meta_sym_marks);
 
     return met_sym;
-}
+}*/
 
 
 
@@ -292,7 +301,7 @@ void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& d
     }
 }*/
 
-template size_t suffix_induction<uint8_t>(dictionary &dict, tmp_workspace& ws);
-template size_t suffix_induction<uint16_t>(dictionary &dict, tmp_workspace& ws);
-template size_t suffix_induction<uint32_t>(dictionary &dict, tmp_workspace& ws);
-template size_t suffix_induction<uint64_t>(dictionary &dict, tmp_workspace& ws);
+//template size_t suffix_induction<std::vector<uint8_t>>(dictionary &dict, tmp_workspace& ws);
+//template size_t suffix_induction<std::vector<uint16_t>>(dictionary &dict, tmp_workspace& ws);
+//template size_t suffix_induction<std::vector<uint32_t>>(dictionary &dict, tmp_workspace& ws);
+//template size_t suffix_induction<vector_t>(dictionary &dict, tmp_workspace& ws);
