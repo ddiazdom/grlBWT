@@ -457,17 +457,19 @@ void invert_data(tmp_workspace& ws, size_t n_meta_syms,  parsing_info& p_info) {
         meta_sym_list.write(i, meta_sym);
     }
     store_to_file(ws.get_file("phr_ranks"), meta_sym_list);
+
     //invert the bit vector marking the suffix ranges
 }
 
-template<class value_type>
+template<class vector_type, class sa_type>
 size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
     std::cout<<"    Sorting the dictionary and constructing the preliminary BWT"<<std::flush;
     auto start = std::chrono::steady_clock::now();
-    size_t n_phrases = suffix_induction<value_type>(dict, ws);
+    size_t n_phrases = suffix_induction<vector_type, sa_type>(dict, ws);
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 2);
+
     malloc_count_print_status();
     malloc_count_reset_peak();
 
@@ -476,7 +478,6 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     invert_data(ws, n_phrases, p_info);
     end = std::chrono::steady_clock::now();
     report_time(start, end, 32);
-
 
     std::cout<<"    Compressing the dictionary"<<std::flush;
     start = std::chrono::steady_clock::now();
@@ -497,13 +498,17 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
     size_t n_phrases;
 
     if(width<=8){
-        n_phrases = process_dictionary_int<uint8_t>(dict, p_info, ws);
+        using uint8_vector_t = std::vector<uint8_t, mallocator<uint8_t>>;
+        n_phrases = process_dictionary_int<uint8_vector_t, uint8_vector_t>(dict, p_info, ws);
     }else if(width<=16){
-        n_phrases = process_dictionary_int<uint16_t>(dict, p_info, ws);
+        using uint16_vector_t = std::vector<uint16_t, mallocator<uint16_t>>;
+        n_phrases = process_dictionary_int<uint16_vector_t, uint16_vector_t>(dict, p_info, ws);
     }else if(width<=32){
-        n_phrases = process_dictionary_int<uint32_t>(dict, p_info, ws);
+        using uint32_vector_t = std::vector<uint32_t, mallocator<uint32_t>>;
+        n_phrases = process_dictionary_int<uint32_vector_t, uint32_vector_t>(dict, p_info, ws);
     }else{
-        n_phrases = process_dictionary_int<uint64_t>(dict, p_info, ws);
+        using uint64_vector_t = std::vector<uint64_t, mallocator<uint64_t>>;
+        n_phrases = process_dictionary_int<uint64_vector_t, vector_t>(dict, p_info, ws);
     }
     return n_phrases;
 }
@@ -529,6 +534,7 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     p_info.str_ptrs.push_back((long)str_coll.n_char);
     p_info.str_ptrs.shrink_to_fit();
     p_info.longest_str = str_coll.longest_string;
+    p_info.active_strings = str_coll.n_strings;
 
     size_t iter=1;
     size_t rem_phrases;
@@ -550,7 +556,6 @@ size_t build_lc_gram(std::string &i_file, size_t n_threads, size_t hbuff_size, s
     report_time(start, end, 4);
     malloc_count_print_status();
     malloc_count_reset_peak();
-
 
     while (rem_phrases > 0) {
         start = std::chrono::steady_clock::now();
@@ -616,7 +621,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
         start = std::chrono::steady_clock::now();
         dictionary dict(map, dict_sym, max_freq, phrase_desc,
                         p_strategy.text_size, p_info.prev_alph,
-                        p_info.max_sym_freq);
+                        std::max<size_t>(p_info.max_sym_freq, p_info.active_strings));
         end = std::chrono::steady_clock::now();
         map.destroy_data();
         report_time(start, end, 18);
@@ -690,6 +695,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
     std::cout<<"      Parsing phrases:                  "<<p_info.lms_phrases<<std::endl;
     std::cout<<"      Number of symbols in the phrases: "<<dict_sym<<std::endl;
     std::cout<<"      Number of unsolved BWT blocks:    "<<p_info.tot_phrases<<std::endl;
+    std::cout<<"      Processed strings:                "<<p_info.active_strings<<std::endl;
     std::cout<<"      Parse size:                       "<<psize<<std::endl;
 
     map.destroy_data();

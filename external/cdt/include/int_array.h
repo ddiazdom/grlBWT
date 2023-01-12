@@ -49,6 +49,12 @@ struct int_array{
             return *this;
         }
 
+        proxy& operator&=(size_t val) {
+            size_t elm = m_arr.bits.read(m_idx * m_arr.m_width, (m_idx + 1) * m_arr.m_width - 1);
+            m_arr.write(m_idx, elm & val);
+            return *this;
+        }
+
         proxy& operator++() {
             auto val = (value_type)*this;
             m_arr.write(m_idx, val+1);
