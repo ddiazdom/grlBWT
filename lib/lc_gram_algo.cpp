@@ -435,9 +435,10 @@ void invert_data(tmp_workspace& ws, size_t n_meta_syms,  parsing_info& p_info) {
                             std::ios::out,
                             pre_bwt_inv.bytes_per_rsym(),
                             pre_bwt_inv.bytes_per_rlen());
-    size_t sym, len;
+    size_t sym, len, bwt_len=0;
     for(size_t i=pre_bwt_inv.size();i-->0;){
         pre_bwt_inv.read_run(i, sym, len);
+        bwt_len+=len;
         pre_bwt.push_back(sym, len);
     }
 
@@ -459,6 +460,25 @@ void invert_data(tmp_workspace& ws, size_t n_meta_syms,  parsing_info& p_info) {
     store_to_file(ws.get_file("phr_ranks"), meta_sym_list);
 
     //invert the bit vector marking the suffix ranges
+    std::vector<std::pair<size_t, size_t>> same_suffix_ranges;
+    load_pl_vector(ws.get_file("same_suffix_ranges"), same_suffix_ranges);
+
+    for(auto & range : same_suffix_ranges){
+        range.first = bwt_len - range.first;
+        range.second = bwt_len - (range.second+1);
+        //std::cout<<range.first<<" "<<range.second<<" "<<bwt_len<<std::endl;
+        //std::cout<<bwt_len-range.first<<" "<<bwt_len-(range.second+1)<<"\n"<<std::endl;
+    }
+    std::reverse(same_suffix_ranges.begin(), same_suffix_ranges.end());
+    //TODO just testing
+    for(auto & range : same_suffix_ranges){
+        std::cout<<range.first<<" "<<range.second<<" "<<bwt_len<<std::endl;
+    }
+    //
+    store_pl_vector(ws.get_file("same_suffix_"+std::to_string(p_info.p_round)), same_suffix_ranges);
+    /*for(auto const& range : same_suffix_ranges){
+        std::cout<<range.first<<" "<<range.second<<std::endl;
+    }*/
 }
 
 template<class vector_type, class sa_type>
@@ -644,7 +664,7 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
         size_t j=0;
         vector_t ranks;
         std::string ranks_file = ws.get_file("phr_ranks");
-        sdsl::load_from_file(ranks, ranks_file);
+        load_from_file(ranks_file, ranks);
         for(auto const& ptr : map){
             phrase_map_t::val_type val=0;
             map.get_value_from(ptr, val);
@@ -653,16 +673,6 @@ size_t build_lc_gram_int(parse_strategy_t& p_strategy, parsing_info &p_info, bv_
             //the first bit marks if the phrase is repeated or not.
             // We need to shift it to get the real id
             new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
-
-            //todo testing
-            /*if(p_info.p_round>5){
-                std::cout<<" phrase : "<<(val>>1UL)<<" -> ";
-                for(size_t i=key_w.size(ptr);i-->0;){
-                    std::cout<<key_w.read(ptr, i)<<" ";
-                }
-                std::cout<<""<<std::endl;
-            }*/
-            //
         }
         ws.remove_file("phr_ranks");
         std::string suffix_file = ws.get_file("suffix_file");

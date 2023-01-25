@@ -620,7 +620,7 @@ struct st_parse_strat_t {//parse data for single thread
             // 10 : all its occurrences cover a full string
             // 11 : some occurrences cover a full string while other cover a partial string
             // We will encode this information in the freq array in the dictionary.
-            // Here we are just computing the width for cells of that array.
+            // Here we are just computing the width for the cells of that array.
             //remember: the phrase are in reverse order. That is the reason
             // why I am using the first symbol instead of the last one in the if below.
             if(!is_suffix[key_w.read(ptr, 0)]) freq>>=2UL;
