@@ -11,16 +11,17 @@ add_subdirectory(external/cdt)
 add_subdirectory(external/bioparsers)
 
 add_library(grlbwt
-        lib/grl_bwt.cpp
         lib/lc_gram_algo.cpp
-        lib/LMS_induction.cpp
-        external/malloc_count-master/malloc_count.c
-        )
+            lib/LMS_induction.cpp
+            lib/exact_algo/exact_grl_bwt.cpp
+            lib/exact_algo/exact_LMS_induction.cpp
+            lib/opt_algo/opt_grl_bwt.cpp
+            external/malloc_count-master/malloc_count.c)
 
 target_compile_options(grlbwt
         PRIVATE
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic
-        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
         -Wshadow)
 
@@ -53,7 +54,10 @@ target_include_directories(grlbwt
         PUBLIC
         ${LIBSDSL_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/external)
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/exact_algo
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/opt_algo
+        ${CMAKE_CURRENT_SOURCE_DIR}/external
+        )
 
 target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS} external/malloc_count-master)
 

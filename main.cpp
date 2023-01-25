@@ -15,6 +15,7 @@ struct arguments{
     float hbuff_frac=0.5;
     bool ver=false;
     bool rev_comp=false;
+    bool opt_bwt=false;
     std::string version= "0.0.1";
 };
 
@@ -47,7 +48,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
             check(CLI::Range(0.0,1.0))->default_val(0.15);
     app.add_option("-b,--run-len-bytes",
                    args.b_f_r,
-                   "Number of bytes to encode the length of the BWT runs. Possible values are [0..5], and 0 means the program will estimate it (def. 1)")->
+                   "Number of bytes to encode the length of the BWT runs (def. 1)")->
             check(CLI::Range(0,5))->default_val(1);
     app.add_option("-T,--tmp",
                       args.tmp_dir,
@@ -56,6 +57,8 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_flag("-v,--version",
                  args.ver, "Print the software version and exit");
     app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
+    app.add_flag("-m,--min-bwt", args.opt_bwt, "Produce the optimal BCR BWT instead of the regular one");
+
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
 
@@ -113,7 +116,10 @@ int main(int argc, char** argv) {
     std::cout<<"  Number of strings :    "<<str_coll.n_strings<<std::endl;
     std::cout<<"  Number of characters : "<<str_coll.n_char<<std::endl;
 
-    grl_bwt_algo(input_collection, args.output_file, tmp_ws, args.n_threads,
-                 str_coll, args.hbuff_frac, args.b_f_r);
+    if(args.opt_bwt){
+        grl_bwt_algo<true>(input_collection, args.output_file, tmp_ws, args.n_threads, str_coll, args.hbuff_frac, args.b_f_r);
+    }else{
+        grl_bwt_algo<false>(input_collection, args.output_file, tmp_ws, args.n_threads, str_coll, args.hbuff_frac, args.b_f_r);
+    }
     return 0;
 }
