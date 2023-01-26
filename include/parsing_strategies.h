@@ -19,185 +19,139 @@ struct parsing_info{
     std::vector<long> str_ptrs;
 };
 
-template<typename parse_data_t,
-         typename parser_t>
-struct hash_functor{
-    void operator()(parse_data_t& data) {
+template<class stream_t,
+        class string_t>
+struct lms_parsing{
 
-        bool cover_an_string;
-        size_t str_len, val;
+    typedef stream_t                       stream_type;
+    typedef typename stream_type::sym_type sym_type;
 
-        auto hash_phrase = [&](string_t& phrase) -> void {
-            phrase.mask_tail();
+    static void compute_breaks(stream_t& ifs,
+                               size_t f_string, size_t l_string,
+                               const std::function<void(size_t)>& process_phrase,
+                               const std::function<std::pair<long, long>(size_t)>& init_str) {
 
-            cover_an_string = phrase.size()==str_len;
-            val = (4UL | cover_an_string<<1UL) | !cover_an_string;
+        sym_type curr_sym, prev_sym;
+        size_t end_ps, start_ps;
+        uint8_t type, rep;
 
-            auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), val);
+        for(size_t str=l_string+1;str-->f_string;) {
 
-            if(!res.second){
-                val=0;
-                data.inner_map.get_value_from(res.first, val);
-                size_t flag = ((val & 3UL) | (cover_an_string<<1UL)) | !cover_an_string;
-                assert(flag<=3);
-                val = (((val>>2UL) + 1)<<2UL) | flag;
-                data.inner_map.insert_value_at(res.first, val);
-            }
-        };
+            auto range = init_str(str);
 
-        auto init_str = [&](size_t str) -> std::pair<long, long>{
-            size_t start = data.str_ptr[str];
-            size_t end = data.str_ptr[str+1]-1;
-            str_len = end-start+1;
-            data.active_strings += (start<=end);
-            return {start, end};
-        };
+            if(range.first<=range.second) { //if this is not true, it means the string was fully compressed
 
-        parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
-        //pthread_exit(nullptr);
-    };
-};
+                start_ps = range.first;
+                end_ps = range.second;
 
-template<typename parse_data_t,
-        typename parser_t>
-struct counting_functor {
-    void operator()(parse_data_t& data) {
-
-        std::cout<< "    Computing the phrases in the text" << std::flush;
-        //std::vector<std::pair<size_t, size_t>> tails;
-
-        o_file_stream<size_t> breaks_list("breaks.txt", BUFFER_SIZE, std::ios::out);
-
-        string_t suffix(2, sym_width(data.max_symbol));
-        phrase_map_t map(0, "", 0.8, nullptr, 8);
-
-        auto record_break = [&](size_t id) -> void {
-            //tails.emplace_back(data.ifs.read(id-1), data.ifs.read(id));
-            breaks_list.push_back(id);
-            suffix.write(0, data.ifs.read(id-1));
-            suffix.write(1, data.ifs.read(id));
-            auto res = map.insert(suffix.data(), suffix.n_bits(), id<<1UL);
-            if(!res.second){
-                size_t first_occ = 0;
-                map.get_value_from(res.first, first_occ);
-                map.insert_value_at(res.first, first_occ | 1UL);
-            }
-        };
-
-        auto init_str = [&](size_t str) -> std::pair<long, long>{
-            return {data.str_ptr[str], data.str_ptr[str+1]-1};
-        };
-
-        parser_t::compute_breaks(data.ifs, data.start, data.end, record_break, init_str);
-        breaks_list.close();
-
-        o_file_stream<size_t> new_breaks_list("breaks_tmp.txt", BUFFER_SIZE, std::ios::out);
-        i_file_stream<size_t> old_breaks_list("breaks.txt", BUFFER_SIZE);
-
-        size_t pos, n_uniq=0, j=0;
-        for(auto const &ptr : map ){
-            pos=0;
-            map.get_value_from(ptr, pos);
-            if(!(pos & 1UL)){
-                pos >>=1UL;
-                while(j<old_breaks_list.size() && old_breaks_list.read(j)!=pos){
-                    new_breaks_list.push_back(old_breaks_list.read(j));
-                    j++;
+                prev_sym = ifs.read(end_ps);
+                if constexpr (std::is_same<sym_type, uint8_t>::value){
+                    rep = 3U;
+                }else{
+                    rep = prev_sym & 1U;
+                    prev_sym >>=1UL;
                 }
-                j++;
-                n_uniq++;
-            }
-        }
-        while(j<old_breaks_list.size()){
-            new_breaks_list.push_back(old_breaks_list.read(j));
-            j++;
-        }
-        assert(new_breaks_list.size()==(old_breaks_list.size()-n_uniq));
-        old_breaks_list.close();
-        std::cout<<"There are "<<n_uniq<<" unnecessary breaks out of "<<new_breaks_list.size()<<std::endl;
-        exit(0);
 
-        /*std::sort(tails.begin(), tails.end(), [&](auto a, auto b){
-            if(a.second!=b.second){
-                return a.second < b.second;
-            }else{
-                return a.first < b.first;
-            }
-        });
+                type = 0;
 
-        size_t l_sym = tails[0].second;
-        size_t r_sym = tails[1].first;
-        size_t freq=1, pos=0;
+                for (size_t i = end_ps; i-- > start_ps;) {
 
-        for(size_t i=1;i<tails.size();i++) {
-            if(tails[i].second!=l_sym){
-                if(freq==1) tails[pos++] = tails[i-1];
-                freq=0;
-                r_sym = tails[i].first;
-                l_sym = tails[i].second;
-            }else{
-                if(tails[i].first!=r_sym){
-                    if(freq<=10) tails[pos++] = tails[i-1];
-                    r_sym = tails[i].first;
-                    freq=0;
+                    curr_sym = ifs.read(i);
+
+                    if constexpr (!std::is_same<sym_type, uint8_t>::value){
+                        rep = (rep << 1UL) | (curr_sym & 1UL);
+                        curr_sym >>=1UL;
+                    }
+
+                    if (curr_sym != prev_sym) {
+                        type = (type<<1UL) | (curr_sym < prev_sym);
+                        if ((type & 3U) == 2 && (rep & 3U)==3U) {//LMS suffix
+                            //process the previous phrase
+                            process_phrase(i+1);
+                        }
+                    } else {
+                        type = (type<<1UL) | (type & 1UL);
+                    }
+                    prev_sym = curr_sym;
                 }
             }
-            freq++;
-            //std::cout<<tails[i].first<<" "<<tails[i].second<<std::endl;
         }
-        if(freq==10) tails[pos++] = tails.back();
-        tails.resize(pos);
-        std::cout<<"\nThere are "<<tails.size()<<" we can avoid "<<std::endl;*/
-    };
+    }
+
+    void operator()(stream_t& ifs,
+                    size_t f_string, size_t l_string, size_t max_symbol,
+                    const std::function<void(string_t&)>& process_phrase,
+                    const std::function<std::pair<long, long>(size_t)>& init_str) const {
+
+        sym_type curr_sym, prev_sym;
+        string_t phrase(2, sdsl::bits::hi(max_symbol)+1);
+        size_t end_ps, start_ps;
+        uint8_t type, rep;
+
+        for(size_t str=l_string+1;str-->f_string;) {
+
+            auto range = init_str(str);
+
+            if(range.first<=range.second) { //if this is not true, it means the string was fully compressed
+
+                start_ps = range.first;
+                end_ps = range.second;
+
+                prev_sym = ifs.read(end_ps);
+                if constexpr (std::is_same<sym_type, uint8_t>::value){
+                    rep = 3U;
+                }else{
+                    rep = prev_sym & 1U;
+                    prev_sym >>=1UL;
+                }
+
+                phrase.push_back(prev_sym);
+                type = 0;
+
+                for (size_t i = end_ps; i-- > start_ps;) {
+
+                    curr_sym = ifs.read(i);
+
+                    if constexpr (!std::is_same<sym_type, uint8_t>::value){
+                        rep = (rep << 1UL) | (curr_sym & 1UL);
+                        curr_sym >>=1UL;
+                    }
+
+                    if (curr_sym != prev_sym) {
+                        type = (type<<1UL) | (curr_sym < prev_sym);
+                        if ((type & 3U) == 2 && (rep & 3U)==3U) {//LMS suffix
+                            //process the previous phrase
+                            assert(!phrase.empty());
+                            process_phrase(phrase);
+
+                            //create the new phrase
+                            phrase.clear();
+                            phrase.push_back(prev_sym);
+                        }
+                    } else {
+                        type = (type<<1UL) | (type & 1UL);
+                    }
+
+                    phrase.push_back(curr_sym);
+                    prev_sym = curr_sym;
+                }
+
+                assert(!phrase.empty());
+                process_phrase(phrase);
+                phrase.clear();
+            }
+        }
+    }
 };
 
-template<typename parse_data_t,
-        typename parser_t>
-struct parse_functor{
 
-    void operator()(parse_data_t& data) {
-        size_t str_len;
-
-        auto phrase2symbol = [&](string_t& phrase){
-            phrase.mask_tail();
-            auto res = data.map.find(phrase.data(), phrase.n_bits());
-            assert(res.second);
-            size_t sym = 0;
-            data.map.get_value_from(res.first, sym);
-
-            if(phrase.size()<str_len){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
-                data.ofs.push_back(sym);
-            }
-        };
-
-        auto init_str = [&](size_t str) -> std::pair<long, long>{
-
-            assert(str>=data.start && str<=data.end);
-            size_t start = data.str_ptr[str];
-            size_t end = data.str_ptr[str+1]-1;
-            str_len = end-start+1;
-
-            if((str+1)<=data.end){
-                data.str_ptr[str+1] = data.ofs.size()-1;
-            }
-            return {start, end};
-        };
-
-        parser_t()(data.ifs, data.start, data.end, data.max_symbol, phrase2symbol, init_str);
-
-        data.str_ptr[data.start] = data.ofs.size()-1;
-
-        data.ofs.close();
-        data.ifs.close();
-        //pthread_exit(nullptr);
-    };
-};
-
-template<class parser_type, class ostream_t>
+template<class parser_type,
+         template<class, class> class hash_functor,
+         template<class, class> class parse_functor,
+         class ostream_t>
 struct mt_parse_strat_t {//multi thread strategy
 
     typedef typename parser_type::stream_type istream_t;
-    typedef typename parser_type::sym_type    sym_type;
 
     struct thread_worker_data_t{
 
@@ -562,7 +516,10 @@ struct mt_parse_strat_t {//multi thread strategy
     }
 };
 
-template<class parser_type, class ostream_t>
+template<class parser_type,
+         template<class, class> class hash_functor,
+         template<class, class> class parse_functor,
+         class ostream_t>
 struct st_parse_strat_t {//parse data for single thread
 
     typedef parser_type                    parser_t;
@@ -725,8 +682,5 @@ typedef o_file_stream<size_t>                         int_o_stream;
 
 typedef lms_parsing<byte_i_stream, string_t>          byte_parser_t;
 typedef lms_parsing<int_i_stream, string_t>           int_parser_t;
-typedef mt_parse_strat_t<byte_parser_t, int_o_stream> mt_byte_parse_strategy;
-typedef mt_parse_strat_t<int_parser_t, int_o_stream>  mt_int_parse_strategy;
-typedef st_parse_strat_t<byte_parser_t, int_o_stream> st_byte_parse_strategy;
-typedef st_parse_strat_t<int_parser_t, int_o_stream>  st_int_parse_strategy;
+
 #endif //GRLBWT_PARSING_STRATEGIES_H

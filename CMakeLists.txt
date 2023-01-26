@@ -11,11 +11,10 @@ add_subdirectory(external/cdt)
 add_subdirectory(external/bioparsers)
 
 add_library(grlbwt
-        lib/lc_gram_algo.cpp
-            lib/LMS_induction.cpp
-            lib/exact_algo/exact_grl_bwt.cpp
-            lib/exact_algo/exact_LMS_induction.cpp
-            lib/opt_algo/opt_grl_bwt.cpp
+            lib/exact_algo/exact_ind_phase.cpp
+            lib/exact_algo/exact_par_phase.cpp
+            lib/opt_algo/opt_ind_phase.cpp
+            lib/opt_algo/opt_par_phase.cpp
             external/malloc_count-master/malloc_count.c)
 
 target_compile_options(grlbwt
