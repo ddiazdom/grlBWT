@@ -5,8 +5,9 @@
 #ifndef LPG_COMPRESSOR_LMS_INDUCTION_H
 #define LPG_COMPRESSOR_LMS_INDUCTION_H
 #include "common.h"
-#include "lc_gram_algo.hpp"
 #include "bwt_io.h"
+
+namespace exact_algo {
 
 #define INSERT_BWT_SYM_FOR_SUFFIX(pos, bwt_sym) \
 size_t phrase = d_lim_rs(pos); \
@@ -101,6 +102,7 @@ void induce_L_type(sa_type& sa, const dictionary &dict, vector_type& buckets, bv
 
 template <class vector_type, class sa_type>
 size_t induce_S_type(sa_type& sa, dictionary& dict, vector_type& buckets, bv_t& solved_sym, tmp_workspace& ws){
+
     size_t pos, bck, l_sym, ind_pos, sa_size = sa.size();
     vector_type ind_bck(dict.alphabet+1, 0);
     bool lcs, first_eq=true, new_break, p_lcs=false;
@@ -117,10 +119,8 @@ size_t induce_S_type(sa_type& sa, dictionary& dict, vector_type& buckets, bv_t& 
     size_t prev_pos=dict.dict.size(), prev_is_suffix=false, acc_freq=0, curr_phrase=0, curr_phrase_freq=0;
     o_file_stream<size_t> reduced_sa(ws.get_file("s_sa"), BUFFER_SIZE, std::ios::out);
     o_file_stream<size_t> nested_phrases(ws.get_file("nested_phrases"), BUFFER_SIZE, std::ios::out);
-    //std::vector<std::pair<size_t, size_t>> same_suffix_range(ws.get_file("same_suffix_range"), BUFFER_SIZE, std::ios::out);
     std::vector<std::pair<size_t, size_t>> same_suffix_range;
     size_t end_range_s_suffix=0, acc_bwt_syms=0;
-
     bv_t meta_sym_marks(dict.dict.size(), false);
     //
 
@@ -345,4 +345,7 @@ size_t suffix_induction(dictionary &dict, tmp_workspace& ws){
 //void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& dict, bool is_gr_phrase, size_t acc_freq, size_t bwt_sym, bwt_buff_writer& bwt_writer);
 //void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dict,bv_rs_t& d_lim_rs, bwt_buff_writer& bwt_writer);
 //void invert_data(tmp_workspace& ws, size_t n_phrases, vector_t& phrase_metasymbols);
+
+}
+
 #endif //LPG_COMPRESSOR_LMS_INDUCTION_H

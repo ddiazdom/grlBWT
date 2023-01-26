@@ -5,9 +5,9 @@
 #ifndef LPG_COMPRESSOR_LMS_INDUCTION_H
 #define LPG_COMPRESSOR_LMS_INDUCTION_H
 #include "common.h"
-#include "lc_gram_algo.hpp"
 #include "bwt_io.h"
 
+namespace opt_algo{
 #define INSERT_BWT_SYM_FOR_SUFFIX(pos, bwt_sym) \
 size_t phrase = d_lim_rs(pos); \
 size_t freq = dict.freqs.read(phrase); \
@@ -345,4 +345,5 @@ size_t suffix_induction(dictionary &dict, tmp_workspace& ws){
 //void increment_bwt(size_t start, size_t end, value_type *sa, const dictionary& dict, bool is_gr_phrase, size_t acc_freq, size_t bwt_sym, bwt_buff_writer& bwt_writer);
 //void insert_bwt_sym_for_suffix(size_t pos, size_t bwt_sym, const dictionary& dict,bv_rs_t& d_lim_rs, bwt_buff_writer& bwt_writer);
 //void invert_data(tmp_workspace& ws, size_t n_phrases, vector_t& phrase_metasymbols);
+}
 #endif //LPG_COMPRESSOR_LMS_INDUCTION_H
