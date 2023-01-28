@@ -571,16 +571,6 @@ struct st_parse_strat_t {//parse data for single thread
             n_syms += key_w.size(ptr);
             freq = 0;
             map.get_value_from(ptr, freq);
-
-            //when a phrase F expands to a string suffix, the first 2 bits indicate the kind of the phrase F is:
-            // 01 : all its occurrences are encapsulated within a string
-            // 10 : all its occurrences cover a full string
-            // 11 : some occurrences cover a full string while other cover a partial string
-            // We will encode this information in the freq array in the dictionary.
-            // Here we are just computing the width for the cells of that array.
-            //remember: the phrase are in reverse order. That is the reason
-            // why I am using the first symbol instead of the last one in the if below.
-            if(!is_suffix[key_w.read(ptr, 0)]) freq>>=2UL;
             assert(freq>0);
             if(freq>max_freq) max_freq = freq;
         }

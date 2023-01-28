@@ -9,86 +9,61 @@
 
 namespace exact_algo {
 
-    void produce_grammar(tmp_workspace& ws, dictionary& dict, parsing_info& p_info) {
+    template<class sa_type>
+    void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases_ht, bv_t& phr_marks, parsing_info& p_info, tmp_workspace& ws) {
 
-        i_file_stream<size_t> s_sa(ws.get_file("s_sa"), BUFFER_SIZE);
         dict.alphabet+=3;
         dict.metasym_dummy= dict.alphabet+s_sa.size()+1;
 
         size_t alphabet = dict.alphabet;
         size_t meta_sym_dummy = dict.metasym_dummy;
-
-        dict.phrases_has_hocc.resize(s_sa.size()+1);
-        sdsl::util::set_to_value(dict.phrases_has_hocc, false);
-
-        bit_hash_table<size_t> phrases_ht;
-        i_file_stream<size_t> nested_phrases(ws.get_file("nested_phrases"), BUFFER_SIZE);
-        size_t i=0, sym, meta_sym, offset = s_sa.size()-1;
-        bool is_last;
         string_t phrase(2, sym_width(alphabet));
-        while(i<nested_phrases.size()){
-            meta_sym = offset - nested_phrases.read(i++);
-            dict.phrases_has_hocc[meta_sym] = true;
-            do{
-                sym = nested_phrases.read(i++);
-                is_last = sym & 1UL;
-                phrase.push_back(sym>>1UL);
-            }while(!is_last);
-
-            phrase.mask_tail();
-            phrases_ht.insert(phrase.data(), phrase.n_bits(), (alphabet + meta_sym));
-            phrase.clear();
-        }
-        nested_phrases.close(true);
 
         size_t pos, new_size=0, l_sym, r_sym;
         vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
-        bv_t meta_sym_marks;
-        sdsl::load_from_file(meta_sym_marks, ws.get_file("meta_sym_marks"));
 
-        for(size_t u=s_sa.size();u-->0;) {
-            pos = s_sa.read(u);
-            assert(pos<dict.dict.size() && !dict.d_lim[pos]);
-            pos++;
-            while(!meta_sym_marks[pos] && !dict.d_lim[pos]) pos++;
+        for(size_t u=0;u<s_sa.size();u++) {
 
-            l_sym = dict.dict.read(pos-1);
-            assert(l_sym<alphabet);
+            pos = s_sa[u];
+            assert(pos<dict.dict.size() && (!dict.d_lim[pos] || dict.is_suffix(dict.dict[pos])));
 
-            if(meta_sym_marks[pos]){
-                phrase.clear();
-                do{
-                    phrase.push_back(dict.dict[pos]);
-                }while(!dict.d_lim[pos++]);
-                phrase.mask_tail();
-                assert(phrase.size()>1);
-                auto res = phrases_ht.find(phrase.data(), phrase.n_bits());
-                assert(res.second);
-
-                r_sym = 0;
-                phrases_ht.get_value_from(res.first, r_sym);
-
-                new_dict.write(new_size++, l_sym);
-                new_dict.write(new_size++, r_sym);
-            }else{
-                r_sym = dict.dict.read(pos);
+            if(dict.d_lim[pos]){
+                assert(dict.is_suffix(dict.dict[pos]));
                 new_dict.write(new_size++, meta_sym_dummy);
-                new_dict.write(new_size++, dict.is_suffix(r_sym) ? meta_sym_dummy : l_sym);
-            }
-        }
+                new_dict.write(new_size++, dict.dict[pos]);
+            }else{
+                pos++;
+                while(!phr_marks[pos] && !dict.d_lim[pos]) pos++;
 
-        new_dict.write(new_size++, meta_sym_dummy);
-        if(p_info.p_round>0){
-            new_dict.write(new_size, dict.end_str_dummy);
-        }else{
-            new_dict.write(new_size, 10);
+                l_sym = dict.dict.read(pos-1);
+                assert(l_sym<alphabet);
+
+                if(phr_marks[pos]){
+                    phrase.clear();
+                    do{
+                        phrase.push_back(dict.dict[pos]);
+                    }while(!dict.d_lim[pos++]);
+                    phrase.mask_tail();
+
+                    auto res = new_phrases_ht.find(phrase.data(), phrase.n_bits());
+                    assert(res.second);
+
+                    r_sym = 0;
+                    new_phrases_ht.get_value_from(res.first, r_sym);
+                    r_sym+=dict.alphabet;
+
+                    new_dict.write(new_size++, l_sym);
+                    new_dict.write(new_size++, r_sym);
+                }else{
+                    r_sym = dict.dict.read(pos);
+                    new_dict.write(new_size++, meta_sym_dummy);
+                    new_dict.write(new_size++, dict.is_suffix(r_sym) ? r_sym : l_sym);
+                }
+            }
         }
 
         dict.dict.swap(new_dict);
         dict.n_phrases = s_sa.size();
-
-        s_sa.close(true);
-        ws.remove_file("meta_sym_marks");
 
         sdsl::util::clear(dict.d_lim);
         std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
@@ -98,19 +73,33 @@ namespace exact_algo {
     template<class vector_type, class sa_type>
     size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
+        sa_type sa;
+        if constexpr (std::is_same<sa_type, vector_t>::value) {
+            size_t width = sym_width(dict.dict.size())+2;
+            sa.set_width(width);
+            sa.resize(dict.dict.size());
+            sa.initialize(0, sa.size());
+        }else{
+            sa.resize(dict.dict.size());
+            memset(sa.data(), 0, sa.size()*sizeof(typename sa_type::value_type));
+        }
+
         std::cout << "    Sorting the dictionary and constructing the preliminary BWT" << std::flush;
         auto start = std::chrono::steady_clock::now();
-        size_t n_phrases = suffix_induction<vector_type, sa_type>(dict, ws);
+        suffix_induction<vector_type, sa_type>(dict, sa);
+
+        phrase_map_t new_phrases_ht;
+        bv_t phr_marks(dict.dict.size(), false);
+        start = std::chrono::steady_clock::now();
+        size_t n_phrases = produce_pre_bwt<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
 
-        malloc_count_print_status();
-        malloc_count_reset_peak();
+        //malloc_count_print_status();
+        //malloc_count_reset_peak();
 
         std::cout << "    Compressing the dictionary" << std::flush;
-        start = std::chrono::steady_clock::now();
-        //size_t n_phrases = get_pre_bwt2<value_type>(dict, sa, dict.dict.size(), p_info, ws);
-        produce_grammar(ws, dict, p_info);
+        produce_grammar<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
         end = std::chrono::steady_clock::now();
         report_time(start, end, 35);
 
@@ -120,9 +109,115 @@ namespace exact_algo {
         return n_phrases;
     }
 
+    template<class sa_type>
+    size_t
+    produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_ht, bv_t &phr_marks, parsing_info &p_info,
+                    tmp_workspace &ws) {
+
+        string_t phrase(2, sym_width(dict.alphabet));
+
+        size_t n_breaks=0, n_phrases=0, acc_freq=0, null_sym=std::numeric_limits<size_t>::max();
+        size_t pos, pl_sym=null_sym, bg_range=0, rank=0, l_sym;
+        bool is_full_phrase, is_valid_suffix;
+
+        bv_rs_t d_lim_rs(&dict.d_lim);
+
+        std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
+        size_t sb = INT_CEIL(sdsl::bits::hi(dict.bwt_dummy)+1, 8);
+        size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
+        bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
+
+        vector_t ranks(dict.n_phrases, 0, sym_width(dict.dict.size())+1);
+        dict.phrases_has_hocc.resize(dict.dict.size());
+        sdsl::util::set_to_value(dict.phrases_has_hocc, false);
+
+        size_t u = 0 ;
+        while(u<sa.size()) {
+
+            pos = (sa[u]>>1UL) - 1;
+            is_valid_suffix = !dict.d_lim[pos] || dict.is_suffix(dict.dict[pos]);
+
+            if(!is_valid_suffix) {
+                u++;
+                while(sa[u] & 1UL) u++;
+                bg_range = u;
+                continue;
+            }
+
+            is_full_phrase = (pos == 0 || dict.d_lim[pos - 1]);
+            size_t freq = dict.freqs[d_lim_rs(pos)];
+            if(is_full_phrase){
+                ranks[d_lim_rs(pos)] = rank<<1UL | (freq>1);
+                l_sym = dict.bwt_dummy;
+            }else{
+                l_sym =  dict.dict[pos-1];
+            }
+
+            n_breaks +=pl_sym!=l_sym;
+            n_phrases += is_full_phrase;
+            acc_freq += freq;
+
+            if((u+1)==sa.size() || !(sa[u+1] & 1UL)) {
+
+                if(n_breaks>1 || n_phrases==1) {
+
+                    l_sym = dict.bwt_dummy;
+                    if((u-bg_range+1) > 1) {
+
+                        size_t samp_pos = pos;
+                        phrase.clear();
+                        do{
+                            phrase.push_back(dict.dict[samp_pos]);
+                        } while(!dict.d_lim[samp_pos++]);
+                        phrase.mask_tail();
+
+                        auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank);
+                        assert(res.second);
+                        dict.phrases_has_hocc[rank] = true;
+                        for (size_t j = bg_range; j <= u; j++) {
+                            phr_marks[(sa[j] >> 1UL) - 1] = true;
+                        }
+                        l_sym = dict.hocc_dummy;
+                    }
+                    sa[rank] = pos;
+                    rank++;
+                }
+
+                if (pre_bwt.size() > 1 && pre_bwt.last_sym() == l_sym) {
+                    pre_bwt.inc_freq_last(acc_freq);
+                } else {
+                    pre_bwt.push_back(l_sym, acc_freq);
+                }
+
+                bg_range = u+1;
+                l_sym = null_sym;
+                n_breaks = 0;
+                n_phrases = 0;
+                acc_freq = 0;
+            }
+            pl_sym = l_sym;
+            u++;
+        }
+
+        pre_bwt.close();
+        sa.resize(rank);
+        dict.phrases_has_hocc.resize(rank);
+
+        sdsl::util::clear(d_lim_rs);
+        dict.freqs.erase();
+        store_to_file(ws.get_file("phr_ranks"), ranks);
+        ranks.erase();
+        new_phrases_ht.shrink_databuff();
+
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+        return rank;
+    }
+
     size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
 
-        uint8_t width = sym_width(dict.dict.size()) + 2;
+        uint8_t width = sym_width(dict.dict.size()) + 1;
         size_t n_phrases;
 
         if (width <= 8) {
@@ -198,8 +293,10 @@ namespace exact_algo {
             }
             end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
+
             remove(tmp_i_file.c_str());
             rename(output_file.c_str(), tmp_i_file.c_str());
+
             malloc_count_print_status();
             malloc_count_reset_peak();
         }
@@ -216,12 +313,13 @@ namespace exact_algo {
 #ifdef __linux__
         malloc_trim(0);
 #endif
-
         std::cout << "    Hashing the phrases" << std::flush;
         auto start = std::chrono::steady_clock::now();
         auto res = p_strategy.get_phrases();
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 42);
+
+        //if(p_strategy.map.size()!=p_info.lms_phrases){
 
         store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
         std::vector<long>().swap(p_info.str_ptrs);
@@ -275,10 +373,9 @@ namespace exact_algo {
             std::string ranks_file = ws.get_file("phr_ranks");
             load_from_file(ranks_file, ranks);
             for (auto const &ptr: map) {
-                phrase_map_t::val_type val = 0;
-                map.get_value_from(ptr, val);
-                val = ranks[j++];
+                size_t val = ranks[j++];
                 map.insert_value_at(ptr, val);
+
                 //the first bit marks if the phrase is repeated or not.
                 // We need to shift it to get the real id
                 new_phrase_desc[(val >> 1UL)] = phrase_desc[key_w.read(ptr, 0)];
@@ -314,22 +411,14 @@ namespace exact_algo {
         std::cout << "      Parsing phrases:                  " << p_info.lms_phrases << std::endl;
         std::cout << "      Number of symbols in the phrases: " << dict_sym << std::endl;
         std::cout << "      Number of unsolved BWT blocks:    " << p_info.tot_phrases << std::endl;
-        std::cout << "      Processed strings:                " << p_info.active_strings << std::endl;
         std::cout << "      Parse size:                       " << psize << std::endl;
 
         map.destroy_data();
         map.destroy_table();
+        return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.lms_phrases;
+        /*else { //just copy the input
 
-        if (psize == 0) {
-            return 0;
-        } else {
-            return p_info.lms_phrases;
-        }
-        //}
-
-        /*else{ //just copy the input
-
-            std::ifstream in(i_file, std::ios_base::binary);
+            / * std::ifstream in(i_file, std::ios_base::binary);
             std::ofstream out(o_file, std::ios_base::binary);
             auto buffer = reinterpret_cast<char*>(malloc(BUFFER_SIZE));
             do {
@@ -339,23 +428,14 @@ namespace exact_algo {
             } while (in.gcount() > 0);
             free(buffer);
             psize/=sizeof(typename parse_strategy_t::sym_type);
-            p_strategy.remove_files();
+            p_strategy.remove_files();* /
             std::cout<<"    No new phrases found"<<std::endl;
             return 0;
         }*/
     }
 
-    template size_t
-    par_round<ext_st_byte_parse_strategy>(ext_st_byte_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc,
-                                            tmp_workspace &ws);
-
-    template size_t
-    par_round<ext_st_int_parse_strategy>(ext_st_int_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-
-    template size_t
-    par_round<ext_mt_byte_parse_strategy>(ext_mt_byte_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc,
-                                            tmp_workspace &ws);
-
-    template size_t
-    par_round<ext_mt_int_parse_strategy>(ext_mt_int_parse_strategy &p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    template size_t par_round<ext_st_byte_parse_strategy>(ext_st_byte_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    template size_t par_round<ext_st_int_parse_strategy>(ext_st_int_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    template size_t par_round<ext_mt_byte_parse_strategy>(ext_mt_byte_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    template size_t par_round<ext_mt_int_parse_strategy>(ext_mt_int_parse_strategy &p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
 }
