@@ -357,8 +357,7 @@ namespace exact_algo {
         std::cout << "    Stats:       " << std::endl;
         std::cout << "      BWT size (n):                  " << new_bwt_size << std::endl;
         std::cout << "      Number of runs (r):            " << new_bwt_buff.size() << std::endl;
-        std::cout << "      n/r:                           " << double(new_bwt_size) / double(new_bwt_buff.size())
-                  << std::endl;
+        std::cout << "      n/r:                           " << double(new_bwt_size) / double(new_bwt_buff.size())<< std::endl;
         std::cout << "      Run stats:                     " << std::endl;
         std::cout << "        Bytes for the symbol:        " << (int) new_al_b << std::endl;
         std::cout << "        Bytes for the length:        " << (int) new_fr_b << std::endl;
@@ -585,7 +584,8 @@ namespace exact_algo {
         free(hocc);
     }
 
-    void parse2bwt(tmp_workspace &ws, size_t p_round) {
+    void parse2bwt(tmp_workspace &ws, size_t& p_round) {
+
 
         std::string parse_file = ws.get_file("tmp_input");
         std::ifstream c_vec(parse_file, std::ifstream::binary);
@@ -598,13 +598,13 @@ namespace exact_algo {
 
         size_t len = tot_bytes / sizeof(size_t);
 
-        std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round - 1));
+        std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
         dictionary dict;
         sdsl::load_from_file(dict, dict_file);
-        size_t sb = INT_CEIL(sdsl::bits::hi(std::max(dict.n_phrases, dict.alphabet)) + 1, 8);
-        size_t fb = INT_CEIL(sdsl::bits::hi(len) + 1, 8);
+        size_t sb = INT_CEIL(sym_width(std::max(dict.prev_alphabet, dict.alphabet)) + 1, 8);
+        size_t fb = INT_CEIL(sym_width(len) + 1, 8);
 
-        std::string bwt_lev_file = ws.get_file("bwt_lev_" + std::to_string(p_round));
+        std::string bwt_lev_file = ws.get_file("bwt_lev_" + std::to_string(p_round+1));
         bwt_buff_writer bwt_buff(bwt_lev_file, std::ios::out, sb, fb);
 
         while (read_bytes < tot_bytes) {
@@ -612,6 +612,7 @@ namespace exact_algo {
             read_bytes += c_vec.gcount();
             assert((c_vec.gcount() % sizeof(size_t)) == 0);
             for (size_t i = 0; i < c_vec.gcount() / sizeof(size_t); i++) {
+                buffer[i]>>=1UL;//the symbols are shifted by one as I use the first bit to mark repeated elements
                 if (bwt_buff.size() == 0 || buffer[i] != bwt_buff.last_sym()) {
                     bwt_buff.push_back(buffer[i], 1);
                 } else {
@@ -635,6 +636,8 @@ namespace exact_algo {
         std::cout << "      Bytes per run:      " << (sb + fb) << std::endl;
         std::cout << "        Bytes per symbol: " << sb << std::endl;
         std::cout << "        Bytes per freq.:  " << fb << std::endl;
+
+        p_round++;
     }
 
     template<uint8_t b_f_r> //b_f_r = number of bytes to encode the length of a BWT run
@@ -643,9 +646,7 @@ namespace exact_algo {
         static_assert(b_f_r >= 0 && b_f_r <= 5);
 
         std::cout << "Inferring the BWT" << std::endl;
-        std::string prev_bwt_file = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
-        std::string new_bwt_file = ws.get_file("bwt_lev_" + std::to_string(p_round));
-        rename(prev_bwt_file.c_str(), new_bwt_file.c_str());
+        parse2bwt(ws, p_round);
 
         while (p_round-- > 0) {
             std::cout << "  Inducing the BWT for parse " << (p_round + 1) << std::endl;

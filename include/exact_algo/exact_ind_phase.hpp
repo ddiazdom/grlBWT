@@ -20,7 +20,7 @@ namespace exact_algo {
     template<uint8_t b_f_r>
     void ind_phase(tmp_workspace &ws, size_t p_round);
 
-    void parse2bwt(tmp_workspace &ws, size_t p_round);
+    void parse2bwt(tmp_workspace &ws, size_t &p_round);
 }
 
 #endif //EXACT_GRLBWT_HPP

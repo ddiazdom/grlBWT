@@ -172,12 +172,18 @@ namespace exact_algo {
     template<class parse_strategy>
     size_t par_round(parse_strategy &p_strat, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
 
-    size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
+    size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws);
 
     template<class vector_type, class sa_type>
-    size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
+    size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws);
 
-    void produce_grammar(tmp_workspace &ws, dictionary &dict, parsing_info &p_info);
+    template<class sa_type>
+    size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_ht,
+                           bv_t &phr_marks, parsing_info &p_info, tmp_workspace &ws);
+
+    template<class sa_type>
+    void produce_grammar(dictionary& dict, sa_type& s_sa, phrase_map_t& new_phrases_ht,
+                         bv_t& phr_marks, parsing_info& p_info, tmp_workspace& ws);
 
     typedef st_parse_strat_t<byte_parser_t, ext_hash_functor, ext_parse_functor, int_o_stream> ext_st_byte_parse_strategy;
     typedef st_parse_strat_t<int_parser_t, ext_hash_functor, ext_parse_functor, int_o_stream>  ext_st_int_parse_strategy;
