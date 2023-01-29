@@ -233,9 +233,6 @@ namespace opt_algo {
     void dict2gram2(dictionary &dict, value_type *s_sa, size_t sa_size, vector_t &first_symbol, parsing_info &p_info,
                     tmp_workspace &ws);
 
-    template<class value_type>
-    size_t get_pre_bwt2(dictionary &dict, value_type *sa, size_t sa_size, parsing_info &p_info, tmp_workspace &ws);
-
     size_t par_phase(std::string &i_file, size_t n_threads, size_t hbuff_size,
                          str_collection &str_coll, tmp_workspace &ws);
 
@@ -251,6 +248,6 @@ namespace opt_algo {
     //typedef st_parse_strat_t<int_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream>  opt_st_int_parse_strategy;
     //typedef mt_parse_strat_t<byte_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream> opt_mt_byte_parse_strategy;
     //typedef mt_parse_strat_t<int_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream>  opt_mt_int_parse_strategy;
+}
 
 #endif //GRLBWT_OPT_PAR_PHASE_H
-}
