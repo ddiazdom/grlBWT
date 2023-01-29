@@ -20,7 +20,8 @@ struct parsing_info{
 };
 
 template<class stream_t,
-        class string_t>
+        class string_t,
+        bool first_round>
 struct lms_parsing{
 
     typedef stream_t                       stream_type;
@@ -84,7 +85,7 @@ struct lms_parsing{
                     const std::function<std::pair<long, long>(size_t)>& init_str) const {
 
         sym_type curr_sym, prev_sym;
-        string_t phrase(2, sdsl::bits::hi(max_symbol)+1);
+        string_t phrase(2, sym_width(max_symbol));
         size_t end_ps, start_ps;
         uint8_t type, rep;
 
@@ -98,7 +99,7 @@ struct lms_parsing{
                 end_ps = range.second;
 
                 prev_sym = ifs.read(end_ps);
-                if constexpr (std::is_same<sym_type, uint8_t>::value){
+                if constexpr (first_round){
                     rep = 3U;
                 }else{
                     rep = prev_sym & 1U;
@@ -112,7 +113,7 @@ struct lms_parsing{
 
                     curr_sym = ifs.read(i);
 
-                    if constexpr (!std::is_same<sym_type, uint8_t>::value){
+                    if constexpr (!first_round){
                         rep = (rep << 1UL) | (curr_sym & 1UL);
                         curr_sym >>=1UL;
                     }
@@ -147,8 +148,7 @@ struct lms_parsing{
 
 template<class parser_type,
          template<class, class> class hash_functor,
-         template<class, class> class parse_functor,
-         class ostream_t>
+         template<class, class, class> class parse_functor>
 struct mt_parse_strat_t {//multi thread strategy
 
     typedef typename parser_type::stream_type istream_t;
@@ -158,20 +158,20 @@ struct mt_parse_strat_t {//multi thread strategy
         size_t               start{};
         size_t               end{};
         istream_t            ifs;
-        ostream_t            ofs;
+        std::string          o_file;
         phrase_map_t&        map;
         phrase_map_t         inner_map;
         std::vector<long>&   str_ptr;
         size_t               max_symbol{};
         size_t               active_strings=0;
 
-        thread_worker_data_t(size_t start_, size_t end_, std::string& i_file, std::string& o_file,
+        thread_worker_data_t(size_t start_, size_t end_, std::string& i_file, std::string& o_file_,
                              phrase_map_t& map_, std::vector<long>& str_ptr_,
                              const size_t &hb_size, void *hb_addr,
                              size_t max_symbol_): start(start_),
                                                   end(end_),
                                                   ifs(i_file, BUFFER_SIZE),
-                                                  ofs(o_file, BUFFER_SIZE, std::ios::out),
+                                                  o_file(o_file_),
                                                   map(map_),
                                                   inner_map(hb_size, o_file + "_phrases", 0.7, hb_addr, map.description_bits()),
                                                   str_ptr(str_ptr_),
@@ -194,10 +194,11 @@ struct mt_parse_strat_t {//multi thread strategy
                                          o_file(o_file_),
                                          map(0, "", 0.8, nullptr, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                          p_info(p_info_),
-                                         str_ptr(p_info.str_ptrs){
+                                         str_ptr(p_info.str_ptrs) {
 
         std::vector<std::pair<size_t, size_t>> thread_ranges;
         size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size()-1, n_threads);
+        n_threads = INT_CEIL((p_info.str_ptrs.size()-1), str_per_thread);
 
         for(size_t i=0;i<n_threads;i++){
             thread_ranges.emplace_back(str_per_thread*i, std::min(str_per_thread*(i+1)-1, p_info.str_ptrs.size()-2));
@@ -251,17 +252,17 @@ struct mt_parse_strat_t {//multi thread strategy
 #endif
 
         //join the different phrase files
-        std::cout << "      Merging thread data into one single hash table" << std::flush;
-        auto start = std::chrono::steady_clock::now();
+        //std::cout <<"      Merging thread data into one single hash table" << std::flush;
+        //auto start = std::chrono::steady_clock::now();
         auto join_res = join_thread_phrases();
-        auto end = std::chrono::steady_clock::now();
-        report_time(start, end, 3);
+        //auto end = std::chrono::steady_clock::now();
+        //report_time(start, end, 3);
         return join_res;
     }
 
     std::pair<size_t, size_t> join_thread_phrases() {
 
-        size_t dic_bits=0, freq, max_freq=0, flag;
+        size_t dic_bits=0, freq, max_freq=0;
         std::string file;
 
         for(auto const& thread : threads_data) {
@@ -321,9 +322,19 @@ struct mt_parse_strat_t {//multi thread strategy
 
                 auto res = map.insert(key, key_bits, freq);
                 if(!res.second){
+                    size_t val=0;
+                    map.get_value_from(res.first, val);
+                    freq += val;
+                    map.insert_value_at(res.first, freq);
+                }else{
+                    dic_bits+=key_bits;
+                }
+                if(freq>max_freq) max_freq = freq;
+                //TODO this work for the opt BWT
+                /*if(!res.second){
 
                     flag = (freq & 3UL);
-                    freq>>=2UL;
+                    freq>>=1UL;
 
                     size_t val;
                     map.get_value_from(res.first, val);
@@ -339,7 +350,7 @@ struct mt_parse_strat_t {//multi thread strategy
                     freq>>=2UL;
                     if(freq>max_freq) max_freq = freq;
                     dic_bits+=key_bits;
-                }
+                }*/
             }
             text_i.close();
 
@@ -356,10 +367,12 @@ struct mt_parse_strat_t {//multi thread strategy
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }
 
+    template<class o_sym_type>
     size_t parse_text() {
 
         std::vector<std::thread> threads(threads_data.size());
-        parse_functor<thread_worker_data_t, parser_type> pf;
+        parse_functor<thread_worker_data_t, parser_type, o_file_stream<o_sym_type>> pf;
+
         for(size_t i=0;i<threads_data.size();i++){
             threads[i] = std::thread(pf, std::ref(threads_data[i]));
         }
@@ -367,8 +380,21 @@ struct mt_parse_strat_t {//multi thread strategy
             threads[i].join();
         }
 
+        //invert the chunks
+        o_file_stream<o_sym_type> of(o_file, BUFFER_SIZE, std::ios::out);
+        for(auto const& thread: threads_data){
+            i_file_stream<o_sym_type> inv_chunk(thread.o_file, BUFFER_SIZE);
+            for(size_t i = inv_chunk.size();i-->0;){
+                of.push_back(inv_chunk.read(i));
+            }
+            inv_chunk.close(true);
+        }
+        of.close();
+        size_t psize = of.size();
+
+
         //join the phrases in one single file
-        size_t psize = join_parse_chunks();
+        //size_t psize = join_parse_chunks();
 
         //update string pointers
         long acc=0, prev, str_len=0;
@@ -461,7 +487,7 @@ struct mt_parse_strat_t {//multi thread strategy
 
         for(auto const& thread: threads_data){
 
-            file = thread.ofs.file;
+            file = thread.o_file;
             std::ifstream tmp_i_file(file, std::ifstream::binary);
 
             tmp_i_file.seekg (0, std::ifstream::end);
@@ -518,17 +544,15 @@ struct mt_parse_strat_t {//multi thread strategy
 
 template<class parser_type,
          template<class, class> class hash_functor,
-         template<class, class> class parse_functor,
-         class ostream_t>
+         template<class, class, class> class parse_functor>
 struct st_parse_strat_t {//parse data for single thread
 
     typedef parser_type                    parser_t;
     typedef typename parser_t::stream_type istream_t;
-    typedef typename parser_type::sym_type sym_type;
 
     istream_t           ifs;
-    ostream_t           ofs;
     std::string         o_file;
+    std::string         tmp_o_file;
 
     phrase_map_t        map;
     phrase_map_t&       inner_map;
@@ -539,10 +563,9 @@ struct st_parse_strat_t {//parse data for single thread
     size_t              start;
     size_t              end;
     size_t              active_strings=0;
-    bv_t&               is_suffix;
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
-                     parsing_info& p_info_, bv_t& is_suffix_): ifs(i_file_, BUFFER_SIZE),
+                     parsing_info& p_info_): ifs(i_file_, BUFFER_SIZE),
                                              o_file(o_file_),
                                              map(0, "", 0.8, nullptr, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                              inner_map(map),
@@ -551,11 +574,9 @@ struct st_parse_strat_t {//parse data for single thread
                                              text_size(ifs.size()),
                                              max_symbol(p_info.tot_phrases),
                                              start(0),
-                                             end(str_ptr.size()-2),
-                                             is_suffix(is_suffix_){
-        std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
-        tmp_o_file.append("_range_" + std::to_string(start) + "_" + std::to_string(end));
-        ofs = ostream_t(tmp_o_file, BUFFER_SIZE, std::ios::out);
+                                             end(str_ptr.size()-2){
+        tmp_o_file = o_file.substr(0, o_file.size() - 4);
+        tmp_o_file.append("_inv");
     }
 
     std::pair<size_t, size_t> get_phrases() {
@@ -577,9 +598,10 @@ struct st_parse_strat_t {//parse data for single thread
         return {n_syms, max_freq};
     }
 
+    template<class o_sym_type>
     size_t parse_text() {
 
-        parse_functor<st_parse_strat_t, parser_type>()(*this);
+        size_t parse_size = parse_functor<st_parse_strat_t, parser_type, o_file_stream<o_sym_type>>()(*this);
 
         //update string pointers
         long acc=0, str_len=0;
@@ -592,85 +614,34 @@ struct st_parse_strat_t {//parse data for single thread
                 str_len = p_info.str_ptrs[j]-p_info.str_ptrs[j-1];
             }
         }
-        p_info.str_ptrs.back() = (long)ofs.size();
+        p_info.str_ptrs.back() = (long)parse_size;
         if((p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2])>str_len){
             str_len = (p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2]);
         }
         p_info.longest_str = str_len;
 
-        size_t tot_sym = reverse_text();
-
-        return tot_sym;
-    }
-
-    size_t reverse_text(){
-
-        std::ofstream of(o_file, std::ofstream::binary);
-        size_t buff_size = BUFFER_SIZE/sizeof(size_t);
-
-        size_t len, rem, to_read, p_start, p_end;
-        auto *buffer = new size_t[buff_size];
-
-        std::string file = ofs.file;
-        std::ifstream tmp_i_file(file, std::ifstream::binary);
-
-        tmp_i_file.seekg (0, std::ifstream::end);
-        len = tmp_i_file.tellg()/sizeof(size_t);
-        tmp_i_file.seekg (0, std::ifstream::beg);
-
-        if(len>0){
-
-            rem=len;
-            to_read = std::min<size_t>(buff_size, len);
-
-            while(true){
-
-                tmp_i_file.seekg( (rem - to_read) * sizeof(size_t));
-                tmp_i_file.read((char *)buffer, sizeof(size_t)*to_read);
-                assert(tmp_i_file.good());
-
-                //invert data
-                p_start =0;
-                p_end=to_read-1;
-                while(p_start<p_end){
-                    std::swap(buffer[p_start++], buffer[p_end--]);
-                }
-
-                of.write((char *)buffer, sizeof(size_t)*to_read);
-                assert(of.good());
-
-                rem -= tmp_i_file.gcount()/sizeof(size_t);
-                to_read = std::min<size_t>(buff_size, rem);
-                if(to_read == 0) break;
-            }
-            tmp_i_file.close();
+        i_file_stream<o_sym_type> inv_parse(o_file, BUFFER_SIZE);
+        o_file_stream<o_sym_type> final_parse(tmp_o_file, BUFFER_SIZE, std::ios::out);
+        for(size_t i=inv_parse.size();i-->0;){
+            final_parse.push_back(inv_parse.read(i));
         }
+        inv_parse.close(true);
+        final_parse.close();
+        rename(tmp_o_file.c_str(), o_file.c_str());
 
-        if(remove(file.c_str())){
-            std::cout<<"Error trying to remove temporal file"<<std::endl;
-            std::cout<<"Aborting"<<std::endl;
-            exit(1);
-        }
-
-        delete[] buffer;
-        of.close();
-        return len;
-    }
-
-    void remove_files(){
-        //remove remaining files
-        std::string tmp_file =  ofs.file;
-        if(remove(tmp_file.c_str())){
-            std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
-        }
+        return parse_size;
     }
 };
 
-typedef i_file_stream<uint8_t>                        byte_i_stream;
-typedef i_file_stream<size_t>                         int_i_stream;
-typedef o_file_stream<size_t>                         int_o_stream;
+typedef i_file_stream<uint8_t>                        uint8t_i_stream;
+typedef i_file_stream<uint16_t>                       uint16t_i_stream;
+typedef i_file_stream<uint32_t>                       uint32t_i_stream;
+typedef i_file_stream<uint64_t>                       uint64t_i_stream;
 
-typedef lms_parsing<byte_i_stream, string_t>          byte_parser_t;
-typedef lms_parsing<int_i_stream, string_t>           int_parser_t;
+typedef lms_parsing<uint8t_i_stream, string_t, true>    char_parser_t;
+typedef lms_parsing<uint8t_i_stream, string_t, false>   uint8t_parser_t;
+typedef lms_parsing<uint16t_i_stream, string_t, false>  uint16t_parser_t;
+typedef lms_parsing<uint32t_i_stream, string_t, false>  uint32t_parser_t;
+typedef lms_parsing<uint64t_i_stream, string_t, false>  uint64t_parser_t;
 
 #endif //GRLBWT_PARSING_STRATEGIES_H

@@ -85,5 +85,9 @@ struct fm_index{
     [[nodiscard]] inline uint8_t get_dummy() const {
         return dummy;
     }
+
+    [[nodiscard]] inline size_t tot_strings() const {
+        return C[sym_map[dummy]+1]-C[sym_map[dummy]];
+    }
 };
 #endif //TEST_RL_BCR_BWT_FM_INDEX_H

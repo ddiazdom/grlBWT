@@ -7,7 +7,7 @@
 #ifdef __linux__
 #include <malloc.h>
 #endif
-#include "malloc_count.h"
+//#include "malloc_count.h"
 
 namespace exact_algo {
 
@@ -584,23 +584,18 @@ namespace exact_algo {
         free(hocc);
     }
 
-    void parse2bwt(tmp_workspace &ws, size_t& p_round) {
-
+    template<class sym_type>
+    void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round) {
 
         std::string parse_file = ws.get_file("tmp_input");
         std::ifstream c_vec(parse_file, std::ifstream::binary);
         c_vec.seekg(0, std::ifstream::end);
         size_t tot_bytes = c_vec.tellg();
         c_vec.seekg(0, std::ifstream::beg);
-
-        auto *buffer = reinterpret_cast<size_t *>(malloc(BUFFER_SIZE));
+        auto *buffer = reinterpret_cast<sym_type *>(malloc(BUFFER_SIZE));
         size_t read_bytes = 0;
+        size_t len = tot_bytes / sizeof(sym_type);
 
-        size_t len = tot_bytes / sizeof(size_t);
-
-        std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
-        dictionary dict;
-        sdsl::load_from_file(dict, dict_file);
         size_t sb = INT_CEIL(sym_width(std::max(dict.prev_alphabet, dict.alphabet)) + 1, 8);
         size_t fb = INT_CEIL(sym_width(len) + 1, 8);
 
@@ -610,8 +605,9 @@ namespace exact_algo {
         while (read_bytes < tot_bytes) {
             c_vec.read((char *) buffer, BUFFER_SIZE);
             read_bytes += c_vec.gcount();
-            assert((c_vec.gcount() % sizeof(size_t)) == 0);
-            for (size_t i = 0; i < c_vec.gcount() / sizeof(size_t); i++) {
+            assert((c_vec.gcount() % sizeof(sym_type)) == 0);
+
+            for (size_t i = 0; i < c_vec.gcount() / sizeof(sym_type); i++) {
                 buffer[i]>>=1UL;//the symbols are shifted by one as I use the first bit to mark repeated elements
                 if (bwt_buff.size() == 0 || buffer[i] != bwt_buff.last_sym()) {
                     bwt_buff.push_back(buffer[i], 1);
@@ -636,6 +632,24 @@ namespace exact_algo {
         std::cout << "      Bytes per run:      " << (sb + fb) << std::endl;
         std::cout << "        Bytes per symbol: " << sb << std::endl;
         std::cout << "        Bytes per freq.:  " << fb << std::endl;
+    }
+
+    void parse2bwt(tmp_workspace &ws, size_t& p_round) {
+
+        std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
+        dictionary dict;
+        sdsl::load_from_file(dict, dict_file);
+        size_t bps = sym_width(dict.n_phrases)+1;
+
+        if(bps<=8){
+            parse2bwt_int<uint8_t>(ws, dict, p_round);
+        }else if(bps<=16){
+            parse2bwt_int<uint16_t>(ws, dict, p_round);
+        } else if(bps<=32){
+            parse2bwt_int<uint32_t>(ws, dict, p_round);
+        } else{
+            parse2bwt_int<uint64_t>(ws, dict, p_round);
+        }
 
         p_round++;
     }
@@ -659,8 +673,8 @@ namespace exact_algo {
             auto end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
             report_mem_peak();
-            malloc_count_print_status();
-            malloc_count_reset_peak();
+            //malloc_count_print_status();
+            //malloc_count_reset_peak();
         }
     }
 

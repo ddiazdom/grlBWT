@@ -3,7 +3,7 @@
 //
 
 #include "opt_ind_phase.hpp"
-#include "malloc_count.h"
+//#include "malloc_count.h"
 
 namespace opt_algo {
     void insert_ssr(size_t freq, size_t &ssr_pos, size_t &next_lim, size_t &consumed_syms, size_t new_bwt_size,
@@ -671,8 +671,8 @@ namespace opt_algo {
             auto end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
             report_mem_peak();
-            malloc_count_print_status();
-            malloc_count_reset_peak();
+            //malloc_count_print_status();
+            //malloc_count_reset_peak();
         }
     }
 
