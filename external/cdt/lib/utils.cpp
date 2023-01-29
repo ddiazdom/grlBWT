@@ -113,7 +113,7 @@ str_collection collection_stats(std::string& input_file){
     char buffer[8192]={0};
     size_t read_bytes, str_len;
     std::streampos buff_size=8192;
-    uint8_t sym;
+    uint8_t sym=255;
 
     while(true){
         ifs.read((char *)&buffer, buff_size);

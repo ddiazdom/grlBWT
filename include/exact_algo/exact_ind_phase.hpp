@@ -5,7 +5,7 @@
 #ifndef EXACT_GRLBWT_HPP
 #define EXACT_GRLBWT_HPP
 
-#include "../../old_v2/lc_gram_algo.hpp"
+#include "exact_par_phase.hpp"
 #include "utils.h"
 
 namespace exact_algo {
