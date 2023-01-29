@@ -33,7 +33,9 @@ struct int_array{
         size_t m_idx;
 
     public:
-        proxy(int_array & _arr, size_t _idx) : m_arr(_arr), m_idx(_idx) {}
+        proxy(int_array & _arr, size_t _idx) : m_arr(_arr), m_idx(_idx) {
+            assert(m_idx<m_arr.m_cap);
+        }
 
         operator value_type() const {
             return m_arr.bits.read(m_idx * m_arr.m_width, (m_idx + 1) * m_arr.m_width - 1);

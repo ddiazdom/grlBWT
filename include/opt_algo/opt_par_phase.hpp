@@ -137,11 +137,9 @@ namespace opt_algo {
         }
     };
 
-    template<typename parse_data_t,
-            typename parser_t>
+    template<class parse_data_t,
+            class parser_t>
     struct opt_hash_functor{
-
-        typedef parser_t parser_type;
 
         void operator()(parse_data_t& data) {
 
@@ -179,15 +177,16 @@ namespace opt_algo {
         };
     };
 
-    template<typename parse_data_t,
-            typename parser_t>
+    template<class parse_data_t,
+            class parser_t,
+            class o_stream_t>
     struct opt_parse_functor{
 
-        typedef parser_t parser_type;
+        size_t operator()(parse_data_t& data) {
 
-        void operator()(parse_data_t& data) {
+            o_stream_t ofs(data.o_file, BUFFER_SIZE, std::ios::out);
+
             size_t str_len;
-
             auto phrase2symbol = [&](string_t& phrase){
                 phrase.mask_tail();
                 auto res = data.map.find(phrase.data(), phrase.n_bits());
@@ -196,7 +195,7 @@ namespace opt_algo {
                 data.map.get_value_from(res.first, sym);
 
                 if(phrase.size()<str_len){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
-                    data.ofs.push_back(sym);
+                    ofs.push_back(sym);
                 }
             };
 
@@ -208,17 +207,18 @@ namespace opt_algo {
                 str_len = end-start+1;
 
                 if((str+1)<=data.end){
-                    data.str_ptr[str+1] = data.ofs.size()-1;
+                    data.str_ptr[str+1] = ofs.size()-1;
                 }
                 return {start, end};
             };
 
             parser_t()(data.ifs, data.start, data.end, data.max_symbol, phrase2symbol, init_str);
 
-            data.str_ptr[data.start] = data.ofs.size()-1;
+            data.str_ptr[data.start] = ofs.size()-1;
 
-            data.ofs.close();
+            ofs.close();
             data.ifs.close();
+            return ofs.size();
             //pthread_exit(nullptr);
         };
     };
@@ -247,11 +247,10 @@ namespace opt_algo {
     template<class vector_type, class sa_type>
     size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &config);
 
-    typedef st_parse_strat_t<byte_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream> opt_st_byte_parse_strategy;
-    typedef st_parse_strat_t<int_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream>  opt_st_int_parse_strategy;
-
-    typedef mt_parse_strat_t<byte_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream> opt_mt_byte_parse_strategy;
-    typedef mt_parse_strat_t<int_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream>  opt_mt_int_parse_strategy;
+    //typedef st_parse_strat_t<byte_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream> opt_st_byte_parse_strategy;
+    //typedef st_parse_strat_t<int_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream>  opt_st_int_parse_strategy;
+    //typedef mt_parse_strat_t<byte_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream> opt_mt_byte_parse_strategy;
+    //typedef mt_parse_strat_t<int_parser_t, opt_hash_functor, opt_parse_functor, int_o_stream>  opt_mt_int_parse_strategy;
 
 #endif //GRLBWT_OPT_PAR_PHASE_H
 }

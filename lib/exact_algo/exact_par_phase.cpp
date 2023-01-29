@@ -5,19 +5,20 @@
 #include "exact_par_phase.hpp"
 #include "exact_LMS_induction.h"
 
-#include "malloc_count.h"
+//#include "malloc_count.h"
 
 namespace exact_algo {
 
     template<class sa_type>
     void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases_ht, bv_t& phr_marks, parsing_info& p_info, tmp_workspace& ws) {
 
+        string_t phrase(2, sym_width(dict.alphabet));
+
         dict.alphabet+=3;
         dict.metasym_dummy= dict.alphabet+s_sa.size()+1;
 
         size_t alphabet = dict.alphabet;
         size_t meta_sym_dummy = dict.metasym_dummy;
-        string_t phrase(2, sym_width(alphabet));
 
         size_t pos, new_size=0, l_sym, r_sym;
         vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
@@ -39,11 +40,27 @@ namespace exact_algo {
                 assert(l_sym<alphabet);
 
                 if(phr_marks[pos]){
+
+                    //TODO
+                    /*if(p_info.p_round==11){
+                        std::cout<<"\n"<<pos<<std::endl;
+                    }*/
+                    //
+
                     phrase.clear();
                     do{
                         phrase.push_back(dict.dict[pos]);
                     }while(!dict.d_lim[pos++]);
                     phrase.mask_tail();
+
+                    //TODO
+                    /*if(p_info.p_round==11){
+                        for(size_t i=0;i<phrase.size();i++){
+                            std::cout<<phrase[i]<<" ";
+                        }
+                        std::cout<<""<<std::endl;
+                    }*/
+                    //
 
                     auto res = new_phrases_ht.find(phrase.data(), phrase.n_bits());
                     assert(res.second);
@@ -84,7 +101,7 @@ namespace exact_algo {
             memset(sa.data(), 0, sa.size()*sizeof(typename sa_type::value_type));
         }
 
-        std::cout << "    Sorting the dictionary and constructing the preliminary BWT" << std::flush;
+        std::cout <<"    Sorting the dictionary and constructing the preliminary BWT" << std::flush;
         auto start = std::chrono::steady_clock::now();
         suffix_induction<vector_type, sa_type>(dict, sa);
 
@@ -114,6 +131,7 @@ namespace exact_algo {
     produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_ht, bv_t &phr_marks, parsing_info &p_info,
                     tmp_workspace &ws) {
 
+
         string_t phrase(2, sym_width(dict.alphabet));
 
         size_t n_breaks=0, n_phrases=0, acc_freq=0, null_sym=std::numeric_limits<size_t>::max();
@@ -123,8 +141,8 @@ namespace exact_algo {
         bv_rs_t d_lim_rs(&dict.d_lim);
 
         std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
-        size_t sb = INT_CEIL(sdsl::bits::hi(dict.bwt_dummy)+1, 8);
-        size_t fb = INT_CEIL(sdsl::bits::hi(dict.t_size)+1,8);
+        size_t sb = INT_CEIL(sym_width(dict.hocc_dummy), 8);
+        size_t fb = INT_CEIL(sym_width(dict.t_size),8);
         bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
 
         vector_t ranks(dict.n_phrases, 0, sym_width(dict.dict.size())+1);
@@ -169,11 +187,29 @@ namespace exact_algo {
                         do{
                             phrase.push_back(dict.dict[samp_pos]);
                         } while(!dict.d_lim[samp_pos++]);
-                        phrase.mask_tail();
 
+                        phrase.mask_tail();
                         auto res = new_phrases_ht.insert(phrase.data(), phrase.n_bits(), rank);
                         assert(res.second);
                         dict.phrases_has_hocc[rank] = true;
+
+                        //TODO
+                        /*if(p_info.p_round==11){
+                            for(size_t i=0;i<phrase.size();i++){
+                                std::cout<<phrase[i]<<" ";
+                            }
+                            std::cout<<" "<<std::endl;
+                            for (size_t j = bg_range; j <= u; j++) {
+                                std::cout<<" -> "<<((sa[j] >> 1UL) - 1)<<" : ";
+                                size_t tmp = ((sa[j] >> 1UL) - 1);
+                                do{
+                                    std::cout<<dict.dict[tmp]<<" ";
+                                }while(!dict.d_lim[tmp++]);
+                                std::cout<<""<<std::endl;
+                            }
+                        }*/
+                        //
+
                         for (size_t j = bg_range; j <= u; j++) {
                             phr_marks[(sa[j] >> 1UL) - 1] = true;
                         }
@@ -207,7 +243,7 @@ namespace exact_algo {
         dict.freqs.erase();
         store_to_file(ws.get_file("phr_ranks"), ranks);
         ranks.erase();
-        new_phrases_ht.shrink_databuff();
+        //new_phrases_ht.shrink_databuff();
 
 #ifdef __linux__
         malloc_trim(0);
@@ -236,8 +272,28 @@ namespace exact_algo {
         return n_phrases;
     }
 
-    size_t par_phase(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection &str_coll,
-                           tmp_workspace &ws) {
+    template<class par_type>
+    size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_info,
+                         size_t hbuff_size, size_t n_threads, bv_t& symbol_desc, tmp_workspace& ws){
+        size_t alph_size;
+        if (n_threads > 1) {
+            {
+                using par_strat_t = mt_parse_strat_t<par_type, ext_hash_functor, ext_parse_functor>;
+                par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
+                alph_size = exact_algo::par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
+            }
+        } else {
+            {
+                using par_strat_t = st_parse_strat_t<par_type, ext_hash_functor, ext_parse_functor>;
+                par_strat_t p_strat(i_file, o_file, p_info);
+                alph_size = exact_algo::par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
+            }
+        }
+        return alph_size;
+    }
+
+    size_t par_phase(std::string &i_file, size_t n_threads, size_t hbuff_size,
+                     str_collection &str_coll, tmp_workspace &ws) {
 
         std::cout << "Parsing the text:    " << std::endl;
         std::string output_file = ws.get_file("tmp_output");
@@ -261,35 +317,34 @@ namespace exact_algo {
         p_info.active_strings = str_coll.n_strings;
 
         size_t iter = 1;
-        size_t rem_phrases;
+        size_t n_syms;
 
         std::cout << "  Parsing round " << iter++ << std::endl;
         auto start = std::chrono::steady_clock::now();
-        if (n_threads > 1) {
-            {
-                ext_mt_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, hbuff_size, n_threads);
-                rem_phrases = exact_algo::par_round<ext_mt_byte_parse_strategy>(p_strat, p_info, symbol_desc, ws);
-            }
-        } else {
-            {
-                ext_st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, symbol_desc);
-                rem_phrases = exact_algo::par_round<ext_st_byte_parse_strategy>(p_strat, p_info, symbol_desc, ws);
-            }
-        }
+        n_syms = par_phase_int<char_parser_t>(i_file, tmp_i_file, p_info,
+                                                hbuff_size, n_threads, symbol_desc, ws);
         auto end = std::chrono::steady_clock::now();
-        report_time(start, end, 4);
-        malloc_count_print_status();
-        malloc_count_reset_peak();
 
-        while (rem_phrases > 0) {
+        report_time(start, end, 4);
+        //malloc_count_print_status();
+        //malloc_count_reset_peak();
+
+        while (n_syms > 0) {
             start = std::chrono::steady_clock::now();
             std::cout << "  Parsing round " << iter++ << std::endl;
-            if (n_threads > 1) {
-                ext_mt_int_parse_strategy p_strat(tmp_i_file, output_file, p_info, hbuff_size, n_threads);
-                rem_phrases = exact_algo::par_round<ext_mt_int_parse_strategy>(p_strat, p_info, symbol_desc, ws);
-            } else {
-                ext_st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info, symbol_desc);
-                rem_phrases = exact_algo::par_round<ext_st_int_parse_strategy>(p_strat, p_info, symbol_desc, ws);
+            size_t bps = sym_width(n_syms)+1;
+            if(bps<=8){
+                n_syms = par_phase_int<uint8t_parser_t>(tmp_i_file, output_file, p_info,
+                                                        hbuff_size, n_threads, symbol_desc, ws);
+            }else if(bps<=16){
+                n_syms = par_phase_int<uint16t_parser_t>(tmp_i_file, output_file, p_info,
+                                                         hbuff_size, n_threads, symbol_desc, ws);
+            } else if(bps<=32){
+                n_syms = par_phase_int<uint32t_parser_t>(tmp_i_file, output_file, p_info,
+                                                         hbuff_size, n_threads, symbol_desc, ws);
+            } else{
+                n_syms = par_phase_int<uint64t_parser_t>(tmp_i_file, output_file, p_info,
+                                                         hbuff_size, n_threads, symbol_desc, ws);
             }
             end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
@@ -297,8 +352,8 @@ namespace exact_algo {
             remove(tmp_i_file.c_str());
             rename(output_file.c_str(), tmp_i_file.c_str());
 
-            malloc_count_print_status();
-            malloc_count_reset_peak();
+            //malloc_count_print_status();
+            //malloc_count_reset_peak();
         }
 
         sdsl::util::clear(symbol_desc);
@@ -390,7 +445,18 @@ namespace exact_algo {
         std::cout << "    Creating the parse of the text" << std::flush;
         start = std::chrono::steady_clock::now();
         load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
-        psize = p_strategy.parse_text();
+
+        size_t bps = sym_width(tot_phrases)+1;
+        if(bps<=8){
+            psize = p_strategy.template parse_text<uint8_t>();
+        }else if(bps<=16){
+            psize = p_strategy.template parse_text<uint16_t>();
+        } else if(bps<=32){
+            psize = p_strategy.template parse_text<uint32_t>();
+        }else{
+            psize = p_strategy.template parse_text<uint64_t>();
+        }
+
         end = std::chrono::steady_clock::now();
         report_time(start, end, 31);
 
@@ -415,7 +481,7 @@ namespace exact_algo {
 
         map.destroy_data();
         map.destroy_table();
-        return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.lms_phrases;
+        return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
         /*else { //just copy the input
 
             / * std::ifstream in(i_file, std::ios_base::binary);
@@ -433,9 +499,4 @@ namespace exact_algo {
             return 0;
         }*/
     }
-
-    template size_t par_round<ext_st_byte_parse_strategy>(ext_st_byte_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-    template size_t par_round<ext_st_int_parse_strategy>(ext_st_int_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-    template size_t par_round<ext_mt_byte_parse_strategy>(ext_mt_byte_parse_strategy &p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-    template size_t par_round<ext_mt_int_parse_strategy>(ext_mt_int_parse_strategy &p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
 }

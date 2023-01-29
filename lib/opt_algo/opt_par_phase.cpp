@@ -7,7 +7,7 @@
 #include "bwt_io.h"
 #include "opt_LMS_induction.h"
 
-#include "malloc_count.h"
+//#include "malloc_count.h"
 
 namespace opt_algo {
 
@@ -396,8 +396,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
 
-        malloc_count_print_status();
-        malloc_count_reset_peak();
+        //malloc_count_print_status();
+        //malloc_count_reset_peak();
 
         std::cout<<"    Finishing the preliminary BWT"<<std::flush;
         start = std::chrono::steady_clock::now();
@@ -439,6 +439,26 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         return n_phrases;
     }
 
+    template<class par_type>
+    size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_info,
+                         size_t hbuff_size, size_t n_threads, bv_t& symbol_desc, tmp_workspace& ws){
+        size_t alph_size;
+        if (n_threads > 1) {
+            {
+                using par_strat_t = mt_parse_strat_t<par_type, opt_hash_functor, opt_parse_functor>;
+                par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
+                alph_size = opt_algo::par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
+            }
+        } else {
+            {
+                using par_strat_t = st_parse_strat_t<par_type, opt_hash_functor, opt_parse_functor>;
+                par_strat_t p_strat(i_file, o_file, p_info);
+                alph_size = opt_algo::par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
+            }
+        }
+        return alph_size;
+    }
+
     size_t par_phase(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection& str_coll, tmp_workspace &ws) {
 
         std::cout<<"Parsing the text:    "<<std::endl;
@@ -463,42 +483,40 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         p_info.active_strings = str_coll.n_strings;
 
         size_t iter=1;
-        size_t rem_phrases;
+        size_t n_syms;
 
         std::cout<<"  Parsing round "<<iter++<<std::endl;
         auto start = std::chrono::steady_clock::now();
-        if(n_threads>1) {
-            {
-                opt_mt_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, hbuff_size, n_threads);
-                rem_phrases = par_round<opt_mt_byte_parse_strategy>(p_strat, p_info, symbol_desc, ws);
-            }
-        }else{
-            {
-                opt_st_byte_parse_strategy p_strat(i_file, tmp_i_file, p_info, symbol_desc);
-                rem_phrases = par_round<opt_st_byte_parse_strategy>(p_strat, p_info, symbol_desc, ws);
-            }
-        }
+        n_syms = par_phase_int<uint8t_parser_t>(i_file, tmp_i_file, p_info,
+                                                hbuff_size, n_threads, symbol_desc, ws);
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 4);
-        malloc_count_print_status();
-        malloc_count_reset_peak();
+        //malloc_count_print_status();
+        //malloc_count_reset_peak();
 
-        while (rem_phrases > 0) {
+        while (n_syms > 0) {
             start = std::chrono::steady_clock::now();
             std::cout<<"  Parsing round "<<iter++<<std::endl;
-            if(n_threads>1) {
-                opt_mt_int_parse_strategy p_strat( tmp_i_file, output_file, p_info, hbuff_size, n_threads);
-                rem_phrases = par_round<opt_mt_int_parse_strategy>(p_strat, p_info, symbol_desc, ws);
-            }else{
-                opt_st_int_parse_strategy p_strat(tmp_i_file, output_file, p_info, symbol_desc);
-                rem_phrases = par_round<opt_st_int_parse_strategy>(p_strat, p_info, symbol_desc, ws);
+            size_t bps = sym_width(n_syms)+1;
+            if(bps<=8){
+                n_syms = par_phase_int<uint8t_parser_t>(tmp_i_file, output_file, p_info,
+                                                        hbuff_size, n_threads, symbol_desc, ws);
+            }else if(bps<=16){
+                n_syms = par_phase_int<uint16t_parser_t>(tmp_i_file, output_file, p_info,
+                                                         hbuff_size, n_threads, symbol_desc, ws);
+            } else if(bps<=32){
+                n_syms = par_phase_int<uint32t_parser_t>(tmp_i_file, output_file, p_info,
+                                                         hbuff_size, n_threads, symbol_desc, ws);
+            } else{
+                n_syms = par_phase_int<uint64t_parser_t>(tmp_i_file, output_file, p_info,
+                                                         hbuff_size, n_threads, symbol_desc, ws);
             }
             end = std::chrono::steady_clock::now();
             report_time(start, end,4);
             remove(tmp_i_file.c_str());
             rename(output_file.c_str(), tmp_i_file.c_str());
-            malloc_count_print_status();
-            malloc_count_reset_peak();
+            //malloc_count_print_status();
+            //malloc_count_reset_peak();
         }
 
         sdsl::util::clear(symbol_desc);
@@ -590,7 +608,18 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         std::cout<<"    Creating the parse of the text"<<std::flush;
         start = std::chrono::steady_clock::now();
         load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
-        psize = p_strategy.parse_text();
+
+        size_t bps = sym_width(tot_phrases)+1;
+        if(bps<=8){
+            psize = p_strategy.template parse_text<uint8_t>();
+        }else if(bps<=16){
+            psize = p_strategy.template parse_text<uint16_t>();
+        }else if(bps<=32){
+            psize = p_strategy.template parse_text<uint32_t>();
+        }else{
+            psize = p_strategy.template parse_text<uint64_t>();
+        }
+
         end = std::chrono::steady_clock::now();
         report_time(start, end, 31);
 
@@ -620,7 +649,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         if(psize==0){
             return 0;
         }else{
-            return p_info.lms_phrases;
+            return p_info.tot_phrases;
         }
         //}
 
@@ -642,8 +671,8 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         }*/
     }
 
-    template size_t par_round<opt_st_byte_parse_strategy>(opt_st_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-    template size_t par_round<opt_st_int_parse_strategy>(opt_st_int_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-    template size_t par_round<opt_mt_byte_parse_strategy>(opt_mt_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
-    template size_t par_round<opt_mt_int_parse_strategy>(opt_mt_int_parse_strategy& p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    //template size_t par_round<opt_st_byte_parse_strategy>(opt_st_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    //template size_t par_round<opt_st_int_parse_strategy>(opt_st_int_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    //template size_t par_round<opt_mt_byte_parse_strategy>(opt_mt_byte_parse_strategy& p_strat, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
+    //template size_t par_round<opt_mt_int_parse_strategy>(opt_mt_int_parse_strategy& p_start, parsing_info &p_gram, bv_t &phrase_desc, tmp_workspace &ws);
 }

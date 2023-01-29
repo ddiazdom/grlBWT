@@ -12,7 +12,7 @@
 namespace exact_algo {
 
     template<typename parse_data_t,
-            typename parser_t>
+             typename parser_t>
     struct ext_hash_functor{
 
         void operator()(parse_data_t& data) {
@@ -41,11 +41,14 @@ namespace exact_algo {
         };
     };
 
-    template<typename parse_data_t,
-            typename parser_t>
+    template<class parse_data_t,
+             class parser_t,
+             class o_stream_type>
     struct ext_parse_functor{
 
-        void operator()(parse_data_t& data) {
+        size_t operator()(parse_data_t& data) {
+
+            o_stream_type ofs(data.o_file, BUFFER_SIZE, std::ios::out);
 
             auto phrase2symbol = [&](string_t& phrase){
                 phrase.mask_tail();
@@ -53,7 +56,7 @@ namespace exact_algo {
                 assert(res.second);
                 size_t sym = 0;
                 data.map.get_value_from(res.first, sym);
-                data.ofs.push_back(sym);
+                ofs.push_back(sym);
             };
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
@@ -63,18 +66,19 @@ namespace exact_algo {
                 size_t end = data.str_ptr[str+1]-1;
 
                 if((str+1)<=data.end){
-                    data.str_ptr[str+1] = data.ofs.size()-1;
+                    data.str_ptr[str+1] = ofs.size()-1;
                 }
                 return {start, end};
             };
 
             parser_t()(data.ifs, data.start, data.end, data.max_symbol, phrase2symbol, init_str);
 
-            data.str_ptr[data.start] = data.ofs.size()-1;
+            data.str_ptr[data.start] = ofs.size()-1;
 
-            data.ofs.close();
             data.ifs.close();
+            ofs.close();
             //pthread_exit(nullptr);
+            return ofs.size();
         };
     };
 
@@ -185,9 +189,5 @@ namespace exact_algo {
     void produce_grammar(dictionary& dict, sa_type& s_sa, phrase_map_t& new_phrases_ht,
                          bv_t& phr_marks, parsing_info& p_info, tmp_workspace& ws);
 
-    typedef st_parse_strat_t<byte_parser_t, ext_hash_functor, ext_parse_functor, int_o_stream> ext_st_byte_parse_strategy;
-    typedef st_parse_strat_t<int_parser_t, ext_hash_functor, ext_parse_functor, int_o_stream>  ext_st_int_parse_strategy;
-    typedef mt_parse_strat_t<byte_parser_t, ext_hash_functor, ext_parse_functor, int_o_stream> ext_mt_byte_parse_strategy;
-    typedef mt_parse_strat_t<int_parser_t, ext_hash_functor, ext_parse_functor, int_o_stream>  ext_mt_int_parse_strategy;
 }
 #endif //GRLBWT_EXACT_PAR_PHASE_H
