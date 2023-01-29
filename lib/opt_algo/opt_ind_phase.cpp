@@ -4,6 +4,7 @@
 
 #include "opt_ind_phase.hpp"
 //#include "malloc_count.h"
+#include "bwt_io.h"
 
 namespace opt_algo {
     void insert_ssr(size_t freq, size_t &ssr_pos, size_t &next_lim, size_t &consumed_syms, size_t new_bwt_size,

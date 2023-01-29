@@ -5,12 +5,10 @@
 #ifndef OPT_GRLBWT_HPP
 #define OPT_GRLBWT_HPP
 
-#include "bwt_io.h"
-#include "utils.h"
-#include "common.h"
-#include "../../old_v2/lc_gram_algo.hpp"
+#include "opt_par_phase.hpp"
 
 namespace opt_algo {
+
     size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buckets, size_t p_round,
                                  tmp_workspace &ws);
 
