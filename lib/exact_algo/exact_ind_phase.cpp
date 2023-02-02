@@ -119,7 +119,7 @@ namespace exact_algo {
         size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
 
         size_t al_b = INT_CEIL(sym_width(dict.alphabet), 8);
-        size_t fr_b = 1;
+        size_t fr_b = b_f_r;
         size_t bps = al_b + fr_b;
 
         bit_hash_table<uintptr_t, sizeof(uintptr_t) * 8, size_t, 8, true> ht;
@@ -251,6 +251,10 @@ namespace exact_algo {
 
         end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
+
+        //TODO just a test
+        ht.dist_stats(10);
+        //
 
         std::cout << "    Assembling the new BWT" << std::flush;
         start = std::chrono::steady_clock::now();

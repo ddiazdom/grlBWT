@@ -23,6 +23,11 @@ namespace exact_algo {
         size_t pos, new_size=0, l_sym, r_sym;
         vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
 
+        //TODO testing
+        //std::cout<<"\ndist stats"<<std::endl;
+        //new_phrases_ht.dist_stats(10);
+        //
+
         for(size_t u=0;u<s_sa.size();u++) {
 
             pos = s_sa[u];
