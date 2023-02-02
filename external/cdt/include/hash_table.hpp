@@ -951,6 +951,30 @@ public:
         return  tot_bytes;
     }
 
+    void dist_stats(size_t top){
+        std::vector<size_t> freqs(max_bck_dist+1, 0);
+        size_t dist;
+        for(size_t i=0;i<n_buckets;i++){
+            if(table[i]!=0){
+                dist = table[i]>>44UL;
+                assert(dist<=max_bck_dist);
+                freqs[dist]++;
+            }
+        }
+
+        std::vector<std::pair<size_t, size_t>> pairs(freqs.size());
+        for(size_t i=0;i<pairs.size();i++){
+            pairs[i] = {i, freqs[i]};
+        }
+        std::sort(pairs.begin(), pairs.end(), [&](auto &a, auto &b){
+            return a.second>b.second;
+        });
+
+        for(size_t i=0;i<=std::min(top, max_bck_dist);i++){
+            std::cout<<"Bck dist:"<<pairs[i].first<<" freq:"<<pairs[i].second<<" ( "<<(double(pairs[i].second)/n_elms)*100<<"% )"<<std::endl;
+        }
+    }
+
     void load_data_from_file(const std::string& input){
         assert(table==nullptr && data.stream== nullptr && !static_buffer);
         std::ifstream ifs(input, std::ios_base::binary);
