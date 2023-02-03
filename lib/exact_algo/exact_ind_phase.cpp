@@ -253,7 +253,7 @@ namespace exact_algo {
         report_time(start, end, 2);
 
         //TODO just a test
-        ht.dist_stats(10);
+        ht.ht_stats(10);
         //
 
         std::cout << "    Assembling the new BWT" << std::flush;

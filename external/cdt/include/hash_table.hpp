@@ -674,6 +674,11 @@ public:
                         }
                     }
 
+                    //TODO test
+                    if(dist>limit_bck_dist){
+                        ht_stats(10);
+                    }
+                    //
                     assert(dist<=limit_bck_dist);
                     if(dist>max_bck_dist) max_bck_dist = dist;
 
@@ -697,6 +702,11 @@ public:
                 }
             }
 
+            //TODO test
+            if(dist>limit_bck_dist){
+                ht_stats(10);
+            }
+            //
             assert(dist<=limit_bck_dist);
             if(dist>max_bck_dist) max_bck_dist = dist;
 
@@ -951,7 +961,7 @@ public:
         return  tot_bytes;
     }
 
-    void dist_stats(size_t top){
+    void ht_stats(size_t top){
         std::vector<size_t> freqs(max_bck_dist+1, 0);
         size_t dist;
         for(size_t i=0;i<n_buckets;i++){
@@ -970,6 +980,9 @@ public:
             return a.second>b.second;
         });
 
+        std::cout<<"\nsize "<<size()<<std::endl;
+        std::cout<<"n_buckets "<<tot_buckets()<<std::endl;
+        std::cout<<"load factor: "<<load_factor()<<std::endl;
         for(size_t i=0;i<=std::min(top, max_bck_dist);i++){
             std::cout<<"Bck dist:"<<pairs[i].first<<" freq:"<<pairs[i].second<<" ( "<<(double(pairs[i].second)/n_elms)*100<<"% )"<<std::endl;
         }
