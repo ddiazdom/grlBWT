@@ -111,6 +111,10 @@ namespace exact_algo {
         sdsl::load_from_file(dict, dict_file);
         bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
+        //TODO fixing bug
+        std::ofstream ofs("fixing_bug", std::ios::out);
+        //
+
         size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1, max_run_len = (1UL << (b_f_r * 8)) - 1;
 
         std::cout << "    Computing the number of induced symbols" << std::flush;
@@ -159,6 +163,11 @@ namespace exact_algo {
                         new_freq += freq;
                         if (new_freq > max_run_len) {
                             auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr - bps);
+
+                            //TODO fixing bug
+                            ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                            //
+
                             auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                             if (!res.second) {
                                 size_t tmp = 0;
@@ -175,6 +184,9 @@ namespace exact_algo {
                     size_t new_freq = freq;
                     if (new_freq > max_run_len) {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
+                        //TODO fixing bug
+                        ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                        //
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                         assert(res.second);
                         new_freq = 0;
@@ -212,6 +224,9 @@ namespace exact_algo {
                         new_freq += freq;
                         if (new_freq > max_run_len) /*[[unlikely]]*/ {
                             auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr - bps);
+                            //TODO fixing bug
+                            ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                            //
                             auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                             if (!res.second) {
                                 size_t tmp = 0;
@@ -228,6 +243,9 @@ namespace exact_algo {
                     size_t new_freq = freq;
                     if (new_freq > max_run_len) /*[[unlikely]]*/ {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
+                        //TODO fixing bug
+                        ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                        //
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                         assert(res.second);
                         new_freq = 0;
@@ -252,7 +270,8 @@ namespace exact_algo {
         end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
 
-        //TODO just a test
+        //TODO fixing bug
+        ofs.close();
         ht.ht_stats(10);
         //
 
