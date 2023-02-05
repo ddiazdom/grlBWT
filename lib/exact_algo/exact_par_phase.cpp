@@ -25,7 +25,7 @@ namespace exact_algo {
 
         //TODO testing
         //std::cout<<"\ndist stats"<<std::endl;
-        new_phrases_ht.ht_stats(10);
+        //new_phrases_ht.ht_stats(10);
         //
 
         for(size_t u=0;u<s_sa.size();u++) {
