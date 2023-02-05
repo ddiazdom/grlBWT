@@ -106,21 +106,10 @@ namespace exact_algo {
     template<uint8_t b_f_r>
     void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
-        //TODO
-        if(p_round==0){
-            std::cout<<"terminating before to check a bug"<<std::endl;
-            exit(0);
-        }
-        //
-
         dictionary dict;
         std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
         sdsl::load_from_file(dict, dict_file);
         bv_rs_t hocc_rs(&dict.phrases_has_hocc);
-
-        //TODO fixing bug
-        std::ofstream ofs("fixing_bug", std::ios::out);
-        //
 
         size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1, max_run_len = (1UL << (b_f_r * 8)) - 1;
 
@@ -133,7 +122,7 @@ namespace exact_algo {
         size_t fr_b = b_f_r;
         size_t bps = al_b + fr_b;
 
-        bit_hash_table<uintptr_t, sizeof(uintptr_t) * 8, size_t, 8, true> ht;
+        bit_hash_table<uintptr_t, sizeof(uintptr_t)*8, 8> ht;
 
         auto *hocc = (char *) malloc(n_runs * bps);
         memset(hocc, 0, n_runs * bps);
@@ -172,7 +161,7 @@ namespace exact_algo {
                             auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr - bps);
 
                             //TODO fixing bug
-                            ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                            //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
                             //
 
                             auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
@@ -192,7 +181,7 @@ namespace exact_algo {
                     if (new_freq > max_run_len) {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                         //TODO fixing bug
-                        ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                        //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
                         //
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                         assert(res.second);
@@ -232,7 +221,7 @@ namespace exact_algo {
                         if (new_freq > max_run_len) /*[[unlikely]]*/ {
                             auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr - bps);
                             //TODO fixing bug
-                            ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                            //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
                             //
                             auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                             if (!res.second) {
@@ -251,7 +240,7 @@ namespace exact_algo {
                     if (new_freq > max_run_len) /*[[unlikely]]*/ {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
                         //TODO fixing bug
-                        ofs <<ptr_addr<<" "<<new_freq <<std::endl;
+                        //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
                         //
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                         assert(res.second);
@@ -277,8 +266,8 @@ namespace exact_algo {
         report_time(start, end, 2);
 
         //TODO fixing bug
-        ofs.close();
-        ht.ht_stats(10);
+        //ofs.close();
+        //ht.ht_stats(10);
         //
 
         std::cout << "    Assembling the new BWT" << std::flush;

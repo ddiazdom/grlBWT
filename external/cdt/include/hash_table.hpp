@@ -124,16 +124,16 @@ public:
 
 template<class value_t,
          size_t val_bits=sizeof(value_t)*8,
-         class buffer_t=size_t,
-         size_t desc_bits=32,
-         bool short_key=false>
+         size_t desc_bits=32>
 class bit_hash_table{
 
 private:
-    typedef bit_hash_table<value_t, val_bits, buffer_t, desc_bits, short_key> ht_type;
-    typedef bitstream<buffer_t>                                               stream_t;
-    typedef bit_hash_table_iterator<ht_type>                                  iterator;
-    friend                                                                    iterator;
+
+    typedef bit_hash_table<value_t, val_bits, desc_bits> ht_type;
+    typedef size_t                                       buffer_t;
+    typedef bitstream<size_t>                            stream_t;
+    typedef bit_hash_table_iterator<ht_type>             iterator;
+    friend                                               iterator;
 
     //limit bucket distance allowed for the data in the hash table
     const size_t limit_bck_dist = 0xFFFF;
@@ -251,12 +251,7 @@ private:
 
             data.read_chunk(tmp_key, data_offset + d_bits, data_offset + d_bits + key_bits - 1);
 
-            if constexpr(short_key){
-                hash = (*(reinterpret_cast<const size_t*>(tmp_key)));
-                hash =  hash & bitstream<buffer_t>::masks[key_bits];
-            }else{
-                hash = XXH3_64bits(tmp_key, key_bytes);
-            }
+            hash = XXH3_64bits(tmp_key, key_bytes);
 
             idx = hash & (n_buckets - 1);
             tmp_offset = data_offset + 1;
@@ -560,13 +555,7 @@ public:
 
     std::pair<size_t, bool> insert_new(const void* key, const size_t& key_bits, const value_t& val){
 
-        size_t hash;
-        if constexpr(short_key){
-            hash = (*(reinterpret_cast<const size_t*>(key)));
-            hash =  hash & bitstream<buffer_t>::masks[key_bits];
-        }else{
-            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
-        }
+        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1), in_offset;
 
@@ -628,13 +617,7 @@ public:
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
         assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
-        size_t hash;
-        if constexpr(short_key){
-            hash = (*(reinterpret_cast<const size_t*>(key)));
-            hash =  hash & bitstream<buffer_t>::masks[key_bits];
-        }else{
-            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
-        }
+        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1);
         size_t in_offset=0;//locus where the key is inserted
@@ -798,13 +781,7 @@ public:
 
     inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
 
-        size_t hash;
-        if constexpr(short_key){
-            hash = (*(reinterpret_cast<const size_t*>(key)));
-            hash =  hash & bitstream<buffer_t>::masks[key_bits];
-        }else{
-            hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
-        }
+        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1);
 
@@ -983,6 +960,7 @@ public:
         std::cout<<"\nsize "<<size()<<std::endl;
         std::cout<<"n_buckets "<<tot_buckets()<<std::endl;
         std::cout<<"load factor: "<<load_factor()<<std::endl;
+        std::cout<<"max_bck_dist: "<<max_bck_dist<<std::endl;
         for(size_t i=0;i<=std::min(top, max_bck_dist);i++){
             std::cout<<"Bck dist:"<<pairs[i].first<<" freq:"<<pairs[i].second<<" ( "<<(double(pairs[i].second)/n_elms)*100<<"% )"<<std::endl;
         }
