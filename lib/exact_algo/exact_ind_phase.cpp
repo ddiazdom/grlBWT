@@ -106,6 +106,13 @@ namespace exact_algo {
     template<uint8_t b_f_r>
     void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
+        //TODO
+        if(p_round==0){
+            std::cout<<"terminating before to check a bug"<<std::endl;
+            exit(0);
+        }
+        //
+
         dictionary dict;
         std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
         sdsl::load_from_file(dict, dict_file);
@@ -266,7 +273,6 @@ namespace exact_algo {
 #ifdef __linux__
         malloc_trim(0);
 #endif
-
         end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
 

@@ -162,6 +162,23 @@ struct bitstream{
         return (tmp_in[n_words - 1] & masks[(bits-read_bits)]) == read(i + read_bits, i+bits-1);
     }
 
+    //compare a segment of the stream with an external source of bits
+    /*inline bool compare_segment(const uint8_t* input, size_t i, size_t bits) const {
+
+        size_t n_words = INT_CEIL(bits, word_bits);
+        size_t left = i & (word_bits - 1UL);
+        size_t right = word_bits - left;
+
+        for(size_t k=0, cell_i=(i>>word_shift); k < n_words - 1; k+=8, cell_i++){
+            const size_t tmp_data = ((stream[cell_i] >> left) & masks[right]) | ((stream[cell_i+1] & masks[left]) << right);
+            if(memcmp(input+k, &tmp_data, sizeof(size_t))!=0) return false;
+        }
+
+        //size_t cell_i = i >> word_shift;
+        size_t read_bits = ((n_words - 1) << word_shift);
+        //return (tmp_in[n_words - 1] & masks[(bits-read_bits)]) == read(i + read_bits, i+bits-1);
+    }*/
+
     //compare the segment ]a-bits..a] with the segment ]b-bits..b+bits]
     //return the bit_pos (0-based) of the rightmost different bit (return len if the segments are equal)
     inline size_t inv_com_segments(size_t a, size_t b, size_t& bits) const {
