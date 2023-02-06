@@ -4,6 +4,7 @@
 #include <vector>
 #include "hash_table.hpp"
 #include "int_array.h"
+#include <chrono>
 #include <random>
 
 int main(int argc, char** argv) {
@@ -20,7 +21,7 @@ int main(int argc, char** argv) {
     std::uniform_int_distribution<std::mt19937::result_type> dist_short(2,100);
 
     std::vector<std::vector<size_t>> list(1000000, std::vector<size_t>());
-    ht.resize_table(2097152);
+    //ht.resize_table(2097152);
     for(auto & str : list){
         size_t length = dist_short(rng2);
         for(size_t j=0;j<length;j++){
