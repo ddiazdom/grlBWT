@@ -60,7 +60,6 @@ target_include_directories(grlbwt
         )
 
 target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS} external/malloc_count-master)
-
 add_executable(grlbwt-cli main.cpp)
 target_link_libraries(grlbwt-cli grlbwt biopar)
 target_include_directories(grlbwt-cli PUBLIC external/bioparsers/include)
@@ -98,3 +97,9 @@ target_include_directories(fix_bug_ht PUBLIC
         external/cdt/include
         external/cdt/include/xxHash-dev)
 
+target_compile_options(fix_bug_ht
+        PRIVATE
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic
+        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        INTERFACE
+        -Wshadow)
