@@ -298,17 +298,6 @@ private:
         return av_bytes;
     }
 
-    void resize_table(size_t new_n_buckets) {
-        assert(!static_buffer);
-        size_t new_table_bytes = new_n_buckets*sizeof(size_t);
-
-        assert(new_table_bytes <= av_tb_bytes());
-        table = reinterpret_cast<size_t*>(realloc(table, new_table_bytes));
-        n_buckets = new_n_buckets;
-        memset(table, 0, new_n_buckets * sizeof(size_t));
-        rehash();
-        m_load_factor = float(n_elms) / n_buckets;
-    };
 
     //increase the data buffer to insert bits_to_fit bits
     bool resize_data_buffer(size_t bits_to_fit) {
@@ -613,6 +602,20 @@ public:
         }
         return {in_offset-1, true};
     }
+
+    void resize_table(size_t new_n_buckets) {
+        assert(!static_buffer && new_n_buckets>0 && (new_n_buckets & (new_n_buckets-1))==0);
+        size_t new_table_bytes = new_n_buckets*sizeof(size_t);
+
+        assert(new_table_bytes <= av_tb_bytes());
+        table = reinterpret_cast<size_t*>(realloc(table, new_table_bytes));
+        n_buckets = new_n_buckets;
+        memset(table, 0, new_n_buckets * sizeof(size_t));
+        if(n_elms>0){
+            rehash();
+            m_load_factor = float(n_elms) / n_buckets;
+        }
+    };
 
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
         assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
