@@ -11,6 +11,7 @@
 #include <utility>
 #include "xxHash-dev/xxhash.h"
 #include "bitstream.h"
+#include <algorithm>
 #ifdef __linux__
 #include <malloc.h>
 #endif
