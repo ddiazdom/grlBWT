@@ -578,11 +578,13 @@ struct st_parse_strat_t {//parse data for single thread
         tmp_o_file = o_file.substr(0, o_file.size() - 4);
         tmp_o_file.append("_inv");
 
-        if(p_info.p_round==0){
-            auto n_buckets = std::max<size_t>(size_t(double(ifs.size())*0.06*0.4), 4);
-            std::cout<<" the buckets would be "<<n_buckets<<std::endl;
-        }else{
-
+        if(p_info.p_round==1){
+            auto n_buckets = std::max<size_t>(size_t(double(ifs.size())*0.2*0.4), 4);
+            n_buckets = next_power_of_two(n_buckets);
+            map.resize_table(n_buckets);
+        }else if(p_info.p_round>1){
+            size_t n_buckets = prev_power_of_two(p_info.lms_phrases);
+            map.resize_table(n_buckets);
         }
     }
 
