@@ -12,6 +12,8 @@
 #include "xxHash-dev/xxhash.h"
 #include "bitstream.h"
 #include <algorithm>
+#include <type_traits>
+#include <utility>
 #ifdef __linux__
 #include <malloc.h>
 #endif
@@ -185,7 +187,6 @@ private:
     //number of bits used in the key description
     size_t d_bits=0;
 
-
     //the variable query is a pointer containing the queried string
     inline bool equal(const void *query, size_t query_bits, size_t data_offset) const{
         size_t key_bits = data.read(data_offset, data_offset+d_bits-1);
@@ -220,7 +221,11 @@ private:
         idx+=key_bits;
 
         //write the value
-        data.write_chunk(&value, idx, idx+val_bits-1);
+        if constexpr (val_bits<=64){
+            data.write( idx, idx+val_bits-1, value);
+        }else{
+            data.write_chunk(&value, idx, idx+val_bits-1);
+        }
 
         if(key_bits>max_key_bits) max_key_bits = key_bits;
 
@@ -299,7 +304,6 @@ private:
         return av_bytes;
     }
 
-
     //increase the data buffer to insert bits_to_fit bits
     bool resize_data_buffer(size_t bits_to_fit) {
         assert(!static_buffer);
@@ -325,7 +329,7 @@ private:
             //minimum number of bytes we require for inserting the data
             size_t min_data_bytes = used_data_bytes+bytes_to_fit;
 
-            size_t new_size = size_t(data.stream_size*sizeof(buffer_t)*1.5);
+            auto new_size = size_t(data.stream_size*sizeof(buffer_t)*1.5);
             //maximum number of bytes we can allocate
             size_t new_data_bytes = std::min(std::max(min_data_bytes, new_size), max_buffer_bytes-table_bytes);
             data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_data_bytes));
@@ -543,6 +547,18 @@ public:
         }
     }
 
+    template<class val_t = value_t>
+    typename std::enable_if<std::is_unsigned<val_t>::value, void>::type
+    increment_value(const void* key, const size_t key_bits, value_t new_value) {
+        auto res = insert(key, key_bits, new_value);
+        if(res.second) return;
+
+        value_t old_value = data.read(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1);
+        new_value += old_value;
+        data.write(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1, new_value);
+    }
+
+    /*
     std::pair<size_t, bool> insert_new(const void* key, const size_t& key_bits, const value_t& val){
 
         size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
@@ -602,7 +618,7 @@ public:
             resize_table(new_size);
         }
         return {in_offset-1, true};
-    }
+    }*/
 
     void resize_table(size_t new_n_buckets) {
         assert(!static_buffer && new_n_buckets>0 && (new_n_buckets & (new_n_buckets-1))==0);
@@ -619,7 +635,7 @@ public:
     };
 
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
-        assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
+        //assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
         size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
 
@@ -661,18 +677,12 @@ public:
                         }
                     }
 
-                    //TODO test
-                    if(dist>limit_bck_dist){
-                        ht_stats(10);
-                    }
-                    //
                     assert(dist<=limit_bck_dist);
                     if(dist>max_bck_dist) max_bck_dist = dist;
 
                     table[idx] = (dist<<44UL) | offset;
                     offset = bck_offset;
                     dist = bck_dist+1;
-
                 }else{
                     dist++;
                 }
@@ -689,18 +699,13 @@ public:
                 }
             }
 
-            //TODO test
-            if(dist>limit_bck_dist){
-                ht_stats(10);
-            }
-            //
             assert(dist<=limit_bck_dist);
             if(dist>max_bck_dist) max_bck_dist = dist;
 
             table[idx] = (dist<<44UL) | offset ;
         }
 
-        assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
+        //assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
         finish:
         n_elms++;
@@ -812,13 +817,21 @@ public:
     //offset is the bit where the pair description starts
     inline void insert_value_at(size_t offset, value_t val){
         size_t value_start = offset + d_bits + data.read(offset, offset + d_bits - 1);
-        data.write_chunk(&val, value_start, value_start + val_bits - 1);
+        if constexpr (val_bits<=64){
+            data.write(value_start, value_start + val_bits - 1, val);
+        }else{
+            data.write_chunk(&val, value_start, value_start + val_bits - 1);
+        }
     }
 
     //offset is the bit where the pair description starts
     inline void get_value_from(size_t offset, value_t& dest) const {
         size_t value_start = offset + d_bits + data.read(offset, offset + d_bits - 1);
-        data.read_chunk(&dest, value_start, value_start + val_bits - 1);
+        if constexpr (val_bits<=64){
+            dest = data.read(value_start, value_start + val_bits - 1);
+        }else{
+            data.read_chunk(&dest, value_start, value_start + val_bits - 1);
+        }
     }
 
     //offset is the bit where the pair description starts

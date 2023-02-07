@@ -145,7 +145,6 @@ struct lms_parsing{
     }
 };
 
-
 template<class parser_type,
          template<class, class> class hash_functor,
          template<class, class, class> class parse_functor>

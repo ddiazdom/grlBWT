@@ -19,14 +19,14 @@ namespace exact_algo {
 
             auto hash_phrase = [&](string_t& phrase) -> void {
                 phrase.mask_tail();
-                auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), 1);
-
+                data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
+                /*auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), 1);
                 if(!res.second){
                     size_t val=0;
                     data.inner_map.get_value_from(res.first, val);
                     val+=1;
                     data.inner_map.insert_value_at(res.first, val);
-                }
+                }*/
             };
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
