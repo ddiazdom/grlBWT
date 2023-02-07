@@ -112,7 +112,6 @@ namespace exact_algo {
 
         phrase_map_t new_phrases_ht;
         bv_t phr_marks(dict.dict.size(), false);
-        start = std::chrono::steady_clock::now();
         size_t n_phrases = produce_pre_bwt<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
@@ -121,6 +120,7 @@ namespace exact_algo {
         //malloc_count_reset_peak();
 
         std::cout << "    Compressing the dictionary" << std::flush;
+        start = std::chrono::steady_clock::now();
         produce_grammar<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
         end = std::chrono::steady_clock::now();
         report_time(start, end, 35);
