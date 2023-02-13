@@ -199,6 +199,8 @@ struct mt_parse_strat_t {//multi thread strategy
         size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size()-1, n_threads);
         n_threads = INT_CEIL((p_info.str_ptrs.size()-1), str_per_thread);
 
+        std::cout<<"We will use "<<hbuff_size<<" bytes for the static buffer "<<std::endl;
+
         for(size_t i=0;i<n_threads;i++){
             thread_ranges.emplace_back(str_per_thread*i, std::min(str_per_thread*(i+1)-1, p_info.str_ptrs.size()-2));
         }
@@ -263,6 +265,10 @@ struct mt_parse_strat_t {//multi thread strategy
 
         size_t dic_bits=0, freq, max_freq=0;
         std::string file;
+
+        if(p_info.p_round>0){
+            map.resize_table(prev_power_of_two(p_info.lms_phrases));
+        }
 
         for(auto const& thread : threads_data) {
 
@@ -577,11 +583,10 @@ struct st_parse_strat_t {//parse data for single thread
         tmp_o_file = o_file.substr(0, o_file.size() - 4);
         tmp_o_file.append("_inv");
 
-        if(p_info.p_round==1){
-            auto n_buckets = std::max<size_t>(size_t(double(ifs.size())*0.2*0.4), 4);
-            n_buckets = next_power_of_two(n_buckets);
-            map.resize_table(n_buckets);
-        }else if(p_info.p_round>1){
+        if(p_info.p_round>1){
+            //auto n_buckets = std::max<size_t>(size_t(double(ifs.size())*0.2*0.4), 4);
+            //n_buckets = next_power_of_two(n_buckets);
+            //map.resize_table(n_buckets);
             size_t n_buckets = prev_power_of_two(p_info.lms_phrases);
             map.resize_table(n_buckets);
         }
