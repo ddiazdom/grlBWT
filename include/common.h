@@ -17,7 +17,7 @@ typedef sdsl::bit_vector                        bv_t;
 typedef sdsl::bit_vector::rank_1_type           bv_rs_t;
 typedef int_array<size_t>                       vector_t;
 typedef int_array<size_t>                       string_t;
-typedef bit_hash_table<size_t>                  phrase_map_t;
+typedef bit_hash_table<size_t, 44>              phrase_map_t;
 typedef typename phrase_map_t::buff_t           ht_buff_t;
 
 // the phrases are stored in a bit-compressed hash table:

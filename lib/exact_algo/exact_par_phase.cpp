@@ -5,7 +5,7 @@
 #include "exact_par_phase.hpp"
 #include "exact_LMS_induction.h"
 
-//#include "malloc_count.h"
+#include "malloc_count.h"
 
 namespace exact_algo {
 
@@ -331,8 +331,8 @@ namespace exact_algo {
         auto end = std::chrono::steady_clock::now();
 
         report_time(start, end, 4);
-        //malloc_count_print_status();
-        //malloc_count_reset_peak();
+        malloc_count_print_status();
+        malloc_count_reset_peak();
 
         while (n_syms > 0) {
             start = std::chrono::steady_clock::now();
@@ -356,9 +356,9 @@ namespace exact_algo {
 
             remove(tmp_i_file.c_str());
             rename(output_file.c_str(), tmp_i_file.c_str());
-
-            //malloc_count_print_status();
-            //malloc_count_reset_peak();
+            report_mem_peak();
+            malloc_count_print_status();
+            malloc_count_reset_peak();
         }
 
         sdsl::util::clear(symbol_desc);

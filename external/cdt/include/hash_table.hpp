@@ -814,6 +814,37 @@ public:
         }
     }
 
+    inline bool get_value(const void* key, size_t key_bits, value_t& value) const {
+
+        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+
+        size_t idx = hash & (n_buckets - 1);
+
+        if(table[idx]==0){
+            return false;
+        }else{
+            size_t offset, i=0, bck_dist;
+            while(i<=max_bck_dist && table[idx]!=0){
+                bck_dist = (table[idx] >> 44U);
+                if(bck_dist<i){
+                    return false;
+                }
+                offset = (table[idx] & 0xFFFFFFFFFFFul);
+                if(i==bck_dist && equal(key, key_bits, offset-1)){
+                    if constexpr (val_bits<=64){
+                        value = data.read(offset-1+d_bits+key_bits, offset-1+d_bits+key_bits+val_bits-1);
+                    }else{
+                        data.read_chunk(value, offset-1+d_bits+key_bits, offset-1+d_bits+key_bits+val_bits-1);
+                    }
+                    return true;
+                }
+                idx = (idx+1) & (n_buckets - 1);
+                i++;
+            }
+            return false;
+        }
+    }
+
     //offset is the bit where the pair description starts
     inline void insert_value_at(size_t offset, value_t val){
         size_t value_start = offset + d_bits + data.read(offset, offset + d_bits - 1);

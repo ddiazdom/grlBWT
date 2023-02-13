@@ -8,6 +8,7 @@
 #endif
 #include <random>
 #include <zlib.h>
+#include <sys/resource.h>
 
 bool is_fastx(const std::string& input_file){
 
@@ -91,7 +92,9 @@ bool ends_with(std::string const & value, std::string const & ending) {
 }
 
 void report_mem_peak(){
-
+    struct rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    std::cout<<"\n peak : "<<usage.ru_maxrss<<" megabytes "<<std::endl;
 }
 
 str_collection collection_stats(std::string& input_file){

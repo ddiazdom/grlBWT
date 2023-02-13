@@ -56,6 +56,13 @@ namespace exact_algo {
                 assert(res.second);
                 size_t sym = 0;
                 data.map.get_value_from(res.first, sym);
+
+                //TODO testing
+                size_t tmp_sym=0;
+                data.map.get_value(phrase.data(), phrase.n_bits(), tmp_sym);
+                assert(tmp_sym==sym);
+                //
+
                 ofs.push_back(sym);
             };
 
