@@ -79,10 +79,10 @@ struct lms_parsing{
         }
     }
 
-    void operator()(stream_t& ifs,
-                    size_t f_string, size_t l_string, size_t max_symbol,
-                    const std::function<void(string_t&)>& process_phrase,
-                    const std::function<std::pair<long, long>(size_t)>& init_str) const {
+    inline void operator()(stream_t& ifs,
+                           size_t f_string, size_t l_string, size_t max_symbol,
+                           std::function<void(string_t&)>&& process_phrase,
+                           std::function<std::pair<long, long>(size_t)>&& init_str) const {
 
         sym_type curr_sym, prev_sym;
         string_t phrase(2, sym_width(max_symbol));
@@ -198,8 +198,6 @@ struct mt_parse_strat_t {//multi thread strategy
         std::vector<std::pair<size_t, size_t>> thread_ranges;
         size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size()-1, n_threads);
         n_threads = INT_CEIL((p_info.str_ptrs.size()-1), str_per_thread);
-
-        std::cout<<"We will use "<<hbuff_size<<" bytes for the static buffer "<<std::endl;
 
         for(size_t i=0;i<n_threads;i++){
             thread_ranges.emplace_back(str_per_thread*i, std::min(str_per_thread*(i+1)-1, p_info.str_ptrs.size()-2));

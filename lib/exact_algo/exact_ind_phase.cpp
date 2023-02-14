@@ -12,7 +12,7 @@
 namespace exact_algo {
 
 //extract freq symbols from bwt[j] onwards and put them in new_bwt
-    void extract_rl_syms(bwt_buff_writer &bwt_buff, bwt_buff_writer &new_bwt_buff, size_t &j, size_t freq) {
+    inline void extract_rl_syms(bwt_buff_writer &bwt_buff, bwt_buff_writer &new_bwt_buff, size_t &j, size_t freq) {
 
         size_t tmp_freq, sym;
         while (freq > 0) {

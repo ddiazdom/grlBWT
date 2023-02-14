@@ -661,12 +661,13 @@ public:
         size_t idx = hash & (n_buckets - 1);
         size_t in_offset=0;//locus where the key is inserted
 
-        if(table[idx]==0){
+        if(table[idx]==0) {
             auto res  = insert_int(key, key_bits, val);
-            if(res.second) idx = hash & (n_buckets-1);
+            //if(res.second) idx = hash & (n_buckets-1);
             in_offset = res.first;
             table[idx] =  in_offset;
         }else{ //resolve collision
+
             size_t dist=0, offset;
             size_t bck_dist, bck_offset;
             bool inserted = false;
@@ -676,9 +677,6 @@ public:
                 bck_offset = (table[idx] & 0xFFFFFFFFFFFul);
                 bck_dist = table[idx] >> 44UL;
 
-                //TODO here I can do better. Every time I evict an element,
-                // I check if it is equal to another pair that was assigned to the same bucket.
-                // That is unnecessary
                 if(!inserted && bck_dist==dist && equal(key, key_bits , bck_offset-1)){
                     return {bck_offset-1, false};
                 }else if(bck_dist<dist){ //steal to the rich
@@ -701,10 +699,9 @@ public:
 
                     table[idx] = (dist<<44UL) | offset;
                     offset = bck_offset;
-                    dist = bck_dist+1;
-                }else{
-                    dist++;
+                    dist = bck_dist;
                 }
+                dist++;
                 idx = (idx+1) & (n_buckets - 1);
             }
 
@@ -723,8 +720,6 @@ public:
 
             table[idx] = (dist<<44UL) | offset ;
         }
-
-        //assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
         finish:
         n_elms++;

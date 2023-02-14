@@ -17,17 +17,10 @@ namespace exact_algo {
 
         void operator()(parse_data_t& data) {
 
-            auto hash_phrase = [&](string_t& phrase) -> void {
-                phrase.mask_tail();
-                data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
-                /*auto res = data.inner_map.insert(phrase.data(), phrase.n_bits(), 1);
-                if(!res.second){
-                    size_t val=0;
-                    data.inner_map.get_value_from(res.first, val);
-                    val+=1;
-                    data.inner_map.insert_value_at(res.first, val);
-                }*/
-            };
+            //auto hash_phrase = [&](string_t& phrase) -> void {
+            //    phrase.mask_tail();
+            //    data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
+            //};
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
                 size_t start = data.str_ptr[str];
@@ -36,7 +29,13 @@ namespace exact_algo {
                 return {start, end};
             };
 
-            parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
+            parser_t()(data.ifs, data.start, data.end, data.max_symbol,
+                    //hash_phrase,
+                    [&](string_t& phrase) -> void {
+                        phrase.mask_tail();
+                        data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
+                    },
+                    init_str);
             //pthread_exit(nullptr);
         };
     };
@@ -50,17 +49,11 @@ namespace exact_algo {
 
             o_stream_type ofs(data.o_file, BUFFER_SIZE, std::ios::out);
 
-            auto phrase2symbol = [&](string_t& phrase){
+            auto phrase2symbol = [&](string_t& phrase) -> void {
                 phrase.mask_tail();
-
-                //auto res = data.map.find(phrase.data(), phrase.n_bits());
-                //assert(res.second);
                 size_t sym = 0;
-                //data.map.get_value_from(res.first, sym);
-
                 auto res = data.map.key2value(phrase.data(), phrase.n_bits(), sym);
                 assert(res);
-
                 ofs.push_back(sym);
             };
 
