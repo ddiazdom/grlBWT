@@ -506,5 +506,8 @@ namespace exact_algo {
             std::cout<<"    No new phrases found"<<std::endl;
             return 0;
         }*/
+#ifdef __linux__
+        malloc_trim(0);
+#endif
     }
 }
