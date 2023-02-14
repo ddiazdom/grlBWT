@@ -356,7 +356,6 @@ namespace exact_algo {
 
             remove(tmp_i_file.c_str());
             rename(output_file.c_str(), tmp_i_file.c_str());
-            report_mem_peak();
             malloc_count_print_status();
             malloc_count_reset_peak();
         }
@@ -391,6 +390,10 @@ namespace exact_algo {
         phrase_map_t &map = p_strategy.map;
         size_t psize;//<- for the iter stats
         assert(map.size() > 0);
+
+        //TODO testing
+        //map.ht_stats(10);
+        //
 
         size_t dict_sym = res.first;
         size_t max_freq = res.second;

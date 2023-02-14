@@ -52,16 +52,14 @@ namespace exact_algo {
 
             auto phrase2symbol = [&](string_t& phrase){
                 phrase.mask_tail();
-                auto res = data.map.find(phrase.data(), phrase.n_bits());
-                assert(res.second);
-                size_t sym = 0;
-                data.map.get_value_from(res.first, sym);
 
-                //TODO testing
-                size_t tmp_sym=0;
-                data.map.get_value(phrase.data(), phrase.n_bits(), tmp_sym);
-                assert(tmp_sym==sym);
-                //
+                //auto res = data.map.find(phrase.data(), phrase.n_bits());
+                //assert(res.second);
+                size_t sym = 0;
+                //data.map.get_value_from(res.first, sym);
+
+                auto res = data.map.key2value(phrase.data(), phrase.n_bits(), sym);
+                assert(res);
 
                 ofs.push_back(sym);
             };
