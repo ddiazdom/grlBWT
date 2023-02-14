@@ -13,10 +13,12 @@ target_compile_options(biopar
         -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         )
 
-# this extra flags only applies to clang compilers
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
     target_compile_options(biopar PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
+    target_compile_options(grlbwt PUBLIC -march=native)
 endif()
 
 target_link_libraries(biopar LINK_PUBLIC z cdt)
