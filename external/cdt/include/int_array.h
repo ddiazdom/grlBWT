@@ -226,6 +226,10 @@ struct int_array{
         return bits.stream;
     }
 
+    [[nodiscard]] inline word_t* stream() const{
+        return bits.stream;
+    }
+
     inline void set_data(const word_t* new_data, size_t size) {
         bits.stream = new_data;
         bits.stream_size = size;

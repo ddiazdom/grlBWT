@@ -11,12 +11,16 @@
 #include <utility>
 #include "xxHash-dev/xxhash.h"
 #include "bitstream.h"
+#include "mxm3.h"
 #include <algorithm>
 #include <type_traits>
 #include <utility>
 #ifdef __linux__
 #include <malloc.h>
 #endif
+
+#define HASH(stream, bytes) XXH3_64bits(stream, bytes);
+//#define HASH(stream, bytes) mx3::hash((const uint8_t*)stream, bytes, 0);
 
 template<class ht_type>
 class bit_hash_table_iterator{
@@ -257,7 +261,8 @@ private:
 
             data.read_chunk(tmp_key, data_offset + d_bits, data_offset + d_bits + key_bits - 1);
 
-            hash = XXH3_64bits(tmp_key, key_bytes);
+            //hash = XXH3_64bits(tmp_key, key_bytes);
+            hash = HASH(tmp_key, key_bytes);
 
             idx = hash & (n_buckets - 1);
             tmp_offset = data_offset + 1;
@@ -558,10 +563,10 @@ public:
         data.write(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1, new_value);
     }
 
-    /*
-    std::pair<size_t, bool> insert_new(const void* key, const size_t& key_bits, const value_t& val){
+    /*std::pair<size_t, bool> insert_new(const void* key, const size_t& key_bits, const value_t& val){
 
-        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        //size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1), in_offset;
 
@@ -570,43 +575,56 @@ public:
             in_offset = res.first;
             table[idx] =  in_offset;
         }else{
-            size_t bck_dist = table[idx]>>44UL, bck_offset, dist=0;
-            while(table[idx]!=0 && bck_dist>dist){
-                idx = (idx+1) & (n_buckets-1);
-                bck_dist = table[idx] >> 44UL;
-                dist++;
-            }
-            while(table[idx]!=0 && bck_dist==dist){
-                bck_offset = table[idx] & 0xFFFFFFFFFFFul;
-                if(equal(key, key_bits , bck_offset-1)){
-                    return {bck_offset-1, false};
+
+            size_t idx1 = (idx+1) & (n_buckets-1);
+            size_t idx2 = (idx+2) & (n_buckets-1);
+            size_t idx3 = (idx+3) & (n_buckets-1);
+            unsigned int bck_close = (table[idx1]==0) | ((table[idx2]==0)<<1UL) | ((table[idx3]==0)<<2);
+            if(bck_close!=3){
+                size_t next_av = sizeof(unsigned int) - __builtin_clz(bck_close | 1);
+                size_t dist1 = table[idx1]>>44UL;
+                size_t dist2 = table[idx2]>>44UL;
+                size_t dist3 = table[idx3]>>44UL;
+                bool check_col = dist1==1U | dist2==2UL | dist3==3UL;
+            }else{
+                size_t bck_dist = table[idx]>>44UL, bck_offset, dist=0;
+                while(table[idx]!=0 && bck_dist>dist){
+                    idx = (idx+1) & (n_buckets-1);
+                    bck_dist = table[idx] >> 44UL;
+                    dist++;
                 }
-                idx = (idx+1) & (n_buckets-1);
-                bck_dist = table[idx] >> 44UL;
-                dist++;
-            }
-
-            assert(dist>0 && bck_dist<dist);
-            auto res = insert_int(key, key_bits, val);
-            size_t tmp_offset = res.first;
-            in_offset = tmp_offset;
-
-            while(table[idx]!=0){
-                bck_dist = table[idx] >> 44UL;
-                if(bck_dist<dist){
+                while(table[idx]!=0 && bck_dist==dist){
                     bck_offset = table[idx] & 0xFFFFFFFFFFFul;
-                    table[idx] = (dist<<44UL) | tmp_offset;
-                    if(dist>max_bck_dist) max_bck_dist = dist;
-                    dist = bck_dist;
-                    tmp_offset = bck_offset;
+                    if(equal(key, key_bits , bck_offset-1)){
+                        return {bck_offset-1, false};
+                    }
+                    idx = (idx+1) & (n_buckets-1);
+                    bck_dist = table[idx] >> 44UL;
+                    dist++;
                 }
-                dist++;
-                idx = (idx+1) & (n_buckets-1);
-            }
 
-            assert(table[idx]==0);
-            table[idx] = (dist<<44UL) | tmp_offset;
-            if(dist>max_bck_dist) max_bck_dist = dist;
+                assert(dist>0 && bck_dist<dist);
+                auto res = insert_int(key, key_bits, val);
+                size_t tmp_offset = res.first;
+                in_offset = tmp_offset;
+
+                while(table[idx]!=0){
+                    bck_dist = table[idx] >> 44UL;
+                    if(bck_dist<dist){
+                        bck_offset = table[idx] & 0xFFFFFFFFFFFul;
+                        table[idx] = (dist<<44UL) | tmp_offset;
+                        if(dist>max_bck_dist) max_bck_dist = dist;
+                        dist = bck_dist;
+                        tmp_offset = bck_offset;
+                    }
+                    dist++;
+                    idx = (idx+1) & (n_buckets-1);
+                }
+
+                assert(table[idx]==0);
+                table[idx] = (dist<<44UL) | tmp_offset;
+                if(dist>max_bck_dist) max_bck_dist = dist;
+            }
         }
 
         n_elms++;
@@ -637,7 +655,8 @@ public:
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
         //assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
-        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        //size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1);
         size_t in_offset=0;//locus where the key is inserted
@@ -790,7 +809,8 @@ public:
 
     inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
 
-        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        //size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1);
 
@@ -814,9 +834,37 @@ public:
         }
     }
 
+    inline bool key2value(const void* key, size_t key_bits, value_t& value) const {
+
+        //size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
+
+        size_t idx = hash & (n_buckets - 1);
+        size_t i=0;
+        size_t bck_dist = (table[idx] >> 44U);
+        size_t offset = (table[idx] & 0xFFFFFFFFFFFul);
+        while(table[idx]!=0 && i<=bck_dist){
+            if(i==bck_dist && equal(key, key_bits, offset-1)){
+                size_t value_start = offset-1+d_bits+key_bits;
+                if constexpr (val_bits<=64){
+                    value = data.read(value_start, value_start+val_bits-1);
+                }else{
+                    data.read_chunk(value, value_start, value_start+val_bits-1);
+                }
+                return true;
+            }
+            idx = (idx+1) & (n_buckets - 1);
+            i++;
+            bck_dist = (table[idx] >> 44U);
+            offset = (table[idx] & 0xFFFFFFFFFFFul);
+        }
+        return false;
+    }
+
     inline bool get_value(const void* key, size_t key_bits, value_t& value) const {
 
-        size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        //size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
 
         size_t idx = hash & (n_buckets - 1);
 

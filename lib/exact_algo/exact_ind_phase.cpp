@@ -690,7 +690,6 @@ namespace exact_algo {
             }
             auto end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
-            report_mem_peak();
             //malloc_count_print_status();
             //malloc_count_reset_peak();
         }
