@@ -25,10 +25,13 @@ target_compile_options(grlbwt
         INTERFACE
         -Wshadow)
 
-# this extra flags only applies to clang compilers
+#compiler-dependent flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
     target_compile_options(grlbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
+    target_compile_options(grlbwt PUBLIC -march=native)
 endif()
 
 # there seems to be problem with the msse4.2 compiler flag and the new Apple chips
