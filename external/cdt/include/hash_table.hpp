@@ -203,7 +203,7 @@ private:
         size_t pair_bits = key_bits+val_bits+d_bits;
         size_t idx = next_av_bit - 1 + pair_bits;
 
-        bool dump=false;//flag to indicate if the data was dumped
+        bool dump=false;//flag to indicate that the data was dumped
         if(idx >= data.n_bits()){
             if(static_buffer){
                 dump = true;
@@ -293,6 +293,26 @@ private:
             data_offset+=d_bits+key_bits+val_bits;
         }
         free(tmp_key);
+    }
+
+    inline bool exceed_buffer(size_t key_bits) const {
+
+        size_t pair_bits = key_bits+val_bits+d_bits;
+        size_t idx = next_av_bit - 1 + pair_bits;
+        size_t table_bytes = n_buckets*sizeof(size_t);
+
+        if((float(n_elms+1)/n_buckets) > m_max_load_factor) {
+            if (static_buffer) return true;
+            size_t new_n_buckets = new_table_size();
+            table_bytes = new_n_buckets*sizeof(size_t);
+        }
+
+        if(idx>=data.n_bits() && static_buffer) return true;
+
+        //number of bytes used by the data buffer, including the new element
+        size_t data_bytes = INT_CEIL(idx, stream_t::word_bits)*sizeof(buffer_t);
+
+        return max_buffer_bytes<(data_bytes+table_bytes);
     }
 
     inline size_t new_table_size() const{
@@ -653,7 +673,6 @@ public:
     };
 
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
-        //assert(max_buffer_bytes >= (data.stream_size*sizeof(buff_t) + n_buckets*sizeof(size_t)));
 
         //size_t hash = XXH3_64bits(key, INT_CEIL(key_bits, 8));
         size_t hash = HASH(key, INT_CEIL(key_bits, 8));
@@ -745,13 +764,17 @@ public:
             if(dump){
                 //invalidate the last insertion and dump the hash table
                 assert(next_av_bit>1);
-                next_av_bit -= (key_bits+val_bits+d_bits);
+                next_av_bit -= (key_bits+val_bits+d_bits);//this step crops the data buffer, so the last insertion is not included in the dump
                 dump_hash();
+                assert(n_elms==0 && m_load_factor==0);
 
                 //insert again the new element
                 auto res = insert_int(key, key_bits, val);
                 assert(!res.second);
                 in_offset = res.first;
+                assert(table[hash & (n_buckets-1)]==0);
+                table[hash & (n_buckets-1)] =  res.first;
+
                 n_elms++;
                 m_load_factor = float(n_elms) / n_buckets;
             }

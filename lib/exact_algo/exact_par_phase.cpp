@@ -301,6 +301,12 @@ namespace exact_algo {
                      str_collection &str_coll, tmp_workspace &ws) {
 
         std::cout << "Parsing the text:    " << std::endl;
+
+        if(n_threads>1){
+            std::cout<<"  Running with up to "<<n_threads<<" working threads "<<std::endl;
+            std::cout<<"  Using "<<float(hbuff_size)/1000000<<" megabytes for each thread hash table ("<< (float(hbuff_size)/1000000)/float(n_threads)<<" megabytes each)"<<std::endl;
+        }
+
         std::string output_file = ws.get_file("tmp_output");
         std::string tmp_i_file = ws.get_file("tmp_input");
 
