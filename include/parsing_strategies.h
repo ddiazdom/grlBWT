@@ -159,7 +159,7 @@ struct mt_parse_strat_t {//multi thread strategy
         istream_t            ifs;
         std::string          o_file;
         phrase_map_t&        map;
-        phrase_map_t         inner_map;
+        buffered_map_t       inner_map;
         std::vector<long>&   str_ptr;
         size_t               max_symbol{};
         size_t               active_strings=0;
@@ -191,7 +191,7 @@ struct mt_parse_strat_t {//multi thread strategy
                      parsing_info& p_info_, const size_t &hbuff_size,
                      size_t n_threads) : i_file(i_file_),
                                          o_file(o_file_),
-                                         map(0, "", 0.8, nullptr, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
+                                         map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                          p_info(p_info_),
                                          str_ptr(p_info.str_ptrs) {
 
@@ -277,6 +277,10 @@ struct mt_parse_strat_t {//multi thread strategy
             size_t tot_bytes = text_i.tellg();
             text_i.seekg (0, std::ifstream::beg);
 
+            //TODO testing
+            i_file_stream<size_t> data_disk_buffer(file, BUFFER_SIZE);
+            //
+
             if(tot_bytes==0) continue;
 
             auto buffer = reinterpret_cast<char *>(malloc(tot_bytes));
@@ -296,30 +300,62 @@ struct mt_parse_strat_t {//multi thread strategy
             size_t key_bits;
             size_t value_bits=map.value_bits();
 
-            void* key=nullptr;
+            uint8_t* key=nullptr;
+            //TODO test
+            uint8_t* key_test= nullptr;
+            //
             size_t max_key_bits=0;
 
             while(next_bit<tot_bits){
 
                 key_bits = bits.read(next_bit-d_bits, next_bit-1);
+                //TODO
+                //if(data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1)!=key_bits){
+                //    std::cout<<"holaa"<<std::endl;
+                //}
+                assert(data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1)==key_bits);
+
+                //
                 assert(key_bits>0);
 
                 size_t n_bytes = INT_CEIL(key_bits, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t);
                 if(key_bits>max_key_bits){
                     if(key==nullptr){
-                        key = malloc(n_bytes);
+                        key = (uint8_t*) malloc(n_bytes);
+                        //TODO
+                        key_test = (uint8_t*) malloc(n_bytes);
+                        //
                     }else {
-                        key = realloc(key, n_bytes);
+                        key = (uint8_t*) realloc(key, n_bytes);
+                        //TODO
+                        key_test = (uint8_t*) realloc(key, n_bytes);
+                        //
                     }
                     max_key_bits = key_bits;
                 }
 
-                char *tmp = reinterpret_cast<char*>(key);
-                tmp[INT_CEIL(key_bits, 8)-1] = 0;
+                //char *tmp = reinterpret_cast<char*>(key);
+                key[INT_CEIL(key_bits, 8)-1] = 0;
+                //TODO
+                key_test[INT_CEIL(key_bits, 8)-1] = 0;
+                //
 
                 bits.read_chunk(key, next_bit, next_bit+key_bits-1);
+
+                //TODO
+                data_disk_buffer.read_bit_chunk(key_test, next_bit, next_bit+key_bits-1);
+                assert(memcmp(key, key_test, INT_CEIL(key_bits, 8))==0);
+                //
+
                 next_bit+=key_bits;
                 freq = bits.read(next_bit, next_bit+value_bits-1);
+                //TODO
+                //if(data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1)!=freq){
+                //    std::cout<<"holaa"<<std::endl;
+                //}
+                //std::cout<<data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1)<<" "<<freq<<" "<<std::endl;
+                assert(data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1)==freq);
+                //
 
                 next_bit+=value_bits+d_bits;
 
@@ -333,6 +369,7 @@ struct mt_parse_strat_t {//multi thread strategy
                     dic_bits+=key_bits;
                 }
                 if(freq>max_freq) max_freq = freq;
+
                 //TODO this work for the opt BWT
                 /*if(!res.second){
 
@@ -356,6 +393,9 @@ struct mt_parse_strat_t {//multi thread strategy
                 }*/
             }
             text_i.close();
+            //TODO testing
+            data_disk_buffer.close();
+            //
 
             if(remove(file.c_str())){
                 std::cout<<"Error trying to remove temporal file"<<std::endl;
@@ -570,7 +610,7 @@ struct st_parse_strat_t {//parse data for single thread
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
                      parsing_info& p_info_): ifs(i_file_, BUFFER_SIZE),
                                              o_file(o_file_),
-                                             map(0, "", 0.8, nullptr, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
+                                             map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                              inner_map(map),
                                              p_info(p_info_),
                                              str_ptr(p_info.str_ptrs),

@@ -23,7 +23,7 @@
 //#define HASH(stream, bytes) mx3::hash((const uint8_t*)stream, bytes, 0);
 
 template<class ht_type>
-class bit_hash_table_iterator{
+class hash_table_iterator{
 
     using buffer_t =                    typename ht_type::buff_t;
     using value_t =                     typename ht_type::val_type;
@@ -47,7 +47,7 @@ class bit_hash_table_iterator{
 
 public:
 
-    bit_hash_table_iterator(const ht_type& ht_, size_t bit_pos): ht(ht_) {
+    hash_table_iterator(const ht_type& ht_, size_t bit_pos): ht(ht_) {
         if(bit_pos+1<ht.next_av_bit){
             size_t n_bits = ht.data.read(bit_pos, bit_pos+ht.description_bits()-1);
             locus.first = bit_pos+ht.description_bits();
@@ -89,21 +89,21 @@ public:
     }
 
 
-    bit_hash_table_iterator<ht_type> operator++(int) {
-        bit_hash_table_iterator<ht_type> tmp(*this);
+    hash_table_iterator<ht_type> operator++(int) {
+        hash_table_iterator<ht_type> tmp(*this);
         ++*this;
         return tmp;
     }
 
-    inline bool operator==(const bit_hash_table_iterator<ht_type>& other) const{
+    inline bool operator==(const hash_table_iterator<ht_type>& other) const{
         return locus.first == other.locus.first;
     }
 
-    inline bool operator!=(const bit_hash_table_iterator<ht_type>& other) const{
+    inline bool operator!=(const hash_table_iterator<ht_type>& other) const{
         return locus.first != other.locus.first;
     }
 
-    bit_hash_table_iterator<ht_type>& operator=(const value_t &val) { //update the value associated with the current key
+    hash_table_iterator<ht_type>& operator=(const value_t &val) { //update the value associated with the current key
         if(locus.first<ht.next_av_bit){
             const void * tmp_ptr = &val;
             ht.data.write_chunk(tmp_ptr, locus.second, locus.second+ht.value_bits()-1);
@@ -111,7 +111,7 @@ public:
         return *this;
     }
 
-    const bit_hash_table_iterator<ht_type>& operator++() {
+    const hash_table_iterator<ht_type>& operator++() {
         if(locus.first<ht.next_av_bit){
             locus.first = locus.second+ht.value_bits()+ht.description_bits();
             if(locus.first<ht.next_av_bit){
@@ -122,7 +122,7 @@ public:
         return *this;
     }
 
-    ~bit_hash_table_iterator(){
+    ~hash_table_iterator(){
         if(m_data.pointer!= nullptr){
             free(m_data.pointer);
         }
@@ -130,16 +130,628 @@ public:
 };
 
 template<class value_t,
-         size_t val_bits=sizeof(value_t)*8,
-         size_t desc_bits=32>
-class bit_hash_table{
+        size_t val_bits=sizeof(value_t)*8,
+        size_t desc_bits=32>
+class hash_table{
 
 private:
 
-    typedef bit_hash_table<value_t, val_bits, desc_bits> ht_type;
+    typedef hash_table<value_t, val_bits, desc_bits> ht_type;
+    typedef size_t                                   buffer_t;
+    typedef bitstream<size_t>                        stream_t;
+    typedef hash_table_iterator<ht_type>             iterator;
+    friend                                           iterator;
+
+    //limit bucket distance allowed for the data in the hash table
+    const size_t limit_bck_dist = 0xFFFF;
+
+    //64-bit pointer for the
+    // hash table
+    size_t* table = nullptr;
+
+    // position of the next
+    // available bit in the data buffer (1-based)
+    size_t next_av_bit=0;
+
+    //number of buckets in the
+    // hash table always a power of two
+    size_t n_buckets=0;
+
+    //maximum bucket distance seen so far
+    // for key (for the robin hood algorithm)
+    size_t max_bck_dist=0;
+
+    //number of elements
+    // inserted in the hash table
+    size_t n_elms=0;
+
+    //current load factor
+    float m_load_factor=0;
+
+    //maximum allowed load factor
+    float m_max_load_factor=0;
+
+    //number of elements of the longest
+    // string inserted so far in the hash table
+    size_t max_key_bits=0;
+
+    //stream of bits with the data
+    stream_t data;
+
+    //number of bits used in the key description
+    size_t d_bits=0;
+
+    //the variable query is a pointer containing the queried string
+    inline bool equal(const void *query, size_t query_bits, size_t data_offset) const{
+        size_t key_bits = data.read(data_offset, data_offset+d_bits-1);
+        if(key_bits!=query_bits) return false;
+        return data.compare_chunk(query, data_offset+d_bits, query_bits);
+    }
+
+    inline size_t insert_int(const void* key, size_t key_bits, const value_t& value){
+
+        size_t pair_bits = key_bits+val_bits+d_bits;
+        size_t idx = next_av_bit - 1 + pair_bits;
+
+        if(idx >= data.n_bits()){
+            resize_data_buffer(pair_bits);
+        }
+
+        idx = next_av_bit-1;
+
+        //write metadata (length, alphabet width) of the key
+        data.write(idx, idx+d_bits-1, key_bits);
+        idx+=d_bits;
+
+        //write the key
+        data.write_chunk(key, idx, idx+key_bits-1);
+        idx+=key_bits;
+
+        //write the value
+        if constexpr (val_bits<=64){
+            data.write( idx, idx+val_bits-1, value);
+        }else{
+            data.write_chunk(&value, idx, idx+val_bits-1);
+        }
+
+        if(key_bits>max_key_bits) max_key_bits = key_bits;
+
+        next_av_bit += pair_bits;
+        assert((next_av_bit-pair_bits)>0);
+
+        return next_av_bit-pair_bits;
+    }
+
+    inline void rehash(){
+
+        max_bck_dist=0;
+        size_t data_offset=0;
+        void * tmp_key = malloc(INT_CEIL(max_key_bits, stream_t::word_bits)*sizeof(buffer_t));
+
+        size_t dist, bck_dist, bck_offset, tmp_offset, idx, hash;
+
+        for(size_t k=0;k<n_elms;k++){
+
+            size_t key_bits = data.read(data_offset, data_offset+d_bits-1);
+            size_t key_bytes = INT_CEIL(key_bits, 8);
+
+            //this clean the tail of the buffer
+            char * tmp = reinterpret_cast<char*>(tmp_key);
+            tmp[key_bytes-1] = 0;
+            //
+
+            data.read_chunk(tmp_key, data_offset + d_bits, data_offset + d_bits + key_bits - 1);
+
+            //hash = XXH3_64bits(tmp_key, key_bytes);
+            hash = HASH(tmp_key, key_bytes);
+
+            idx = hash & (n_buckets - 1);
+            tmp_offset = data_offset + 1;
+
+            if(table[idx]==0){
+                table[idx] = tmp_offset;
+            }else{
+                dist = 0;
+                while(table[idx]!=0){
+                    bck_offset = (table[idx] & 0xFFFFFFFFFFFul);
+                    bck_dist = table[idx] >> 44UL;
+
+                    if(bck_dist<dist){ //steal to the rich
+                        table[idx] = (dist<<44UL) | tmp_offset;
+                        if(dist>max_bck_dist) max_bck_dist = dist;
+                        tmp_offset = bck_offset;
+                        dist = bck_dist+1;
+                    }else{
+                        dist++;
+                    }
+                    idx = (idx+1) & (n_buckets - 1);
+                }
+
+                table[idx] = (dist<<44UL) | tmp_offset ;
+                if(dist>max_bck_dist) max_bck_dist = dist;
+            }
+
+            data_offset+=d_bits+key_bits+val_bits;
+        }
+        free(tmp_key);
+    }
+
+    [[nodiscard]] inline size_t new_table_size() const{
+        //TODO if the hash table becomes too high, then I will change the growth policy to this:
+        //size_t new_size = prime_generator::get_next_prime(size_t(double(n_buckets)/(m_max_load_factor-0.1)));
+        //std::cout<<"Just testing "<<n_buckets<<" -> "<<new_size<<" -- "<<double(n_elms)/new_size<<", "<<(n_buckets<<1UL)<<std::endl;
+        return n_buckets<<1UL;
+    }
+
+    //increase the data buffer to insert bits_to_fit bits
+    void resize_data_buffer(size_t bits_to_fit) {
+        size_t bytes_to_fit = INT_CEIL(bits_to_fit, stream_t::word_bits)*sizeof(buffer_t);
+
+        //number of bytes used by the data buffer
+        size_t used_data_bytes = INT_CEIL(next_av_bit, stream_t::word_bits)*sizeof(buffer_t);
+
+        //minimum number of bytes we require for inserting the data
+        size_t min_data_bytes = used_data_bytes+bytes_to_fit;
+        auto new_size = size_t(data.stream_size*sizeof(buffer_t)*1.5);
+
+        //maximum number of bytes we can allocate
+        size_t new_data_bytes = std::max(min_data_bytes, new_size);
+        data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_data_bytes));
+        data.stream_size = new_data_bytes/sizeof(buffer_t);
+    }
+
+    void move(hash_table&& other){
+        std::swap(n_buckets, other.n_buckets);
+        std::swap(table, other.table);
+        std::swap(next_av_bit, other.next_av_bit);
+        std::swap(max_bck_dist, other.max_bck_dist);
+        std::swap(n_elms, other.n_elms);
+        std::swap(m_load_factor, other.m_load_factor);
+        std::swap(m_max_load_factor, other.m_max_load_factor);
+        std::swap(max_key_bits, other.max_key_bits);
+        data.swap(other.data);
+        std::swap(d_bits, other.d_bits);
+    }
+
+    void copy(hash_table& other){
+        n_buckets = other.n_buckets;
+        if(table==nullptr){
+            table = (size_t*)malloc(sizeof(size_t)*n_buckets);
+        }else{
+            table = reinterpret_cast<size_t*>(realloc(table, n_buckets));
+        }
+        next_av_bit = other.next_av_bit;
+        max_bck_dist = other.max_bck_dist;
+        n_elms = other.n_elms;
+        m_load_factor = other.m_load_factor;
+        m_max_load_factor = other.m_max_load_factor;
+        max_key_bits = other.max_key_bits;
+        d_bits = other.d_bits;
+        data = other.data;
+    }
+
+    void init() {
+
+        //minimum size for the hash table
+        n_buckets = 4;
+
+        //number of bytes allocated for the hash table
+        size_t table_bytes = (n_buckets * sizeof(size_t));
+
+        //number of bytes allocated for the data buffer
+        size_t data_bytes = table_bytes*2;
+
+        table = reinterpret_cast<size_t*>(malloc(table_bytes));
+        memset(table, 0, table_bytes);
+
+        data.stream = reinterpret_cast<buffer_t *>(malloc(data_bytes));
+        data.stream_size = data_bytes/sizeof(buffer_t);
+        memset(data.stream, 0, data_bytes);
+
+        next_av_bit = 1;
+        m_load_factor = 0;
+        max_bck_dist = 0;
+        n_elms = 0;
+        max_key_bits = 0;
+    }
+
+public:
+
+    typedef value_t       val_type;
+    typedef buffer_t      buff_t;
+
+    explicit hash_table(float max_load_factor=0.8, size_t _d_bits=desc_bits){//size of the buffer
+        d_bits = _d_bits;
+        m_max_load_factor = max_load_factor;
+        init();
+    }
+
+    hash_table(hash_table&& other) noexcept{
+        move(std::forward<hash_table>(other));
+    }
+
+    //copy assignment operator
+    hash_table& operator=(hash_table & other){
+        if(this!=&other){
+            copy(other);
+        }
+        return *this;
+    }
+
+    //move assignment operator
+    hash_table& operator=(hash_table && other) noexcept{
+        if(this!=&other){
+            move(std::forward<hash_table>(other));
+        }
+        return *this;
+    }
+
+    //swap method
+    void swap(hash_table& other){
+        move(std::forward<hash_table>(other));
+    }
+
+    inline iterator begin()  {
+        return iterator(*this, 0);
+    }
+
+    inline iterator end() const  {
+        return iterator(*this, next_av_bit);
+    }
+
+    [[nodiscard]] inline size_t value_bits() const{
+        return val_bits;
+    }
+
+    [[nodiscard]] inline size_t description_bits() const{
+        return d_bits;
+    }
+
+    size_t serialize(std::ostream &out) const{
+        size_t written_bytes = serialize_raw_vector(out, table, n_buckets);
+        written_bytes += serialize_elm(out, next_av_bit);
+        written_bytes += serialize_elm(out, max_bck_dist);
+        written_bytes += serialize_elm(out, n_elms);
+        written_bytes += serialize_elm(out, m_load_factor);
+        written_bytes += serialize_elm(out, m_max_load_factor);
+        written_bytes += serialize_elm(out, max_key_bits);
+        data.serialize(out);
+        written_bytes += serialize_elm(out, d_bits);
+        return written_bytes;
+    }
+
+    void load(std::istream &in){
+        load_raw_vector(in, table, n_buckets);
+        load_elm(in, next_av_bit);
+        load_elm(in, max_bck_dist);
+        load_elm(in, n_elms);
+        load_elm(in, m_load_factor);
+        load_elm(in, m_max_load_factor);
+        load_elm(in, max_key_bits);
+        data.load(in);
+        load_elm(in, d_bits);
+    }
+
+    template<class val_t = value_t>
+    typename std::enable_if<std::is_unsigned<val_t>::value, void>::type
+    increment_value(const void* key, const size_t key_bits, value_t new_value) {
+        auto res = insert(key, key_bits, new_value);
+        if(res.second) return;
+
+        value_t old_value = data.read(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1);
+        new_value += old_value;
+        data.write(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1, new_value);
+    }
+
+    void resize_table(size_t new_n_buckets) {
+        assert(new_n_buckets>0 && (new_n_buckets & (new_n_buckets-1))==0);
+        size_t new_table_bytes = new_n_buckets*sizeof(size_t);
+
+        table = reinterpret_cast<size_t*>(realloc(table, new_table_bytes));
+        n_buckets = new_n_buckets;
+        memset(table, 0, new_n_buckets*sizeof(size_t));
+
+        if(n_elms>0){
+            rehash();
+            m_load_factor = float(n_elms) / n_buckets;
+        }
+    };
+
+    std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
+
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
+
+        size_t idx = hash & (n_buckets - 1);
+        size_t in_offset=0;//locus where the key is inserted
+
+        if(table[idx]==0) {
+            in_offset  = insert_int(key, key_bits, val);
+            table[idx] =  in_offset;
+        }else{//resolve collision
+
+            size_t dist=0, offset;
+            size_t bck_dist, bck_offset;
+            bool inserted = false;
+
+            while(table[idx]!=0){
+
+                bck_offset = (table[idx] & 0xFFFFFFFFFFFul);
+                bck_dist = table[idx] >> 44UL;
+
+                if(!inserted && bck_dist==dist && equal(key, key_bits , bck_offset-1)){
+                    return {bck_offset-1, false};
+                }else if(bck_dist<dist){ //steal to the rich
+
+                    if(!inserted){//swap the keys
+                        in_offset = insert_int(key, key_bits, val);
+                        offset = in_offset;
+                        inserted = true;
+                    }
+
+                    assert(dist<=limit_bck_dist);
+                    if(dist>max_bck_dist) max_bck_dist = dist;
+
+                    table[idx] = (dist<<44UL) | offset;
+                    offset = bck_offset;
+                    dist = bck_dist;
+                }
+                dist++;
+                idx = (idx+1) & (n_buckets - 1);
+            }
+
+            if(!inserted){
+                in_offset = insert_int(key, key_bits, val);
+                offset = in_offset;
+            }
+
+            assert(dist<=limit_bck_dist);
+            if(dist>max_bck_dist) max_bck_dist = dist;
+
+            table[idx] = (dist<<44UL) | offset ;
+        }
+
+        n_elms++;
+        m_load_factor = float(n_elms) / n_buckets;
+
+        if(m_load_factor>=m_max_load_factor){
+            resize_table(new_table_size());
+        }
+
+        assert(in_offset>0);
+        return {in_offset-1, true};
+    }
+
+    [[nodiscard]] inline float load_factor() const{
+        return m_load_factor;
+    }
+
+    [[nodiscard]] inline float max_load_factor() const{
+        return m_max_load_factor;
+    }
+
+    [[nodiscard]] inline size_t size() const {
+        return n_elms;
+    }
+
+    inline void shrink_databuff() {
+        size_t new_size = INT_CEIL(next_av_bit, stream_t::word_bits)+1;
+        data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_size*sizeof(buffer_t)));
+        data.stream_size = new_size;
+    }
+
+    inline void reset(){
+        n_buckets = 4;
+        n_elms = 0;
+        max_bck_dist = 0;
+        m_load_factor = 0;
+        next_av_bit = 1;
+
+        size_t table_bytes = n_buckets*sizeof(size_t);
+        table = reinterpret_cast<size_t*>(realloc(table, table_bytes));
+
+        size_t data_bytes = table_bytes*2;
+        data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, data_bytes));
+        data.stream_size = data_bytes/sizeof(buffer_t);
+
+        memset(table, 0, table_bytes);
+        memset(data.stream, 0, data_bytes);
+    }
+
+    [[nodiscard]] inline size_t max_bucket_dist() const {
+        return max_bck_dist;
+    }
+
+    inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
+
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
+
+        size_t idx = hash & (n_buckets - 1);
+
+        if(table[idx]==0){
+            return {0, false};
+        }else{
+            size_t offset, i=0, bck_dist;
+            while(i<=max_bck_dist && table[idx]!=0){
+                bck_dist = (table[idx] >> 44U);
+                if(bck_dist<i){
+                    return {0, false};
+                }
+                offset = (table[idx] & 0xFFFFFFFFFFFul);
+                if(i==bck_dist && equal(key, key_bits, offset-1)){
+                    return {offset - 1, true};
+                }
+                idx = (idx+1) & (n_buckets - 1);
+                i++;
+            }
+            return {0, false};
+        }
+    }
+
+    inline bool key2value(const void* key, size_t key_bits, value_t& value) const {
+
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
+
+        size_t idx = hash & (n_buckets - 1);
+        size_t i=0;
+        size_t bck_dist = (table[idx] >> 44U);
+        size_t offset = (table[idx] & 0xFFFFFFFFFFFul);
+        while(table[idx]!=0 && i<=bck_dist){
+            if(i==bck_dist && equal(key, key_bits, offset-1)){
+                size_t value_start = offset-1+d_bits+key_bits;
+                if constexpr (val_bits<=64){
+                    value = data.read(value_start, value_start+val_bits-1);
+                }else{
+                    data.read_chunk(value, value_start, value_start+val_bits-1);
+                }
+                return true;
+            }
+            idx = (idx+1) & (n_buckets - 1);
+            i++;
+            bck_dist = (table[idx] >> 44U);
+            offset = (table[idx] & 0xFFFFFFFFFFFul);
+        }
+        return false;
+    }
+
+    //offset is the bit where the pair description starts
+    inline void insert_value_at(size_t offset, value_t val) {
+        size_t value_start = offset + d_bits + data.read(offset, offset + d_bits - 1);
+        if constexpr (val_bits<=64){
+            data.write(value_start, value_start + val_bits - 1, val);
+        }else{
+            data.write_chunk(&val, value_start, value_start + val_bits - 1);
+        }
+    }
+
+    //offset is the bit where the pair description starts
+    inline void get_value_from(size_t offset, value_t& dest) const {
+        size_t value_start = offset + d_bits + data.read(offset, offset + d_bits - 1);
+        if constexpr (val_bits<=64){
+            dest = data.read(value_start, value_start + val_bits - 1);
+        }else{
+            data.read_chunk(&dest, value_start, value_start + val_bits - 1);
+        }
+    }
+
+    //offset is the bit where the pair description starts
+    inline size_t get_key_from(size_t offset, void* dest) const {
+        size_t key_bits = data.read(offset, offset + d_bits - 1);;
+        data.read_chunk(dest, offset+d_bits, offset+d_bits+key_bits-1);
+        return key_bits;
+    }
+
+    ~hash_table(){
+        if(table!= nullptr){
+            free(table);
+        }
+        if(data.stream!= nullptr){
+            free(data.stream);
+        }
+    }
+
+    [[nodiscard]] inline size_t tot_buckets() const{
+        return n_buckets;
+    }
+
+    inline const stream_t& get_data(){
+        return data;
+    }
+
+    inline void clean(){
+        memset(table, 0, n_buckets*sizeof(size_t));
+        memset(data.stream, 0, data.stream_size*sizeof(buffer_t));
+        n_elms = 0;
+        max_bck_dist = 0;
+        m_load_factor = 0;
+        next_av_bit = 1;
+    }
+
+    void store_data_to_file(const std::string& output){
+        std::filebuf fb;
+        fb.open(output, std::ios::out | std::ios::binary);
+        std::ostream ofs(&fb);
+        ofs.write(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
+        ofs.tellp();
+        data.serialize(ofs);
+        fb.close();
+    }
+
+    size_t hash_table_tot_bytes(){
+        size_t tot_bytes = n_buckets*sizeof(size_t);
+        tot_bytes+= sizeof(data.stream_size);
+        tot_bytes+= data.stream_size * sizeof(buffer_t);
+        return  tot_bytes;
+    }
+
+    void ht_stats(size_t top){
+        std::vector<size_t> freqs(max_bck_dist+1, 0);
+        size_t dist;
+        for(size_t i=0;i<n_buckets;i++){
+            if(table[i]!=0){
+                dist = table[i]>>44UL;
+                assert(dist<=max_bck_dist);
+                freqs[dist]++;
+            }
+        }
+
+        std::vector<std::pair<size_t, size_t>> pairs(freqs.size());
+        for(size_t i=0;i<pairs.size();i++){
+            pairs[i] = {i, freqs[i]};
+        }
+        std::sort(pairs.begin(), pairs.end(), [&](auto &a, auto &b){
+            return a.second>b.second;
+        });
+
+        std::cout<<"\nsize "<<size()<<std::endl;
+        std::cout<<"n_buckets "<<tot_buckets()<<std::endl;
+        std::cout<<"load factor: "<<load_factor()<<std::endl;
+        std::cout<<"max_bck_dist: "<<max_bck_dist<<std::endl;
+        for(size_t i=0;i<=std::min(top, max_bck_dist);i++){
+            std::cout<<"Bck dist:"<<pairs[i].first<<" freq:"<<pairs[i].second<<" ( "<<(double(pairs[i].second)/n_elms)*100<<"% )"<<std::endl;
+        }
+    }
+
+    void load_data_from_file(const std::string& input){
+        assert(table==nullptr && data.stream== nullptr);
+        std::ifstream ifs(input, std::ios_base::binary);
+        table = reinterpret_cast<size_t*>(malloc(n_buckets*sizeof(size_t)));
+        ifs.read(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
+        data.load(ifs);
+        ifs.close();
+    }
+
+    [[nodiscard]] size_t data_bytes() const {
+        return (data.stream_size*stream_t::word_bits)/8;
+    }
+
+    void destroy_table() {
+        free(table);
+        table = nullptr;
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+    }
+
+    void destroy_data() {
+        free(data.stream);
+        data.stream = nullptr;
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+    }
+};
+
+template<class value_t,
+         size_t val_bits=sizeof(value_t)*8,
+         size_t desc_bits=32>
+class buffered_hash_table{
+
+private:
+
+    typedef buffered_hash_table<value_t, val_bits, desc_bits> ht_type;
     typedef size_t                                       buffer_t;
     typedef bitstream<size_t>                            stream_t;
-    typedef bit_hash_table_iterator<ht_type>             iterator;
+    typedef hash_table_iterator<ht_type>             iterator;
     friend                                               iterator;
 
     //limit bucket distance allowed for the data in the hash table
@@ -363,7 +975,7 @@ private:
         return data_dumped;
     }
 
-    void move(bit_hash_table&& other){
+    void move(buffered_hash_table&& other){
         assert(!static_buffer);
         std::swap(n_buckets, other.n_buckets);
         std::swap(table, other.table);
@@ -381,7 +993,7 @@ private:
         std::swap(static_buffer, other.static_buffer);
     }
 
-    void copy(bit_hash_table& other){
+    void copy(buffered_hash_table& other){
         assert(!static_buffer);
         n_buckets = other.n_buckets;
         if(table==nullptr){
@@ -479,7 +1091,7 @@ public:
     typedef value_t       val_type;
     typedef buffer_t      buff_t;
 
-    explicit bit_hash_table(size_t buffer_size=0, std::string file_="", float max_load_factor=0.8, void* buff_addr=nullptr, size_t _d_bits=desc_bits){//size of the buffer
+    explicit buffered_hash_table(size_t buffer_size=0, std::string file_="", float max_load_factor=0.8, void* buff_addr=nullptr, size_t _d_bits=desc_bits){//size of the buffer
         //buffer_size==0 means there is no limit in memory consumption
         d_bits = _d_bits;
         file = std::move(file_);
@@ -494,12 +1106,12 @@ public:
         }
     }
 
-    bit_hash_table(bit_hash_table&& other) noexcept{
-        move(std::forward<bit_hash_table>(other));
+    buffered_hash_table(buffered_hash_table&& other) noexcept{
+        move(std::forward<buffered_hash_table>(other));
     }
 
     //copy assignment operator
-    bit_hash_table& operator=(bit_hash_table & other){
+    buffered_hash_table& operator=(buffered_hash_table & other){
         if(this!=&other){
             copy(other);
         }
@@ -507,16 +1119,16 @@ public:
     }
 
     //move assignment operator
-    bit_hash_table& operator=(bit_hash_table && other) noexcept{
+    buffered_hash_table& operator=(buffered_hash_table && other) noexcept{
         if(this!=&other){
-            move(std::forward<bit_hash_table>(other));
+            move(std::forward<buffered_hash_table>(other));
         }
         return *this;
     }
 
     //swap method
-    void swap(bit_hash_table& other){
-        move(std::forward<bit_hash_table>(other));
+    void swap(buffered_hash_table& other){
+        move(std::forward<buffered_hash_table>(other));
     }
 
     inline iterator begin()  {
@@ -938,7 +1550,7 @@ public:
         return key_bits;
     }
 
-    ~bit_hash_table(){
+    ~buffered_hash_table(){
         if(!static_buffer){
             flush();
             if(table!= nullptr){

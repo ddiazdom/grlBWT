@@ -23,7 +23,7 @@ namespace opt_algo {
         dict.phrases_has_hocc.resize(s_sa.size()+1);
         sdsl::util::set_to_value(dict.phrases_has_hocc, false);
 
-        bit_hash_table<size_t> phrases_ht;
+        buffered_hash_table<size_t> phrases_ht;
         i_file_stream<size_t> nested_phrases(ws.get_file("nested_phrases"), BUFFER_SIZE);
         size_t i=0, sym, meta_sym, offset = s_sa.size()-1;
         bool is_last;
@@ -465,7 +465,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
         if(n_threads>1){
             std::cout<<"  Running with up to "<<n_threads<<" working threads "<<std::endl;
-            std::cout<<"  Using "<<hbuff_size<<" bytes for each thread hash table ("<< hbuff_size/n_threads<<" bytes each)"<<std::endl;
+            std::cout<<"  Using "<<hbuff_size<<" bytes for the thread hash tables ("<< hbuff_size/n_threads<<" bytes each)"<<std::endl;
         }
 
         std::string output_file = ws.get_file("tmp_output");

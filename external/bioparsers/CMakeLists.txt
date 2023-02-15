@@ -10,7 +10,7 @@ add_library(biopar
 target_compile_options(biopar
         PUBLIC
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic -Wno-deprecated-copy -Wno-unused-function
-        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        #-O3 -funroll-loops -fomit-frame-pointer -ffast-math
         )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -18,7 +18,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(biopar PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
-    target_compile_options(biopar PUBLIC -march=native)
+    #target_compile_options(biopar PUBLIC -march=native)
 endif()
 
 target_link_libraries(biopar LINK_PUBLIC z cdt)
