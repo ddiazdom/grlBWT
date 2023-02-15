@@ -14,6 +14,8 @@ size_t next_power_of_two(unsigned long val);
 
 size_t prev_power_of_two(unsigned long val);
 
+bool is_power_of_two(unsigned long val);
+
 template<class data_type>
 void load_from_file(std::string const& file, data_type& dt){
     std::ifstream ifs(file, std::ios::binary);

@@ -351,7 +351,7 @@ namespace opt_algo {
         size_t fr_b = 1;
         size_t bps = al_b + fr_b;
 
-        bit_hash_table<uintptr_t, sizeof(uintptr_t) * 8, 8> ht;
+        buffered_hash_table<uintptr_t, sizeof(uintptr_t) * 8, 8> ht;
 
         auto *hocc = (char *) malloc(n_runs * bps);
         memset(hocc, 0, n_runs * bps);

@@ -19,29 +19,36 @@ struct i_file_stream{
     std::ifstream text_i;
     size_t tot_cells{};
     size_t block_bg{};
+    size_t block_bits{};
     bitstream<sym_t> buffer;
 
     std::string file;
     static constexpr size_t w_bytes = sizeof(sym_t);
+    constexpr static uint8_t w_bits = std::numeric_limits<sym_t>::digits;
+    constexpr static uint8_t w_shift = __builtin_ctz(w_bits);
 
     i_file_stream(i_file_stream<sym_t> &&other) noexcept{
         move(std::forward<i_file_stream<sym_t>>(other));
     }
 
     i_file_stream(const std::string& i_file, size_t buff_size_){
+
         file =  i_file;
         text_i = std::ifstream(file, std::ifstream::binary);
 
         text_i.seekg (0, std::ifstream::end);
-        tot_cells = text_i.tellg()/w_bytes;
+        size_t file_size =  text_i.tellg();
         text_i.seekg (0, std::ifstream::beg);
 
-        size_t buff_size = std::min<size_t>(buff_size_/w_bytes, tot_cells);
-        buffer.stream_size = buff_size;
-        buffer.stream = new sym_t[buff_size];
+        size_t block_bytes = std::min<size_t>(buff_size_, file_size);
+        block_bits = block_bytes*8;
+
+        tot_cells = INT_CEIL(file_size, w_bytes);
+        buffer.stream_size = INT_CEIL(block_bytes, w_bytes);
+        buffer.stream = new sym_t[buffer.stream_size];
 
         block_bg=0;
-        text_i.read((char*) buffer.stream, buff_size*w_bytes);
+        text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
     }
 
     i_file_stream& operator=(i_file_stream<sym_t> &&other) noexcept{
@@ -95,26 +102,88 @@ struct i_file_stream{
         return buffer.stream[i-block_bg];
     }
 
-
-    inline void read_chunk(void *dst, size_t i, size_t j) {
+    inline void read_bit_chunk(uint8_t *dst, size_t i, size_t j) {
         assert(i<=j);
 
-        size_t cell_i = i/(w_bytes*8);
-        size_t cell_j = j/(w_bytes*8);
+        size_t cell_i = i >> w_shift;
+        size_t cell_j = j >> w_shift;
 
         assert(cell_j<tot_cells && (cell_j-cell_i+1)<=buffer.stream_size);
 
-        if(cell_i<block_bg || (block_bg+buffer.stream_size)<=cell_j){
-            block_bg = cell_i;
-            text_i.seekg(cell_i*w_bytes);
+        if(cell_i<block_bg || (block_bg+buffer.stream_size)<=cell_i){
+            block_bg = (cell_i/buffer.stream_size)*buffer.stream_size;
+            text_i.seekg(block_bg*w_bytes);
             text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
             }
         }
 
-        size_t start = i - block_bg*w_bytes*8;
-        buffer.read_chunk(dst, start, start+(j-i));
+        size_t start = i % block_bits;
+        if((cell_i/buffer.stream_size) == (cell_j/buffer.stream_size)){ //same block
+            return buffer.read_chunk(dst, start, start+(j-i));
+        }else{ //different blocks
+
+            buffer.read_chunk(dst, start, block_bits-1);
+            size_t bits_read = block_bits-start;
+            block_bg+=buffer.stream_size;
+
+            text_i.seekg(block_bg*w_bytes);
+            text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
+            if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
+                text_i.clear();
+            }
+
+            size_t bytes_read = INT_CEIL(bits_read, 8);
+            size_t offset = (8*bytes_read)-bits_read;
+            dst+=bytes_read-1;
+            if(offset>0){
+                uint8_t tail = buffer.read(0, offset-1);
+                *dst = (tail << (bits_read % 8)) | (*dst);
+                bits_read+=offset;
+            }
+
+            if(bits_read<(j-i+1)){
+                dst++;
+                buffer.read_chunk(dst, offset, j % block_bits);
+            }
+        }
+    }
+
+    inline size_t read_bits(size_t i, size_t j) {
+
+        assert(i<=j && (j-i+1)<=64);
+
+        size_t cell_i = i >> w_shift;
+        size_t cell_j = j >> w_shift;
+
+        assert(cell_j<tot_cells && (cell_j-cell_i+1)<=buffer.stream_size);
+
+        if(cell_i<block_bg || (block_bg+buffer.stream_size)<=cell_i){
+            block_bg = (cell_i/buffer.stream_size)*buffer.stream_size;
+            text_i.seekg(block_bg*w_bytes);
+            text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
+            if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
+                text_i.clear();
+            }
+        }
+
+        size_t start = i % block_bits;
+        if((cell_i/buffer.stream_size) == (cell_j/buffer.stream_size)){ //same block
+            return buffer.read(start, start+(j-i));
+        }else{ //different blocks
+
+            size_t data = buffer.read(start, block_bits-1);
+            size_t delta = block_bits-start;
+            block_bg+=buffer.stream_size;
+
+            text_i.seekg(block_bg*w_bytes);
+            text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
+            if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
+                text_i.clear();
+            }
+            return (buffer.read(0, j % block_bits)<<delta) | data;
+        }
     }
 };
 

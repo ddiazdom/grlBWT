@@ -17,3 +17,7 @@ size_t prev_power_of_two(unsigned long val){
     uint8_t width = sym_width(val);
     return 1UL<<(width-1);
 }
+
+bool is_power_of_two(unsigned long val){
+    return !(val & (val-1));
+}
