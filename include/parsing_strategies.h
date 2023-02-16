@@ -272,107 +272,59 @@ struct mt_parse_strat_t {//multi thread strategy
 
             file = thread.inner_map.dump_file();
             std::ifstream text_i(file, std::ios_base::binary);
-
-            text_i.seekg (0, std::ifstream::end);
-            size_t tot_bytes = text_i.tellg();
-            text_i.seekg (0, std::ifstream::beg);
-
-            //TODO testing
-            i_file_stream<size_t> data_disk_buffer(file, BUFFER_SIZE);
-            //
-
+            size_t tot_bytes = std::filesystem::file_size(file);
             if(tot_bytes==0) continue;
 
-            auto buffer = reinterpret_cast<char *>(malloc(tot_bytes));
+            size_t d_bits = thread.inner_map.description_bits();
+            size_t value_bits = thread.inner_map.value_bits();
+            size_t longest_key = thread.inner_map.longest_key();//in bits
 
-            text_i.read(buffer, std::streamsize(tot_bytes));
+            //size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, BUFFER_SIZE));
+            //buffer_size = next_power_of_two(buffer_size);
+            //i_file_stream<size_t> data_disk_buffer(file, buffer_size);
 
             bitstream<ht_buff_t> bits;
-            bits.stream = reinterpret_cast<ht_buff_t*>(buffer);
-
-            size_t d_bits = map.description_bits();
-            size_t next_bit = d_bits;
+            bits.stream = (ht_buff_t*) malloc(INT_CEIL(tot_bytes,sizeof(ht_buff_t))*sizeof(ht_buff_t));
+            bits.stream_size = INT_CEIL(tot_bytes, sizeof(ht_buff_t));
+            text_i.read((char *)bits.stream, std::streamsize(tot_bytes));
 
             //there is a region of the file that does not contain data
             // * * * | * 0 0 0 0 0 0 0 <- tot_bits
             //             | <- if next_bit falls in this region, the loop is still valid, but there is no more data
             size_t tot_bits = (tot_bytes*8)-8;
             size_t key_bits;
-            size_t value_bits=map.value_bits();
-
-            uint8_t* key=nullptr;
-            //TODO test
-            uint8_t* key_test= nullptr;
-            //
-            size_t max_key_bits=0;
+            size_t next_bit = d_bits;
+            auto * key= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
+            //auto * key_test= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
 
             while(next_bit<tot_bits){
 
                 key_bits = bits.read(next_bit-d_bits, next_bit-1);
-                //TODO
-                //if(data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1)!=key_bits){
-                //    std::cout<<"holaa"<<std::endl;
-                //}
-                assert(data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1)==key_bits);
+                //std::cout<<count++<<std::endl;
+                //key_bits = data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1);
+                //assert(key_bits_test==key_bits);
 
-                //
-                assert(key_bits>0);
-
-                size_t n_bytes = INT_CEIL(key_bits, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t);
-                if(key_bits>max_key_bits){
-                    if(key==nullptr){
-                        key = (uint8_t*) malloc(n_bytes);
-                        //TODO
-                        key_test = (uint8_t*) malloc(n_bytes);
-                        //
-                    }else {
-                        key = (uint8_t*) realloc(key, n_bytes);
-                        //TODO
-                        key_test = (uint8_t*) realloc(key, n_bytes);
-                        //
-                    }
-                    max_key_bits = key_bits;
-                }
-
-                //char *tmp = reinterpret_cast<char*>(key);
+                assert(key_bits>0 && key_bits<=longest_key);
                 key[INT_CEIL(key_bits, 8)-1] = 0;
-                //TODO
-                key_test[INT_CEIL(key_bits, 8)-1] = 0;
-                //
+                //key_test[INT_CEIL(key_bits, 8)-1] = 0;
 
                 bits.read_chunk(key, next_bit, next_bit+key_bits-1);
-
-                //TODO
-                data_disk_buffer.read_bit_chunk(key_test, next_bit, next_bit+key_bits-1);
-                assert(memcmp(key, key_test, INT_CEIL(key_bits, 8))==0);
-                //
+                //data_disk_buffer.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
+                //assert(memcmp(key, key_test, INT_CEIL(key_bits, 8))==0);
 
                 next_bit+=key_bits;
                 freq = bits.read(next_bit, next_bit+value_bits-1);
-                //TODO
-                //if(data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1)!=freq){
-                //    std::cout<<"holaa"<<std::endl;
-                //}
-                //std::cout<<data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1)<<" "<<freq<<" "<<std::endl;
-                assert(data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1)==freq);
-                //
-
+                //freq = data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1);
+                //assert(freq_test==freq);
                 next_bit+=value_bits+d_bits;
 
-                auto res = map.insert(key, key_bits, freq);
-                if(!res.second){
-                    size_t val=0;
-                    map.get_value_from(res.first, val);
-                    freq += val;
-                    map.insert_value_at(res.first, freq);
-                }else{
-                    dic_bits+=key_bits;
-                }
+                auto res = map.increment_value(key, key_bits, freq);
+                if(res==freq) dic_bits+=key_bits;
+                freq = res;
                 if(freq>max_freq) max_freq = freq;
 
                 //TODO this work for the opt BWT
                 /*if(!res.second){
-
                     flag = (freq & 3UL);
                     freq>>=1UL;
 
@@ -392,21 +344,16 @@ struct mt_parse_strat_t {//multi thread strategy
                     dic_bits+=key_bits;
                 }*/
             }
-            text_i.close();
-            //TODO testing
-            data_disk_buffer.close();
-            //
 
-            if(remove(file.c_str())){
-                std::cout<<"Error trying to remove temporal file"<<std::endl;
-                std::cout<<"Aborting"<<std::endl;
-                exit(1);
-            }
+            //
+            text_i.close();
+            //
+            //data_disk_buffer.close(true);
+            free(bits.stream);
             free(key);
-            free(buffer);
+            //free(key_test);
         }
         map.shrink_databuff();
-
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }
 

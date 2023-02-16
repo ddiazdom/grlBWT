@@ -40,11 +40,11 @@ struct i_file_stream{
         size_t file_size =  text_i.tellg();
         text_i.seekg (0, std::ifstream::beg);
 
-        size_t block_bytes = std::min<size_t>(buff_size_, file_size);
+        size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;//std::min<size_t>(buff_size_, file_size);
         block_bits = block_bytes*8;
 
         tot_cells = INT_CEIL(file_size, w_bytes);
-        buffer.stream_size = INT_CEIL(block_bytes, w_bytes);
+        buffer.stream_size = block_bytes/w_bytes;
         buffer.stream = new sym_t[buffer.stream_size];
 
         block_bg=0;
@@ -139,10 +139,11 @@ struct i_file_stream{
             dst+=bytes_read-1;
             if(offset>0){
                 uint8_t tail = buffer.read(0, offset-1);
-                *dst = (tail << (bits_read % 8)) | (*dst);
+                uint8_t left = (8 - offset);
+                *dst &= ~(bitstream<uint8_t>::masks[offset]<<left);//clean the area
+                *dst |= tail << left;//add new data in the area
                 bits_read+=offset;
             }
-
             if(bits_read<(j-i+1)){
                 dst++;
                 buffer.read_chunk(dst, offset, j % block_bits);

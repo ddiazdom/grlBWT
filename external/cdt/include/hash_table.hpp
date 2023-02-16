@@ -432,15 +432,17 @@ public:
         load_elm(in, d_bits);
     }
 
+    //returns the update value in the hash table
     template<class val_t = value_t>
-    typename std::enable_if<std::is_unsigned<val_t>::value, void>::type
+    typename std::enable_if<std::is_unsigned<val_t>::value, size_t>::type
     increment_value(const void* key, const size_t key_bits, value_t new_value) {
         auto res = insert(key, key_bits, new_value);
-        if(res.second) return;
+        if(res.second) return new_value;
 
         value_t old_value = data.read(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1);
         new_value += old_value;
         data.write(res.first+d_bits+key_bits, res.first+d_bits+key_bits+val_bits-1, new_value);
+        return new_value;
     }
 
     void resize_table(size_t new_n_buckets) {
@@ -1048,6 +1050,7 @@ private:
         max_buffer_bytes = data.stream_size*sizeof(buff_t)+n_buckets*sizeof(size_t);
     }
 
+
     void dynamic_init(size_t buffer_size){
         assert(!static_buffer);
 
@@ -1283,6 +1286,10 @@ public:
             m_load_factor = float(n_elms) / n_buckets;
         }
     };
+
+    size_t longest_key() const {
+        return max_key_bits;
+    }
 
     std::pair<size_t, bool> insert(const void* key, const size_t& key_bits, const value_t& val){
 
