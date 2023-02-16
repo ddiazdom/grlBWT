@@ -188,7 +188,7 @@ struct mt_parse_strat_t {//multi thread strategy
     size_t              text_size{};
 
     mt_parse_strat_t(std::string &i_file_, std::string& o_file_,
-                     parsing_info& p_info_, const size_t &hbuff_size,
+                     parsing_info& p_info_, size_t hbuff_size,
                      size_t n_threads) : i_file(i_file_),
                                          o_file(o_file_),
                                          map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
@@ -204,11 +204,17 @@ struct mt_parse_strat_t {//multi thread strategy
         }
         threads_data.reserve(thread_ranges.size());
 
-        //how many size_t cells we can fit in the buffer
-        size_t buff_cells = hbuff_size/sizeof(size_t);
+        // each thread has a hast table with a buffer of at least 8MB
+        hbuff_size = std::max<size_t>(hbuff_size, BUFFER_SIZE*n_threads);
 
+        // each thread has a buffer with the same size, and with an integral number of size_t words
+        size_t hb_bytes = INT_CEIL(INT_CEIL(hbuff_size, n_threads), sizeof(size_t)) * sizeof(size_t);
+        hbuff_size = hb_bytes*n_threads;
+
+        //how many size_t cells we can fit in the buffer
+        //size_t buff_cells = hbuff_size/sizeof(size_t);
         //number of bytes per thread
-        size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
+        //size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
         buff_addr = malloc(hbuff_size);
         auto tmp_addr = reinterpret_cast<char *>(buff_addr);
@@ -300,6 +306,11 @@ struct mt_parse_strat_t {//multi thread strategy
             while(next_bit<tot_bits){
 
                 key_bits = bits.read(next_bit-d_bits, next_bit-1);
+
+                if(key_bits/ sym_width(p_info.tot_phrases)==887){
+                    std::cout<<"\n whut ?"<<INT_CEIL(next_bit-d_bits, 8)<<" "<<tot_bytes<<" "<<std::endl;
+                }
+
                 //std::cout<<count++<<std::endl;
                 //key_bits = data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1);
                 //assert(key_bits_test==key_bits);
@@ -353,6 +364,7 @@ struct mt_parse_strat_t {//multi thread strategy
             free(key);
             //free(key_test);
         }
+
         map.shrink_databuff();
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }

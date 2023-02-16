@@ -805,6 +805,9 @@ private:
     //number of bits used in the key description
     size_t d_bits=0;
 
+    //maximum number of bits you can fit in the data buffer
+    size_t buff_limit{};
+
     //the variable query is a pointer containing the queried string
     inline bool equal(const void *query, size_t query_bits, size_t data_offset) const{
         size_t key_bits = data.read(data_offset, data_offset+d_bits-1);
@@ -815,8 +818,9 @@ private:
     inline std::pair<size_t, bool> insert_int(const void* key, size_t key_bits, const value_t& value){
 
         size_t pair_bits = key_bits+val_bits+d_bits;
-        size_t idx = next_av_bit - 1 + pair_bits;
+        assert(pair_bits<buff_limit);
 
+        size_t idx = next_av_bit - 1 + pair_bits;
         bool dump=false;//flag to indicate that the data was dumped
         if(idx >= data.n_bits()){
             if(static_buffer){
@@ -1029,19 +1033,20 @@ private:
         }
 
         //define the size of the hash table
-        n_buckets = (buffer_size/2)/sizeof(size_t); //half of the buffer for the hash table
-        n_buckets = 1UL<< sym_width(n_buckets); //resize the table to the next power of two
+        n_buckets = (buffer_size/4)/sizeof(size_t); //25% buffer for the hash table
+        n_buckets = next_power_of_two(n_buckets); //resize the table to the next power of two (50% of the buffer for the table, at most)
         assert(n_buckets>=4);
         table = reinterpret_cast<size_t*>(buff_addr);
 
         //define the size of the data
-        size_t rem_buff = buffer_size - n_buckets*sizeof(n_buckets);//the other half is for the data
+        size_t rem_buff = buffer_size - n_buckets*sizeof(size_t);//the other half is for the data
 
         //the address should be aligned!!
         assert(((uintptr_t)(table+n_buckets) % sizeof(buff_t))==0);
         data.stream_size = rem_buff/sizeof(buff_t);//the number of elements is floored
         data.stream = reinterpret_cast<buffer_t*>(table+n_buckets);
 
+        buff_limit = (data.stream_size-1)*sizeof(buffer_t);
         next_av_bit = 1;
         m_load_factor = 0;
         max_bck_dist = 0;
@@ -1107,6 +1112,7 @@ public:
             static_buffer = true;
             static_init(buffer_size, buff_addr);
         }
+        assert(static_buffer);
     }
 
     buffered_hash_table(buffered_hash_table&& other) noexcept{
@@ -1583,6 +1589,13 @@ public:
         }
     }
 
+    //TODO delete this
+    bool EndsWith(const std::string& a, const std::string& b) {
+        if (b.size() > a.size()) return false;
+        return std::equal(a.begin() + a.size() - b.size(), a.end(), b.begin());
+    }
+    //
+
     void dump_hash(){
 
         //next_av_bit is one-based!!
@@ -1590,6 +1603,10 @@ public:
         size_t written_bits = next_av_bit-1;
         size_t tot_bytes = INT_CEIL(written_bits, 8);
         size_t bytes_to_write;
+
+        if(EndsWith(file, "_0_66_phrases")){
+            std::cout<<" dump to "<<file<<" written_bits "<<written_bits<<" bytes written so far "<<dump_fs.tellp()<<std::endl;
+        }
 
         buffer_t tail=0;
         if(tot_bytes>0) {
@@ -1601,7 +1618,7 @@ public:
                 //leave the tail in the buffer
                 size_t n_cells = INT_CEIL(written_bits, bitstream<buffer_t>::word_bits);
                 bytes_to_write = (n_cells-1)*sizeof(buffer_t);
-                tail = data.stream[n_cells-1] & data.masks[rem];
+                tail = data.stream[n_cells-1] & bitstream<buffer_t>::masks[rem];
                 next_av_bit = rem+1;
             }
 
@@ -1628,7 +1645,9 @@ public:
             data.stream = reinterpret_cast<buffer_t *>(realloc(data.stream, data.stream_size*sizeof(buffer_t)));
         }
 
+        memset(data.stream, 0, data.stream_size*sizeof(size_t));
         data.stream[0] = tail;
+
         memset(table, 0, n_buckets * sizeof(size_t));
     };
 
