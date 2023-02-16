@@ -17,7 +17,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
     target_compile_options(biopar PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
+    #message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
     #target_compile_options(biopar PUBLIC -march=native)
 endif()
 

@@ -23,7 +23,7 @@ template<bool opt_bwt>
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace & tmp_ws,
                   size_t n_threads, str_collection& str_coll, float hbuff_frac, uint8_t b_p_r){
 
-    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(std::ceil(float(str_coll.n_char) * hbuff_frac)));
+    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_char) * hbuff_frac)));
 
     if constexpr (opt_bwt){
         std::cout<<"Constructing the optimal BCR BWT of "<<i_file<<std::endl;
