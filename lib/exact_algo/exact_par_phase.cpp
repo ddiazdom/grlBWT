@@ -470,6 +470,7 @@ namespace exact_algo {
         }else{
             psize = p_strategy.template parse_text<uint64_t>();
         }
+        assert(psize>=map.size());//the parse can't be smaller than the number of phrases
 
         end = std::chrono::steady_clock::now();
         report_time(start, end, 31);

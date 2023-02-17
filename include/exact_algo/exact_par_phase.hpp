@@ -119,20 +119,20 @@ namespace exact_algo {
             size_t j = 0, k = 0, freq;
 
             //TODO testing
-            std::vector<std::vector<size_t>> plain_dict;
+            //std::vector<std::vector<size_t>> plain_dict;
             //
 
             for (auto const &ptr: mp_map) {
                 //TODO
-                std::vector<size_t> phrase;
+                //std::vector<size_t> phrase;
                 //
 
                 for (size_t i = key_w.size(ptr); i-- > 0;) {
                     dict[j] = key_w.read(ptr, i);
-                    phrase.push_back(dict[j]);
+                    //phrase.push_back(dict[j]);
                     d_lim[j++] = false;
                 }
-                plain_dict.emplace_back(phrase);
+                //plain_dict.emplace_back(phrase);
                 d_lim[j - 1] = true;
 
                 freq = 0;
@@ -142,36 +142,36 @@ namespace exact_algo {
             }
 
             //TODO
-            std::cout<<"storing the dictionary in plain format, delete this"<<std::endl;
-            std::sort(plain_dict.begin(), plain_dict.end(), [](auto a, auto b){
-                for(size_t i=0;i<std::min(a.size(), b.size()); i++){
-                    if(a[i]!=b[i]) return a[i]<b[i];
-                }
-                return a.size()<b.size();
-            });
+            //std::cout<<"storing the dictionary in plain format, delete this"<<std::endl;
+            //std::sort(plain_dict.begin(), plain_dict.end(), [](auto a, auto b){
+            //    for(size_t i=0;i<std::min(a.size(), b.size()); i++){
+            //        if(a[i]!=b[i]) return a[i]<b[i];
+            //    }
+            //    return a.size()<b.size();
+            //});
 
-            std::ifstream ifs("serialized_dict_"+std::to_string(t_size), std::ios::in | std::ios::binary);
-            std::vector<std::vector<size_t>> correct_dict;
-            for(size_t i=0;i<plain_dict.size();i++){
-                std::vector<size_t> correct_phrase;
-                load_plain_vector(ifs, correct_phrase);
-                if(correct_phrase.size()!=plain_dict[i].size()){
-                    std::cout<<i<<" -> length corr "<<correct_phrase.size()<<" length malo "<<plain_dict[i].size()<<std::endl;
-                    std::cout<<"bueno: "<<std::endl;
-                    for(size_t u=0;u<correct_phrase.size();u++){
-                        std::cout<<correct_phrase[u]<<" ";
-                    }
-                    std::cout<<"malo: "<<std::endl;
-                    for(size_t u=0;u<plain_dict[i].size();u++){
-                        std::cout<<plain_dict[i][u]<<" ";
-                    }
-                }
-                assert(correct_phrase.size()==plain_dict[i].size());
-                for(size_t u=0;u<correct_phrase.size();u++){
-                    assert(correct_phrase[u]==plain_dict[i][u]);
-                }
-            }
-            ifs.close();
+            //std::ifstream ifs("serialized_dict_"+std::to_string(t_size), std::ios::in | std::ios::binary);
+            //std::vector<std::vector<size_t>> correct_dict;
+            //for(size_t i=0;i<plain_dict.size();i++){
+            //    std::vector<size_t> correct_phrase;
+            //    load_plain_vector(ifs, correct_phrase);
+            //    if(correct_phrase.size()!=plain_dict[i].size()){
+            //        std::cout<<i<<" -> length corr "<<correct_phrase.size()<<" length malo "<<plain_dict[i].size()<<std::endl;
+            //        std::cout<<"bueno: "<<std::endl;
+            //        for(size_t u=0;u<correct_phrase.size();u++){
+            //            std::cout<<correct_phrase[u]<<" ";
+            //        }
+            //        std::cout<<"malo: "<<std::endl;
+            //        for(size_t u=0;u<plain_dict[i].size();u++){
+            //            std::cout<<plain_dict[i][u]<<" ";
+            //        }
+            //    }
+            //    assert(correct_phrase.size()==plain_dict[i].size());
+            //    for(size_t u=0;u<correct_phrase.size();u++){
+            //        assert(correct_phrase[u]==plain_dict[i][u]);
+            //    }
+            //}
+            //ifs.close();
             //for(auto const &vector : plain_dict ){
             //    serialize_plain_vector(ofs, vector);
             //}
