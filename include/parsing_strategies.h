@@ -280,6 +280,7 @@ struct mt_parse_strat_t {//multi thread strategy
             std::ifstream text_i(file, std::ios_base::binary);
             size_t tot_bytes = std::filesystem::file_size(file);
             if(tot_bytes==0) continue;
+            std::cout<<tot_bytes<<std::endl;
 
             size_t d_bits = thread.inner_map.description_bits();
             size_t value_bits = thread.inner_map.value_bits();
@@ -299,17 +300,14 @@ struct mt_parse_strat_t {//multi thread strategy
             //             | <- if next_bit falls in this region, the loop is still valid, but there is no more data
             size_t tot_bits = (tot_bytes*8)-8;
             size_t key_bits;
-            size_t next_bit = d_bits;
+            size_t next_bit = 0;
             auto * key= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
             //auto * key_test= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
 
+            size_t count=0;
             while(next_bit<tot_bits){
-
-                key_bits = bits.read(next_bit-d_bits, next_bit-1);
-
-                if(key_bits/ sym_width(p_info.tot_phrases)==887){
-                    std::cout<<"\n whut ?"<<INT_CEIL(next_bit-d_bits, 8)<<" "<<tot_bytes<<" "<<std::endl;
-                }
+                //std::cout<<next_bit<<std::endl;
+                key_bits = bits.read(next_bit, next_bit+d_bits-1);
 
                 //std::cout<<count++<<std::endl;
                 //key_bits = data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1);
@@ -319,6 +317,7 @@ struct mt_parse_strat_t {//multi thread strategy
                 key[INT_CEIL(key_bits, 8)-1] = 0;
                 //key_test[INT_CEIL(key_bits, 8)-1] = 0;
 
+                next_bit+=d_bits;
                 bits.read_chunk(key, next_bit, next_bit+key_bits-1);
                 //data_disk_buffer.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
                 //assert(memcmp(key, key_test, INT_CEIL(key_bits, 8))==0);
@@ -327,7 +326,7 @@ struct mt_parse_strat_t {//multi thread strategy
                 freq = bits.read(next_bit, next_bit+value_bits-1);
                 //freq = data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1);
                 //assert(freq_test==freq);
-                next_bit+=value_bits+d_bits;
+                next_bit+=value_bits;
 
                 auto res = map.increment_value(key, key_bits, freq);
                 if(res==freq) dic_bits+=key_bits;
@@ -354,8 +353,10 @@ struct mt_parse_strat_t {//multi thread strategy
                     if(freq>max_freq) max_freq = freq;
                     dic_bits+=key_bits;
                 }*/
+                count++;
             }
 
+            std::cout<<"visits "<<count<<" -> "<<next_bit<<" "<<tot_bytes<<" whut? "<<float(dic_bits)/sym_width(p_info.tot_phrases)<<" "<<map.size()<<std::endl;
             //
             text_i.close();
             //
@@ -364,7 +365,6 @@ struct mt_parse_strat_t {//multi thread strategy
             free(key);
             //free(key_test);
         }
-
         map.shrink_databuff();
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }
@@ -386,6 +386,7 @@ struct mt_parse_strat_t {//multi thread strategy
         o_file_stream<o_sym_type> of(o_file, BUFFER_SIZE, std::ios::out);
         for(auto const& thread: threads_data){
             i_file_stream<o_sym_type> inv_chunk(thread.o_file, BUFFER_SIZE);
+            //std::cout<<"whut? ---> "<<thread.o_file<<" "<<inv_chunk.size()<<std::endl;
             for(size_t i = inv_chunk.size();i-->0;){
                 of.push_back(inv_chunk.read(i));
             }
@@ -533,7 +534,7 @@ struct mt_parse_strat_t {//multi thread strategy
         return tot_syms;
     }
 
-    void remove_files(){
+    /*void remove_files(){
         //remove remaining files
         for(size_t i=0;i<threads_data.size();i++){
             std::string tmp_file =  threads_data[i].ofs.file;
@@ -541,7 +542,7 @@ struct mt_parse_strat_t {//multi thread strategy
                 std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
             }
         }
-    }
+    }*/
 };
 
 template<class parser_type,

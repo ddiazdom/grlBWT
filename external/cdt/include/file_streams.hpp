@@ -35,20 +35,21 @@ struct i_file_stream{
 
         file =  i_file;
         text_i = std::ifstream(file, std::ifstream::binary);
+        assert(text_i.good());
 
         text_i.seekg (0, std::ifstream::end);
         size_t file_size =  text_i.tellg();
         text_i.seekg (0, std::ifstream::beg);
 
-        size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;//std::min<size_t>(buff_size_, file_size);
+        size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
+        buffer.stream_size = block_bytes/w_bytes;
+        buffer.stream = new sym_t[buffer.stream_size];
         block_bits = block_bytes*8;
 
         tot_cells = INT_CEIL(file_size, w_bytes);
-        buffer.stream_size = block_bytes/w_bytes;
-        buffer.stream = new sym_t[buffer.stream_size];
 
         block_bg=0;
-        text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
+        text_i.read((char*) buffer.stream, std::streamsize(std::min<size_t>(file_size, block_bytes)));
     }
 
     i_file_stream& operator=(i_file_stream<sym_t> &&other) noexcept{
@@ -92,6 +93,7 @@ struct i_file_stream{
     inline size_t read(size_t i) {
         assert(i<tot_cells);
         if(i<block_bg || (block_bg+buffer.stream_size)<=i){
+
             block_bg = (i/buffer.stream_size)*buffer.stream_size;
             text_i.seekg(block_bg*w_bytes);
             text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
@@ -402,6 +404,7 @@ struct o_file_stream{
         // if I don't flush the ofs buffer. However, flusing the buffer is expensive.
         // Maybe I should define an if macro here.
         assert(ofs.good());
+        std::cout<<file<<" tiene "<<ofs.tellp()<<" bytes "<<std::endl;
         modified=false;
     }
 

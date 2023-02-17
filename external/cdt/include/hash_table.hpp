@@ -285,17 +285,22 @@ private:
 
     //increase the data buffer to insert bits_to_fit bits
     void resize_data_buffer(size_t bits_to_fit) {
-        size_t bytes_to_fit = INT_CEIL(bits_to_fit, stream_t::word_bits)*sizeof(buffer_t);
+
+        //bytes we need to fit in the data buffer
+        size_t bytes_to_fit = INT_CEIL(bits_to_fit, 8);
 
         //number of bytes used by the data buffer
-        size_t used_data_bytes = INT_CEIL(next_av_bit, stream_t::word_bits)*sizeof(buffer_t);
+        size_t used_data_bytes = INT_CEIL(next_av_bit, 8);
 
         //minimum number of bytes we require for inserting the data
         size_t min_data_bytes = used_data_bytes+bytes_to_fit;
+
+
         auto new_size = size_t(data.stream_size*sizeof(buffer_t)*1.5);
 
         //maximum number of bytes we can allocate
-        size_t new_data_bytes = std::max(min_data_bytes, new_size);
+        size_t new_data_bytes = INT_CEIL(std::max(min_data_bytes, new_size), sizeof(buffer_t))*sizeof(buffer_t);
+
         data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_data_bytes));
         data.stream_size = new_data_bytes/sizeof(buffer_t);
     }
@@ -314,12 +319,18 @@ private:
     }
 
     void copy(hash_table& other){
+
         n_buckets = other.n_buckets;
+
         if(table==nullptr){
             table = (size_t*)malloc(sizeof(size_t)*n_buckets);
         }else{
             table = reinterpret_cast<size_t*>(realloc(table, n_buckets));
         }
+
+        //TODO you missed copying the data buffer
+        //
+
         next_av_bit = other.next_av_bit;
         max_bck_dist = other.max_bck_dist;
         n_elms = other.n_elms;
@@ -539,6 +550,11 @@ public:
         size_t new_size = INT_CEIL(next_av_bit, stream_t::word_bits)+1;
         data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_size*sizeof(buffer_t)));
         data.stream_size = new_size;
+
+        if(next_av_bit<((new_size-1)*sizeof(buffer_t)*8)){
+            data.write(next_av_bit+1, (new_size-1)*sizeof(buffer_t)*8-1, 0);
+        }
+        data.stream[new_size-1]=0;
     }
 
     inline void reset(){
@@ -751,10 +767,10 @@ class buffered_hash_table{
 private:
 
     typedef buffered_hash_table<value_t, val_bits, desc_bits> ht_type;
-    typedef size_t                                       buffer_t;
-    typedef bitstream<size_t>                            stream_t;
-    typedef hash_table_iterator<ht_type>             iterator;
-    friend                                               iterator;
+    typedef size_t                                            buffer_t;
+    typedef bitstream<size_t>                                 stream_t;
+    typedef hash_table_iterator<ht_type>                      iterator;
+    friend                                                    iterator;
 
     //limit bucket distance allowed for the data in the hash table
     const size_t limit_bck_dist = 0xFFFF;
@@ -1046,13 +1062,15 @@ private:
         data.stream_size = rem_buff/sizeof(buff_t);//the number of elements is floored
         data.stream = reinterpret_cast<buffer_t*>(table+n_buckets);
 
-        buff_limit = (data.stream_size-1)*sizeof(buffer_t);
+        buff_limit = (data.stream_size-1)*sizeof(buff_t)*8;
         next_av_bit = 1;
         m_load_factor = 0;
         max_bck_dist = 0;
         n_elms = 0;
         max_key_bits = 0;
         max_buffer_bytes = data.stream_size*sizeof(buff_t)+n_buckets*sizeof(size_t);
+        std::cout<<max_buffer_bytes<<" "<<buffer_size<<std::endl;
+        assert(max_buffer_bytes<=buffer_size);
     }
 
 
@@ -1604,9 +1622,7 @@ public:
         size_t tot_bytes = INT_CEIL(written_bits, 8);
         size_t bytes_to_write;
 
-        if(EndsWith(file, "_0_66_phrases")){
-            std::cout<<" dump to "<<file<<" written_bits "<<written_bits<<" bytes written so far "<<dump_fs.tellp()<<std::endl;
-        }
+        std::cout<<" dump to "<<file<<" written_bits "<<written_bits<<" bytes written so far "<<dump_fs.tellp()<<" "<<(written_bits % bitstream<buffer_t>::word_bits)<<std::endl;
 
         buffer_t tail=0;
         if(tot_bytes>0) {
