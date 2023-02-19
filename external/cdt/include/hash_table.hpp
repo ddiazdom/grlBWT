@@ -295,7 +295,6 @@ private:
         //minimum number of bytes we require for inserting the data
         size_t min_data_bytes = used_data_bytes+bytes_to_fit;
 
-
         auto new_size = size_t(data.stream_size*sizeof(buffer_t)*1.5);
 
         //maximum number of bytes we can allocate
@@ -343,20 +342,18 @@ private:
 
     void init() {
 
-        //minimum size for the hash table
+        //size for the hash table
         n_buckets = 4;
 
         //number of bytes allocated for the hash table
         size_t table_bytes = (n_buckets * sizeof(size_t));
-
-        //number of bytes allocated for the data buffer
-        size_t data_bytes = table_bytes*2;
-
         table = reinterpret_cast<size_t*>(malloc(table_bytes));
         memset(table, 0, table_bytes);
 
+        //number of bytes allocated for the data buffer
+        data.stream_size = 8;
+        size_t data_bytes = data.stream_size*sizeof(buffer_t);
         data.stream = reinterpret_cast<buffer_t *>(malloc(data_bytes));
-        data.stream_size = data_bytes/sizeof(buffer_t);
         memset(data.stream, 0, data_bytes);
 
         next_av_bit = 1;
@@ -547,14 +544,15 @@ public:
     }
 
     inline void shrink_databuff() {
-        size_t new_size = INT_CEIL(next_av_bit, stream_t::word_bits)+1;
+        //next_av_bit is zero-based
+        size_t written_bits = next_av_bit-1;
+        size_t new_size = INT_CEIL(written_bits, stream_t::word_bits);
         data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_size*sizeof(buffer_t)));
         data.stream_size = new_size;
 
-        if(next_av_bit<((new_size-1)*sizeof(buffer_t)*8)){
-            data.write(next_av_bit+1, (new_size-1)*sizeof(buffer_t)*8-1, 0);
-        }
-        data.stream[new_size-1]=0;
+        //fill the tail to avoid valgrind warnings
+        size_t buffer_bits = new_size*stream_t::word_bits;
+        data.write(written_bits, buffer_bits-1, 0);
     }
 
     inline void reset(){
