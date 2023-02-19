@@ -184,7 +184,7 @@ struct mt_parse_strat_t {//multi thread strategy
     parsing_info&       p_info;
     std::vector<long>&  str_ptr;
     std::vector<thread_worker_data_t> threads_data;
-    void *buff_addr=nullptr;
+    std::vector<char *> buff_addr;
     size_t              text_size{};
 
     mt_parse_strat_t(std::string &i_file_, std::string& o_file_,
@@ -209,21 +209,21 @@ struct mt_parse_strat_t {//multi thread strategy
 
         // each thread has a buffer with the same size, and with an integral number of size_t words
         size_t hb_bytes = INT_CEIL(INT_CEIL(hbuff_size, n_threads), sizeof(size_t)) * sizeof(size_t);
-        hbuff_size = hb_bytes*n_threads;
+        //hbuff_size = hb_bytes*n_threads;
 
         //how many size_t cells we can fit in the buffer
         //size_t buff_cells = hbuff_size/sizeof(size_t);
         //number of bytes per thread
         //size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
-        buff_addr = malloc(hbuff_size);
-        auto tmp_addr = reinterpret_cast<char *>(buff_addr);
         size_t k = 0;
         for (auto &range: thread_ranges) {
+            auto tmp_ptr = (char *)malloc(hb_bytes);
             std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
             tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
             threads_data.emplace_back(range.first, range.second, i_file, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
-                                      tmp_addr + (k * hb_bytes), p_info.tot_phrases);
+                                      tmp_ptr, p_info.tot_phrases);
+            buff_addr.push_back(tmp_ptr);
             k++;
         }
         assert(!threads_data.empty());
@@ -249,8 +249,8 @@ struct mt_parse_strat_t {//multi thread strategy
         for (size_t i = 0; i < threads_data.size(); i++) {
             threads_data[i].inner_map.flush();
             p_info.active_strings +=threads_data[i].active_strings;
+            free(buff_addr[i]);
         }
-        free(buff_addr);
 
 #ifdef __linux__
         malloc_trim(0);
@@ -365,7 +365,7 @@ struct mt_parse_strat_t {//multi thread strategy
             free(key);
             //free(key_test);
         }
-        map.shrink_databuff();
+        //map.shrink_databuff();
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }
 

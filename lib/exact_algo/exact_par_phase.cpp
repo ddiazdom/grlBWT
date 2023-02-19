@@ -496,6 +496,11 @@ namespace exact_algo {
 
         map.destroy_data();
         map.destroy_table();
+
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+
         return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
         /*else { //just copy the input
 
@@ -513,8 +518,5 @@ namespace exact_algo {
             std::cout<<"    No new phrases found"<<std::endl;
             return 0;
         }*/
-#ifdef __linux__
-        malloc_trim(0);
-#endif
     }
 }
