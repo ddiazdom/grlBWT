@@ -137,19 +137,23 @@ struct i_file_stream{
             }
 
             size_t bytes_read = INT_CEIL(bits_read, 8);
-            size_t offset = (8*bytes_read)-bits_read;
+            size_t offset = std::min((8*bytes_read), (j-i+1))-bits_read;
             dst+=bytes_read-1;
             if(offset>0){
                 uint8_t tail = buffer.read(0, offset-1);
-                uint8_t left = (8 - offset);
+                uint8_t left = bits_read % 8;
                 *dst &= ~(bitstream<uint8_t>::masks[offset]<<left);//clean the area
                 *dst |= tail << left;//add new data in the area
                 bits_read+=offset;
             }
+
             if(bits_read<(j-i+1)){
                 dst++;
-                buffer.read_chunk(dst, offset, j % block_bits);
+                size_t end = j % block_bits;
+                buffer.read_chunk(dst, offset, end);
+                bits_read+=end-offset+1;
             }
+            assert(bits_read==(j-i+1));
         }
     }
 
@@ -175,7 +179,6 @@ struct i_file_stream{
         if((cell_i/buffer.stream_size) == (cell_j/buffer.stream_size)){ //same block
             return buffer.read(start, start+(j-i));
         }else{ //different blocks
-
             size_t data = buffer.read(start, block_bits-1);
             size_t delta = block_bits-start;
             block_bg+=buffer.stream_size;
@@ -404,7 +407,6 @@ struct o_file_stream{
         // if I don't flush the ofs buffer. However, flusing the buffer is expensive.
         // Maybe I should define an if macro here.
         assert(ofs.good());
-        std::cout<<file<<" tiene "<<ofs.tellp()<<" bytes "<<std::endl;
         modified=false;
     }
 

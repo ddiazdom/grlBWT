@@ -7,7 +7,7 @@
 #ifdef __linux__
 #include <malloc.h>
 #endif
-//#include "malloc_count.h"
+#include "malloc_count.h"
 
 namespace exact_algo {
 
@@ -159,10 +159,6 @@ namespace exact_algo {
                         new_freq += freq;
                         if (new_freq > max_run_len) {
                             auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr - bps);
-
-                            //TODO fixing bug
-                            //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
-                            //
 
                             auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                             if (!res.second) {
@@ -690,8 +686,8 @@ namespace exact_algo {
             }
             auto end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
-            //malloc_count_print_status();
-            //malloc_count_reset_peak();
+            malloc_count_print_status();
+            malloc_count_reset_peak();
         }
     }
 
