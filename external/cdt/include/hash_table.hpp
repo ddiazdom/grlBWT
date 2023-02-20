@@ -199,6 +199,12 @@ private:
 
         idx = next_av_bit-1;
 
+        //TODO
+        if(idx==1173568){
+            std::cout<<"\n aca tengo un bug : "<<value<<" -> "<<idx<<" "<<(data.stream_size*64)<<std::endl;
+        }
+        //
+
         //write metadata (length, alphabet width) of the key
         data.write(idx, idx+d_bits-1, key_bits);
         idx+=d_bits;
@@ -218,6 +224,7 @@ private:
 
         next_av_bit += pair_bits;
         assert((next_av_bit-pair_bits)>0);
+
 
         return next_av_bit-pair_bits;
     }
@@ -547,12 +554,17 @@ public:
         //next_av_bit is zero-based
         size_t written_bits = next_av_bit-1;
         size_t new_size = INT_CEIL(written_bits, stream_t::word_bits);
-        data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, new_size*sizeof(buffer_t)));
-        data.stream_size = new_size;
 
-        //fill the tail to avoid valgrind warnings
-        size_t buffer_bits = new_size*stream_t::word_bits;
-        data.write(written_bits, buffer_bits-1, 0);
+        if(data.stream_size!=new_size) {
+            data.stream = reinterpret_cast<buffer_t *>(realloc(data.stream, new_size * sizeof(buffer_t)));
+            data.stream_size = new_size;
+            //fill the tail to avoid valgrind warnings
+            size_t buffer_bits = new_size*stream_t::word_bits;
+            assert(buffer_bits>=written_bits);
+            if(buffer_bits>written_bits){//clean the buffer tail
+                data.write(written_bits, buffer_bits-1, 0);
+            }
+        }
     }
 
     inline void reset(){
@@ -688,6 +700,7 @@ public:
         std::ostream ofs(&fb);
         ofs.write(reinterpret_cast<char *>(table), n_buckets*sizeof(size_t));
         ofs.tellp();
+        shrink_databuff();
         data.serialize(ofs);
         fb.close();
     }
@@ -1067,7 +1080,6 @@ private:
         n_elms = 0;
         max_key_bits = 0;
         max_buffer_bytes = data.stream_size*sizeof(buff_t)+n_buckets*sizeof(size_t);
-        std::cout<<max_buffer_bytes<<" "<<buffer_size<<std::endl;
         assert(max_buffer_bytes<=buffer_size);
     }
 
@@ -1605,13 +1617,6 @@ public:
         }
     }
 
-    //TODO delete this
-    bool EndsWith(const std::string& a, const std::string& b) {
-        if (b.size() > a.size()) return false;
-        return std::equal(a.begin() + a.size() - b.size(), a.end(), b.begin());
-    }
-    //
-
     void dump_hash(){
 
         //next_av_bit is one-based!!
@@ -1619,8 +1624,6 @@ public:
         size_t written_bits = next_av_bit-1;
         size_t tot_bytes = INT_CEIL(written_bits, 8);
         size_t bytes_to_write;
-
-        std::cout<<" dump to "<<file<<" written_bits "<<written_bits<<" bytes written so far "<<dump_fs.tellp()<<" "<<(written_bits % bitstream<buffer_t>::word_bits)<<std::endl;
 
         buffer_t tail=0;
         if(tot_bytes>0) {

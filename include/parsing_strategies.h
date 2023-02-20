@@ -154,8 +154,8 @@ struct mt_parse_strat_t {//multi thread strategy
 
     struct thread_worker_data_t{
 
-        size_t               start{};
-        size_t               end{};
+        size_t               start_str{};
+        size_t               end_str{};
         istream_t            ifs;
         std::string          o_file;
         phrase_map_t&        map;
@@ -163,19 +163,29 @@ struct mt_parse_strat_t {//multi thread strategy
         std::vector<long>&   str_ptr;
         size_t               max_symbol{};
         size_t               active_strings=0;
+        size_t               rb{};
 
         thread_worker_data_t(size_t start_, size_t end_, std::string& i_file, std::string& o_file_,
                              phrase_map_t& map_, std::vector<long>& str_ptr_,
                              const size_t &hb_size, void *hb_addr,
-                             size_t max_symbol_): start(start_),
-                                                  end(end_),
+                             size_t max_symbol_): start_str(start_),
+                                                  end_str(end_),
                                                   ifs(i_file, BUFFER_SIZE),
                                                   o_file(o_file_),
                                                   map(map_),
                                                   inner_map(hb_size, o_file + "_phrases", 0.7, hb_addr, map.description_bits()),
                                                   str_ptr(str_ptr_),
-                                                  max_symbol(max_symbol_){};
+                                                  max_symbol(max_symbol_),
+                                                  rb(str_ptr[end_str+1]-1){};
         thread_worker_data_t()=default;
+
+        inline std::pair<long, long> str2range(size_t str) const {
+            assert(start_str<=str && str<=end_str);
+            size_t bg = str_ptr[str];
+            size_t end = str ==end_str ? rb : str_ptr[str+1]-1;
+            assert(bg<=end);
+            return {bg, end};
+        }
     };
 
     std::string         i_file;
@@ -184,7 +194,7 @@ struct mt_parse_strat_t {//multi thread strategy
     parsing_info&       p_info;
     std::vector<long>&  str_ptr;
     std::vector<thread_worker_data_t> threads_data;
-    std::vector<char *> buff_addr;
+    char *              buff_addr;
     size_t              text_size{};
 
     mt_parse_strat_t(std::string &i_file_, std::string& o_file_,
@@ -209,21 +219,20 @@ struct mt_parse_strat_t {//multi thread strategy
 
         // each thread has a buffer with the same size, and with an integral number of size_t words
         size_t hb_bytes = INT_CEIL(INT_CEIL(hbuff_size, n_threads), sizeof(size_t)) * sizeof(size_t);
-        //hbuff_size = hb_bytes*n_threads;
+        hbuff_size = hb_bytes*n_threads;
 
         //how many size_t cells we can fit in the buffer
         //size_t buff_cells = hbuff_size/sizeof(size_t);
         //number of bytes per thread
         //size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
+        buff_addr = (char *)malloc(hbuff_size);
         size_t k = 0;
         for (auto &range: thread_ranges) {
-            auto tmp_ptr = (char *)malloc(hb_bytes);
             std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
             tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
             threads_data.emplace_back(range.first, range.second, i_file, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
-                                      tmp_ptr, p_info.tot_phrases);
-            buff_addr.push_back(tmp_ptr);
+                                      buff_addr+(hb_bytes*k), p_info.tot_phrases);
             k++;
         }
         assert(!threads_data.empty());
@@ -249,9 +258,9 @@ struct mt_parse_strat_t {//multi thread strategy
         for (size_t i = 0; i < threads_data.size(); i++) {
             threads_data[i].inner_map.flush();
             p_info.active_strings +=threads_data[i].active_strings;
-            free(buff_addr[i]);
         }
 
+        free(buff_addr);
 #ifdef __linux__
         malloc_trim(0);
 #endif
@@ -277,23 +286,26 @@ struct mt_parse_strat_t {//multi thread strategy
         for(auto const& thread : threads_data) {
 
             file = thread.inner_map.dump_file();
-            std::ifstream text_i(file, std::ios_base::binary);
             size_t tot_bytes = std::filesystem::file_size(file);
             if(tot_bytes==0) continue;
-            std::cout<<tot_bytes<<std::endl;
 
             size_t d_bits = thread.inner_map.description_bits();
             size_t value_bits = thread.inner_map.value_bits();
             size_t longest_key = thread.inner_map.longest_key();//in bits
 
-            //size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, BUFFER_SIZE));
-            //buffer_size = next_power_of_two(buffer_size);
-            //i_file_stream<size_t> data_disk_buffer(file, buffer_size);
+            size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, BUFFER_SIZE));
+            //size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, 1024));
+            buffer_size = next_power_of_two(buffer_size);
+            i_file_stream<size_t> data_disk_buffer(file, buffer_size);
 
-            bitstream<ht_buff_t> bits;
-            bits.stream = (ht_buff_t*) malloc(INT_CEIL(tot_bytes,sizeof(ht_buff_t))*sizeof(ht_buff_t));
-            bits.stream_size = INT_CEIL(tot_bytes, sizeof(ht_buff_t));
-            text_i.read((char *)bits.stream, std::streamsize(tot_bytes));
+            //TODO testing
+            //std::ifstream text_i(file, std::ios_base::binary);
+            //bitstream<ht_buff_t> bits;
+            //bits.stream = (ht_buff_t*) malloc(INT_CEIL(tot_bytes,sizeof(ht_buff_t))*sizeof(ht_buff_t));
+            //bits.stream_size = INT_CEIL(tot_bytes, sizeof(ht_buff_t));
+            //text_i.read((char *)bits.stream, std::streamsize(tot_bytes));
+            //auto * key_test= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
+            //
 
             //there is a region of the file that does not contain data
             // * * * | * 0 0 0 0 0 0 0 <- tot_bits
@@ -302,30 +314,35 @@ struct mt_parse_strat_t {//multi thread strategy
             size_t key_bits;
             size_t next_bit = 0;
             auto * key= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
-            //auto * key_test= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
 
-            size_t count=0;
-            while(next_bit<tot_bits){
-                //std::cout<<next_bit<<std::endl;
-                key_bits = bits.read(next_bit, next_bit+d_bits-1);
+            while(next_bit<tot_bits) {
 
-                //std::cout<<count++<<std::endl;
-                //key_bits = data_disk_buffer.read_bits(next_bit-d_bits, next_bit-1);
+                key_bits = data_disk_buffer.read_bits(next_bit, next_bit+d_bits-1);
+
+                //TODO testing
+                //size_t key_bits_test = bits.read(next_bit, next_bit+d_bits-1);
                 //assert(key_bits_test==key_bits);
+                //
 
                 assert(key_bits>0 && key_bits<=longest_key);
-                key[INT_CEIL(key_bits, 8)-1] = 0;
-                //key_test[INT_CEIL(key_bits, 8)-1] = 0;
 
+                key[INT_CEIL(key_bits, 8)-1] = 0;
                 next_bit+=d_bits;
-                bits.read_chunk(key, next_bit, next_bit+key_bits-1);
-                //data_disk_buffer.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
+                data_disk_buffer.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
+
+                //TODO testing
+                //key_test[INT_CEIL(key_bits_test, 8)-1] = 0;
+                //bits.read_chunk(key_test, next_bit, next_bit+key_bits-1);
                 //assert(memcmp(key, key_test, INT_CEIL(key_bits, 8))==0);
+                //
 
                 next_bit+=key_bits;
-                freq = bits.read(next_bit, next_bit+value_bits-1);
-                //freq = data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1);
+                freq = data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1);
+
+                //TODO testing
+                //size_t freq_test = bits.read(next_bit, next_bit+value_bits-1);
                 //assert(freq_test==freq);
+                //
                 next_bit+=value_bits;
 
                 auto res = map.increment_value(key, key_bits, freq);
@@ -353,19 +370,18 @@ struct mt_parse_strat_t {//multi thread strategy
                     if(freq>max_freq) max_freq = freq;
                     dic_bits+=key_bits;
                 }*/
-                count++;
             }
 
-            std::cout<<"visits "<<count<<" -> "<<next_bit<<" "<<tot_bytes<<" whut? "<<float(dic_bits)/sym_width(p_info.tot_phrases)<<" "<<map.size()<<std::endl;
-            //
-            text_i.close();
-            //
-            //data_disk_buffer.close(true);
-            free(bits.stream);
-            free(key);
+            //TODO testing
+            //text_i.close();
+            //free(bits.stream);
             //free(key_test);
+            //
+
+            data_disk_buffer.close(true);
+            free(key);
         }
-        //map.shrink_databuff();
+        map.shrink_databuff();
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }
 
@@ -402,10 +418,11 @@ struct mt_parse_strat_t {//multi thread strategy
         //update string pointers
         long acc=0, prev, str_len=0;
         for(size_t i=0;i<threads_data.size();i++){
-            prev = p_info.str_ptrs[threads_data[i].start];
-            for(size_t j=threads_data[i].start; j<=threads_data[i].end;j++){
+            prev = p_info.str_ptrs[threads_data[i].start_str];
+            for(size_t j=threads_data[i].start_str; j<=threads_data[i].end_str;j++){
                 acc += (prev-p_info.str_ptrs[j]);
                 prev = p_info.str_ptrs[j];
+
                 p_info.str_ptrs[j] = acc;
                 if(j>0 && (p_info.str_ptrs[j]-p_info.str_ptrs[j-1])>str_len){
                     str_len = p_info.str_ptrs[j]-p_info.str_ptrs[j-1];
@@ -563,8 +580,8 @@ struct st_parse_strat_t {//parse data for single thread
     std::vector<long>&  str_ptr;
     size_t              text_size{};
     size_t              max_symbol{};
-    size_t              start;
-    size_t              end;
+    size_t              start_str;
+    size_t              end_str;
     size_t              active_strings=0;
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
@@ -576,8 +593,8 @@ struct st_parse_strat_t {//parse data for single thread
                                              str_ptr(p_info.str_ptrs),
                                              text_size(ifs.size()),
                                              max_symbol(p_info.tot_phrases),
-                                             start(0),
-                                             end(str_ptr.size()-2){
+                                             start_str(0),
+                                             end_str(str_ptr.size()-2){
         tmp_o_file = o_file.substr(0, o_file.size() - 4);
         tmp_o_file.append("_inv");
 
@@ -588,6 +605,14 @@ struct st_parse_strat_t {//parse data for single thread
             size_t n_buckets = prev_power_of_two(p_info.lms_phrases);
             map.resize_table(n_buckets);
         }
+    }
+
+    [[nodiscard]] inline std::pair<long, long> str2range(size_t str) const {
+        assert(start_str<=str && str<=end_str);
+        size_t bg = str_ptr[str];
+        size_t end = str_ptr[str+1]-1;
+        assert(bg<=end);
+        return {bg, end};
     }
 
     std::pair<size_t, size_t> get_phrases() {
@@ -603,6 +628,13 @@ struct st_parse_strat_t {//parse data for single thread
             n_syms += key_w.size(ptr);
             freq = 0;
             map.get_value_from(ptr, freq);
+
+            //TODO testing
+            if(freq==0){
+                std::cout<<"here I have a bug at "<<ptr<<" "<<freq<<std::endl;
+            }
+            //
+
             assert(freq>0);
             if(freq>max_freq) max_freq = freq;
         }
@@ -616,8 +648,8 @@ struct st_parse_strat_t {//parse data for single thread
 
         //update string pointers
         long acc=0, str_len=0;
-        size_t prev = p_info.str_ptrs[start];
-        for(size_t j=start; j<=end; j++){
+        size_t prev = p_info.str_ptrs[start_str];
+        for(size_t j=start_str; j<=end_str; j++){
             acc += (prev-p_info.str_ptrs[j]);
             prev = p_info.str_ptrs[j];
             p_info.str_ptrs[j] = acc;

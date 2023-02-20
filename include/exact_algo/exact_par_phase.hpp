@@ -23,13 +23,14 @@ namespace exact_algo {
             //};
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
-                size_t start = data.str_ptr[str];
-                size_t end = data.str_ptr[str+1]-1;
-                data.active_strings += (start<=end);
-                return {start, end};
+                //size_t start = data.str_ptr[str];
+                //size_t end = data.str_ptr[str+1]-1;
+                auto range = data.str2range(str);
+                data.active_strings += (range.first<=range.second);
+                return range;//{start, end};
             };
 
-            parser_t()(data.ifs, data.start, data.end, data.max_symbol,
+            parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol,
                     //hash_phrase,
                     [&](string_t& phrase) -> void {
                         phrase.mask_tail();
@@ -59,22 +60,24 @@ namespace exact_algo {
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
 
-                assert(str>=data.start && str<=data.end);
-                size_t start = data.str_ptr[str];
-                size_t end = data.str_ptr[str+1]-1;
-
-                if((str+1)<=data.end){
+                //assert(str>=data.start && str<=data.end);
+                //size_t start = data.str_ptr[str];
+                //size_t end = data.str_ptr[str+1]-1;
+                //assert(start<=end);
+                auto range = data.str2range(str);
+                if((str+1)<=data.end_str){
                     data.str_ptr[str+1] = ofs.size()-1;
                 }
-                return {start, end};
+                return range; //{start, end};
             };
 
-            parser_t()(data.ifs, data.start, data.end, data.max_symbol, phrase2symbol, init_str);
+            parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, phrase2symbol, init_str);
 
-            data.str_ptr[data.start] = ofs.size()-1;
+            data.str_ptr[data.start_str] = ofs.size()-1;
 
             data.ifs.close();
             ofs.close();
+
             //pthread_exit(nullptr);
             return ofs.size();
         };

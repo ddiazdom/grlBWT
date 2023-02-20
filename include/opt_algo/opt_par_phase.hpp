@@ -164,15 +164,27 @@ namespace opt_algo {
                 }
             };
 
-            auto init_str = [&](size_t str) -> std::pair<long, long>{
+            /*auto init_str = [&](size_t str) -> std::pair<long, long>{
                 size_t start = data.str_ptr[str];
                 size_t end = data.str_ptr[str+1]-1;
                 str_len = end-start+1;
                 data.active_strings += (start<=end);
                 return {start, end};
+            };*/
+
+            auto init_str = [&](size_t str) -> std::pair<long, long>{
+
+                //assert(str>=data.start_str && str<=data.end_str);
+                //size_t start = data.str_ptr[str];
+                //size_t end = data.str_ptr[str+1]-1;
+                //str_len = end-start+1;
+                auto range = data.str2range(str);
+                str_len = range.second-range.first+1;
+                data.active_strings += (range.first<=range.second);
+                return range;
             };
 
-            parser_t()(data.ifs, data.start, data.end, data.max_symbol, hash_phrase, init_str);
+            parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, hash_phrase, init_str);
             //pthread_exit(nullptr);
         };
     };
@@ -201,20 +213,22 @@ namespace opt_algo {
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
 
-                assert(str>=data.start && str<=data.end);
-                size_t start = data.str_ptr[str];
-                size_t end = data.str_ptr[str+1]-1;
-                str_len = end-start+1;
+                //assert(str>=data.start_str && str<=data.end_str);
+                //size_t start = data.str_ptr[str];
+                //size_t end = data.str_ptr[str+1]-1;
+                //str_len = end-start+1;
+                auto range = data.str2range(str);
+                str_len = range.second-range.first+1;
 
-                if((str+1)<=data.end){
+                if((str+1)<=data.end_str){
                     data.str_ptr[str+1] = ofs.size()-1;
                 }
-                return {start, end};
+                return range;
             };
 
-            parser_t()(data.ifs, data.start, data.end, data.max_symbol, phrase2symbol, init_str);
+            parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, phrase2symbol, init_str);
 
-            data.str_ptr[data.start] = ofs.size()-1;
+            data.str_ptr[data.start_str] = ofs.size()-1;
 
             ofs.close();
             data.ifs.close();
