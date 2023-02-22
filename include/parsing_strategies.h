@@ -194,7 +194,7 @@ struct mt_parse_strat_t {//multi thread strategy
     parsing_info&       p_info;
     std::vector<long>&  str_ptr;
     std::vector<thread_worker_data_t> threads_data;
-    char *              buff_addr;
+    char *              buff_addr=nullptr;
     size_t              text_size{};
 
     mt_parse_strat_t(std::string &i_file_, std::string& o_file_,
