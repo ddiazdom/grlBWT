@@ -19,6 +19,13 @@
 #include <malloc.h>
 #endif
 
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#include <intrin.h>
+#endif
+
+#include <arm_neon.h>
+
 #define HASH(stream, bytes) XXH3_64bits(stream, bytes);
 //#define HASH(stream, bytes) mx3::hash((const uint8_t*)stream, bytes, 0);
 
@@ -198,12 +205,6 @@ private:
         }
 
         idx = next_av_bit-1;
-
-        //TODO
-        if(idx==1173568){
-            std::cout<<"\n aca tengo un bug : "<<value<<" -> "<<idx<<" "<<(data.stream_size*64)<<std::endl;
-        }
-        //
 
         //write metadata (length, alphabet width) of the key
         data.write(idx, idx+d_bits-1, key_bits);
@@ -589,10 +590,56 @@ public:
         return max_bck_dist;
     }
 
+    inline std::pair<size_t, bool> key2value_test(const void* key, size_t key_bits) const {
+
+        size_t hash = HASH(key, INT_CEIL(key_bits, 8));
+        size_t idx = hash & (n_buckets - 1);
+
+        size_t offset, bck_dist;
+
+        bck_dist = (table[idx] >> 44U);
+        if(bck_dist<1 || bck_dist==max_bck_dist) return {0, false};
+        offset = (table[idx] & 0xFFFFFFFFFFFul);
+        if(1==bck_dist && equal(key, key_bits, offset-1)) return {offset - 1, true};
+        idx = (idx+1) & (n_buckets - 1);
+
+        bck_dist = (table[idx] >> 44U);
+        if(bck_dist<2 || bck_dist==max_bck_dist) return {0, false};
+        offset = (table[idx] & 0xFFFFFFFFFFFul);
+        if(2==bck_dist && equal(key, key_bits, offset-1)) return {offset - 1, true};
+        idx = (idx+1) & (n_buckets - 1);
+
+        bck_dist = (table[idx] >> 44U);
+        if(bck_dist<3 || bck_dist==max_bck_dist) return {0, false};
+        offset = (table[idx] & 0xFFFFFFFFFFFul);
+        if(3==bck_dist && equal(key, key_bits, offset-1)) return {offset - 1, true};
+        idx = (idx+1) & (n_buckets - 1);
+
+        bck_dist = (table[idx] >> 44U);
+        if(bck_dist<4 || bck_dist==max_bck_dist) return {0, false};
+        offset = (table[idx] & 0xFFFFFFFFFFFul);
+        if(4==bck_dist && equal(key, key_bits, offset-1)) return {offset - 1, true};
+        idx = (idx+1) & (n_buckets - 1);
+
+        size_t i = 6;
+        while(i<=max_bck_dist && table[idx]!=0){
+            bck_dist = (table[idx] >> 44U);
+            if(bck_dist<i){
+                return {0, false};
+            }
+            offset = (table[idx] & 0xFFFFFFFFFFFul);
+            if(i==bck_dist && equal(key, key_bits, offset-1)){
+                return {offset - 1, true};
+            }
+            idx = (idx+1) & (n_buckets - 1);
+            i++;
+        }
+        return {0, false};
+    }
+
     inline std::pair<size_t, bool> find(const void* key, size_t key_bits) const {
 
         size_t hash = HASH(key, INT_CEIL(key_bits, 8));
-
         size_t idx = hash & (n_buckets - 1);
 
         if(table[idx]==0){
