@@ -402,7 +402,6 @@ struct mt_parse_strat_t {//multi thread strategy
         o_file_stream<o_sym_type> of(o_file, BUFFER_SIZE, std::ios::out);
         for(auto const& thread: threads_data){
             i_file_stream<o_sym_type> inv_chunk(thread.o_file, BUFFER_SIZE);
-            //std::cout<<"whut? ---> "<<thread.o_file<<" "<<inv_chunk.size()<<std::endl;
             for(size_t i = inv_chunk.size();i-->0;){
                 of.push_back(inv_chunk.read(i));
             }
@@ -410,7 +409,6 @@ struct mt_parse_strat_t {//multi thread strategy
         }
         of.close();
         size_t psize = of.size();
-
 
         //join the phrases in one single file
         //size_t psize = join_parse_chunks();

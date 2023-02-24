@@ -497,6 +497,10 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
                                                 hbuff_size, n_threads, symbol_desc, ws);
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 4);
+
+#ifdef __linux__
+        empty_page_cache(i_file)
+#endif
         //malloc_count_print_status();
         //malloc_count_reset_peak();
 
