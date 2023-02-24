@@ -6,6 +6,7 @@
 #include <fstream>
 #include <vector>
 #include <cassert>
+#include <cstring>
 
 int main (int argc, char** argv){
 
@@ -69,12 +70,15 @@ int main (int argc, char** argv){
 
     std::cout<<"Total symbols:         "<<n_symbols<<std::endl;
     std::cout<<"Alphabet:              "<<alphabet.size()<<std::endl;
+    for(size_t i=0;i<alphabet.size();i++){
+        std::cout<<"    symbol: "<<(int)alphabet[i]<<" freq: "<<sym_freqs[i]<<std::endl;
+    }
     std::cout<<"Smallest symbol:       "<<(int)alphabet[0]<<std::endl;
     std::cout<<"Greatest symbol:       "<<(int)alphabet.back()<<std::endl;
-    std::cout<<"Number of strings:     "<<sym_freqs[sep_sym]<<std::endl;
+    std::cout<<"Number of strings:     "<<sym_freqs[0]<<std::endl;
     std::cout<<"Longest string:        "<<longest_string<<std::endl;
     std::cout<<"Shortest string:       "<<shortest_string<<std::endl;
-    std::cout<<"Average string length: "<<n_symbols/sym_freqs[sep_sym]<<std::endl;
+    std::cout<<"Average string length: "<<n_symbols/sym_freqs[0]<<std::endl;
     std::cout<<"Sep. symbol:           "<<(int)sep_sym<<std::endl;
 
     if(sep_sym!=alphabet[0]){

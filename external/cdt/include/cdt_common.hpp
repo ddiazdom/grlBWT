@@ -7,7 +7,10 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstdlib>
+#include <sys/types.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 uint8_t sym_width(unsigned long val);
 
@@ -18,17 +21,7 @@ size_t prev_power_of_two(unsigned long val);
 bool is_power_of_two(unsigned long val);
 
 #ifdef __linux__
-void empty_page_cache(const char *filename) {
-    const int fd = open(filename, O_RDWR);
-    if (fd == -1) {
-        std::perror(filename);
-        std::exit(EXIT_FAILURE);
-    }
-    const off_t length = lseek(fd, 0, SEEK_END);
-    lseek(fd, 0L, SEEK_SET);
-    posix_fadvise(fd, 0, length, POSIX_FADV_DONTNEED);
-    close(fd);
-}
+void empty_page_cache(const char *filename);
 #endif
 
 template<class data_type>
