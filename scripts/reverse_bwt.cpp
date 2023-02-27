@@ -14,7 +14,7 @@ int main(int argc, char** argv){
 
     errno = 0;
     char *endptr;
-    long n_seqs;
+    long n_seqs=0;
     if(argc==4){
         n_seqs = strtol(argv[3], &endptr, 10);
     }

@@ -499,7 +499,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         report_time(start, end, 4);
 
 #ifdef __linux__
-        empty_page_cache(i_file)
+        empty_page_cache(i_file.c_str());
 #endif
         //malloc_count_print_status();
         //malloc_count_reset_peak();
