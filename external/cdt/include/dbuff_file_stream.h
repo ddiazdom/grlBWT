@@ -8,6 +8,8 @@
 #include <thread>
 #include <fcntl.h>
 #include <unistd.h>
+#include <mutex>
+#include <condition_variable>
 
 //std::mutex g_display_mutex;
 
@@ -24,14 +26,14 @@ struct dbuff_i_file_stream{
     size_t buff_pos{};
     size_t curr_buff={};
     size_t buff_size={};
-    sym_t *buff_mem = nullptr;
     int fp{};
 
     bool worker_thread_alive=true;
     std::mutex m;
     std::condition_variable cv;
+
     std::string data;
-    bool needs_disk_acc = true;
+    bool needs_disk_acc = false;
 
     bitstream<sym_t> buffers[n_buff];
     size_t inv_buff=0;
@@ -69,39 +71,28 @@ struct dbuff_i_file_stream{
         buff_pos = 0;
         text_pos = 0;
         curr_buff = 0;
-        inv_buff = 1;
+        inv_buff = 0;
+
         assert(((page_size*n_buff) % sizeof(sym_t))==0);
         buff_size =  (page_size*n_pages)/sizeof(sym_t);
 
-        if (posix_memalign((void **)&buff_mem, page_size, buff_size*sizeof(sym_t)*n_buff)) {
-            perror("posix_memalign failed");
-        }
-
-        read(fp, (char *) buff_mem, buff_size*sizeof(sym_t));
-        //text_i.read((char *) buff_mem, buff_size*sizeof(sym_t));
-        //assert(text_i.good());
-
-        auto mem_tmp = buff_mem;
         for(size_t i=0;i<n_buff;i++){
             buffers[i].stream_size = buff_size;
-            buffers[i].stream = mem_tmp;
-            mem_tmp+=buff_size;
+            if (posix_memalign((void **)&buffers[i].stream, page_size, buff_size*sizeof(sym_t))) {
+                perror("posix_memalign failed");
+            }
+            read(fp, (char *) buffers[i].stream, buff_size*sizeof(sym_t));
         }
 
         dw = std::thread([&](){
-
             std::unique_lock<std::mutex> lk(m);
             lk.unlock();
 
             while(worker_thread_alive){
                 lk.lock();
                 cv.wait(lk, [&]{return needs_disk_acc;});
-
                 read(fp, (char *)buffers[inv_buff].stream, buff_size*sizeof(sym_t));
-                //text_i.read((char*) buffers[inv_buff].stream, buff_size*sizeof(sym_t));
-                //text_i.good();
                 needs_disk_acc = false;
-
                 lk.unlock();
                 cv.notify_one();
             }
@@ -126,7 +117,7 @@ struct dbuff_i_file_stream{
         cv.notify_one();
         worker_thread_alive = false;
         dw.join();
-        free(buff_mem);
+        for(size_t i=0;i<n_buff;i++) free(buffers[i].stream);
         close_stream();
     }
 
