@@ -176,7 +176,7 @@ struct mt_parse_strat_t {//multi thread strategy
                                                   ifs(i_file, BUFFER_SIZE),
                                                   o_file(o_file_),
                                                   map(map_),
-                                                  inner_map(hb_size, o_file + "_phrases", 0.7, hb_addr, map.description_bits()),
+                                                  inner_map(hb_size, o_file +"_"+std::to_string(start_)+"_"+std::to_string(end_)+"_phrases", 0.7, hb_addr, map.description_bits()),
                                                   str_ptr(str_ptr_),
                                                   max_symbol(max_symbol_),
                                                   rb(str_ptr[end_str+1]-1){};
@@ -191,7 +191,6 @@ struct mt_parse_strat_t {//multi thread strategy
         }
     };
 
-    std::string         o_file;
     phrase_map_t        map;
     parsing_info&       p_info;
     std::vector<thread_worker_data_t> threads_data;
@@ -199,8 +198,7 @@ struct mt_parse_strat_t {//multi thread strategy
 
     mt_parse_strat_t(std::string &i_file_, std::string& o_file_,
                      parsing_info& p_info_, size_t hbuff_size,
-                     size_t n_threads) : o_file(o_file_),
-                                         map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
+                     size_t n_threads) : map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                          p_info(p_info_){
 
         std::vector<std::pair<size_t, size_t>> thread_ranges;
@@ -222,9 +220,7 @@ struct mt_parse_strat_t {//multi thread strategy
         buff_addr = (char *)malloc(hbuff_size);
         size_t k = 0;
         for (auto &range: thread_ranges) {
-            std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
-            tmp_o_file.append("_range_" +std::to_string(k));
-            threads_data.emplace_back(range.first, range.second, i_file_, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
+            threads_data.emplace_back(range.first, range.second, i_file_, o_file_, map, p_info.str_ptrs, hb_bytes,
                                       buff_addr+(hb_bytes*k), p_info.tot_phrases);
             k++;
         }
@@ -376,6 +372,12 @@ struct mt_parse_strat_t {//multi thread strategy
     template<class o_sym_type>
     size_t parse_text() {
 
+        size_t offset=0;
+        for(size_t i=0;i<threads_data.size();i++){
+            threads_data[i].offset = offset+threads_data[i].n_phrases;
+            offset += threads_data[i].n_phrases;
+        }
+
         std::vector<std::thread> threads(threads_data.size());
         parse_functor<thread_worker_data_t, parser_type, o_file_stream<o_sym_type>> pf;
 
@@ -386,35 +388,15 @@ struct mt_parse_strat_t {//multi thread strategy
             threads[i].join();
         }
 
-        //invert the chunks
-        o_file_stream<o_sym_type> of(o_file, BUFFER_SIZE, std::ios::out);
-        for(auto const& thread: threads_data){
-            i_file_stream<o_sym_type> chunk(thread.o_file, BUFFER_SIZE);
-            for(size_t i = 0; i<chunk.size(); i++){
-                of.push_back(chunk.read(i));
-            }
-            chunk.close(true);
-        }
-        of.close();
-        size_t psize = of.size();
-
-        //update string pointers
-        long str_len=0, offset=0;
-        for(size_t i=0;i<threads_data.size();i++){
-            for(size_t j=threads_data[i].start_str; j<=threads_data[i].end_str;j++){
-                p_info.str_ptrs[j] += offset;
-                if(j>0 && (p_info.str_ptrs[j]-p_info.str_ptrs[j-1])>str_len){
-                    str_len = p_info.str_ptrs[j]-p_info.str_ptrs[j-1];
-                }
-            }
-            offset+=threads_data[i].n_phrases;
-        }
-
+        size_t psize = offset;
         p_info.str_ptrs.back() = (long)psize;
-        if((p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2])>str_len){
-            str_len = (p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2]);
+
+        size_t str_len;
+        p_info.longest_str = 0;
+        for(size_t i=0;i<p_info.str_ptrs.size()-1;i++){
+            str_len = size_t(p_info.str_ptrs[i+1]-p_info.str_ptrs[i]);
+            if(p_info.longest_str < str_len) p_info.longest_str = str_len;
         }
-        p_info.longest_str = str_len;
 
         return psize;
     }
@@ -491,6 +473,7 @@ struct st_parse_strat_t {//parse data for single thread
     template<class o_sym_type>
     size_t parse_text() {
 
+        offset = n_phrases;
         size_t parse_size = parse_functor<st_parse_strat_t, parser_type, o_file_stream<o_sym_type>>()(*this);
         p_info.str_ptrs.back() = (long)parse_size;
 

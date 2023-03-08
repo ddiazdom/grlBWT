@@ -43,7 +43,6 @@ namespace exact_algo {
         size_t operator()(parse_data_t& data) {
 
             o_stream_type ofs(data.o_file, BUFFER_SIZE, std::ios::out);
-            data.offset = data.n_phrases;
 
             auto phrase2symbol = [&](string_t& phrase) -> void {
                 phrase.mask_tail();
@@ -64,7 +63,6 @@ namespace exact_algo {
 
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, phrase2symbol, init_str);
 
-            assert(data.offset==0);//this assert is temporary
             data.str_ptr[data.start_str] = data.offset;
 
             data.ifs.close();
