@@ -187,7 +187,6 @@ struct mt_parse_strat_t {//multi thread strategy
             return {bg, end};
         }
     };
-
     std::string         i_file;
     std::string         o_file;
     phrase_map_t        map;
