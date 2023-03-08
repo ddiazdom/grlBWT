@@ -16,13 +16,14 @@ struct parsing_info{
     size_t max_sym_freq=0; // most repeated symbol in the input text of the round
     size_t longest_str=0; //longest string in the parsing
     size_t active_strings=0; //number of active strings
+    size_t text_size=0;
     std::vector<long> str_ptrs;
 };
 
 template<class stream_t,
         class string_t,
         bool first_round>
-struct lms_parsing{
+struct lms_parsing {
 
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
@@ -163,6 +164,8 @@ struct mt_parse_strat_t {//multi thread strategy
         std::vector<long>&   str_ptr;
         size_t               max_symbol{};
         size_t               active_strings=0;
+        size_t               n_phrases=0;
+        size_t               offset=0;
         size_t               rb{};
 
         thread_worker_data_t(size_t start_, size_t end_, std::string& i_file, std::string& o_file_,
@@ -187,22 +190,18 @@ struct mt_parse_strat_t {//multi thread strategy
             return {bg, end};
         }
     };
-    std::string         i_file;
+
     std::string         o_file;
     phrase_map_t        map;
     parsing_info&       p_info;
-    std::vector<long>&  str_ptr;
     std::vector<thread_worker_data_t> threads_data;
     char *              buff_addr=nullptr;
-    size_t              text_size{};
 
     mt_parse_strat_t(std::string &i_file_, std::string& o_file_,
                      parsing_info& p_info_, size_t hbuff_size,
-                     size_t n_threads) : i_file(i_file_),
-                                         o_file(o_file_),
+                     size_t n_threads) : o_file(o_file_),
                                          map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
-                                         p_info(p_info_),
-                                         str_ptr(p_info.str_ptrs) {
+                                         p_info(p_info_){
 
         std::vector<std::pair<size_t, size_t>> thread_ranges;
         size_t str_per_thread = INT_CEIL(p_info.str_ptrs.size()-1, n_threads);
@@ -220,22 +219,16 @@ struct mt_parse_strat_t {//multi thread strategy
         size_t hb_bytes = INT_CEIL(INT_CEIL(hbuff_size, n_threads), sizeof(size_t)) * sizeof(size_t);
         hbuff_size = hb_bytes*n_threads;
 
-        //how many size_t cells we can fit in the buffer
-        //size_t buff_cells = hbuff_size/sizeof(size_t);
-        //number of bytes per thread
-        //size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
-
         buff_addr = (char *)malloc(hbuff_size);
         size_t k = 0;
         for (auto &range: thread_ranges) {
             std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
-            tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
-            threads_data.emplace_back(range.first, range.second, i_file, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
+            tmp_o_file.append("_range_" +std::to_string(k));
+            threads_data.emplace_back(range.first, range.second, i_file_, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
                                       buff_addr+(hb_bytes*k), p_info.tot_phrases);
             k++;
         }
         assert(!threads_data.empty());
-        text_size = threads_data[0].ifs.size();
     };
 
     mt_parse_strat_t()=default;
@@ -260,16 +253,12 @@ struct mt_parse_strat_t {//multi thread strategy
         }
 
         free(buff_addr);
+
 #ifdef __linux__
         malloc_trim(0);
 #endif
 
-        //join the different phrase files
-        //std::cout <<"      Merging thread data into one single hash table" << std::flush;
-        //auto start = std::chrono::steady_clock::now();
         auto join_res = join_thread_phrases();
-        //auto end = std::chrono::steady_clock::now();
-        //report_time(start, end, 3);
         return join_res;
     }
 
@@ -400,32 +389,25 @@ struct mt_parse_strat_t {//multi thread strategy
         //invert the chunks
         o_file_stream<o_sym_type> of(o_file, BUFFER_SIZE, std::ios::out);
         for(auto const& thread: threads_data){
-            i_file_stream<o_sym_type> inv_chunk(thread.o_file, BUFFER_SIZE);
-            for(size_t i = inv_chunk.size();i-->0;){
-                of.push_back(inv_chunk.read(i));
+            i_file_stream<o_sym_type> chunk(thread.o_file, BUFFER_SIZE);
+            for(size_t i = 0; i<chunk.size(); i++){
+                of.push_back(chunk.read(i));
             }
-            inv_chunk.close(true);
+            chunk.close(true);
         }
         of.close();
         size_t psize = of.size();
 
-        //join the phrases in one single file
-        //size_t psize = join_parse_chunks();
-
         //update string pointers
-        long acc=0, prev, str_len=0;
+        long str_len=0, offset=0;
         for(size_t i=0;i<threads_data.size();i++){
-            prev = p_info.str_ptrs[threads_data[i].start_str];
             for(size_t j=threads_data[i].start_str; j<=threads_data[i].end_str;j++){
-                acc += (prev-p_info.str_ptrs[j]);
-                prev = p_info.str_ptrs[j];
-
-                p_info.str_ptrs[j] = acc;
+                p_info.str_ptrs[j] += offset;
                 if(j>0 && (p_info.str_ptrs[j]-p_info.str_ptrs[j-1])>str_len){
                     str_len = p_info.str_ptrs[j]-p_info.str_ptrs[j-1];
                 }
             }
-            acc +=prev+1;
+            offset+=threads_data[i].n_phrases;
         }
 
         p_info.str_ptrs.back() = (long)psize;
@@ -434,129 +416,8 @@ struct mt_parse_strat_t {//multi thread strategy
         }
         p_info.longest_str = str_len;
 
-        //TODO testing
-        /*for(size_t ctr=0;ctr<(p_info.str_ptrs.size()-1);ctr++){
-            if(p_info.str_ptrs[ctr]<=(p_info.str_ptrs[ctr+1]-1)){
-                std::cout<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" "<<p_info.str_ptrs[ctr+1]-p_info.str_ptrs[ctr]<<" "<<p_info.longest_str<<std::endl;
-            }
-        }*/
-        //
-
-        //TODO testing
-        /*if(p_info.p_round>4){
-            for(size_t ctr=0;ctr<(p_info.str_ptrs.size()-1);ctr++){
-                if(p_info.str_ptrs[ctr]<=(p_info.str_ptrs[ctr+1]-1)){
-                    std::cout<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
-                    for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                        std::cout<<(ifs.read(k)>>1UL)<<" ";
-                    }
-                    std::cout<<""<<std::endl;
-                }
-            }
-            size_t ctr=1;
-            for(long i=0;i<(long)ifs.size();i++){
-                if(ifs.read(i)<tot_phrases && phrase_desc[ifs.read(i)]){
-                    if((i+1)!=p_info.str_ptrs[ctr]){
-                        while((i+1)>p_info.str_ptrs[ctr]){
-                            if(p_info.str_ptrs[ctr]>(p_info.str_ptrs[ctr+1]-1)){
-                                std::cout<<" xxx "<<p_info.str_ptrs[ctr]<<" "<<p_info.str_ptrs[ctr+1]-1<<std::endl;
-                            }else{
-                                std::cout<<" *** "<<p_info.str_ptrs[ctr]<<" "<<p_info.str_ptrs[ctr+1]-1<<" | ";
-                                for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                                    std::cout<<ifs.read(k)<<" ";
-                                }
-                                std::cout<<""<<std::endl;
-                            }
-                            ctr++;
-                        }
-                        if((i+1)==p_info.str_ptrs[ctr]){
-                            std::cout<<(i+1)<<" "<<p_info.str_ptrs[ctr]<<" - "<<(p_info.str_ptrs[ctr+1]-1)<<" | ";
-                            for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                                std::cout<<ifs.read(k)<<" ";
-                            }
-                            ctr++;
-                        }else{
-                            std::cout<<"wrong!"<<std::endl;
-                        }
-                    }else{
-                        std::cout<<(i+1)<<" "<<p_info.str_ptrs[ctr]<<" - "<<p_info.str_ptrs[ctr+1]-1<<" | "<<ifs.size()<<" "<<ctr<<std::endl;
-                        for(long k=p_info.str_ptrs[ctr];k<=(p_info.str_ptrs[ctr+1]-1);k++){
-                            std::cout<<ifs.read(k)<<" ";
-                        }
-                        std::cout<<""<<std::endl;
-                        ctr++;
-                    }
-                }
-            }
-        }*/
-        //
         return psize;
     }
-
-    size_t join_parse_chunks() {
-
-        //concatenate the files
-        std::ofstream of(o_file, std::ofstream::binary);
-        size_t buff_size = BUFFER_SIZE/sizeof(size_t);
-        size_t len, rem, to_read, start, end, tot_syms=0;
-        auto *buffer = new size_t[buff_size];
-        std::string file;
-
-        for(auto const& thread: threads_data){
-
-            file = thread.o_file;
-            std::ifstream tmp_i_file(file, std::ifstream::binary);
-
-            tmp_i_file.seekg (0, std::ifstream::end);
-            len = tmp_i_file.tellg()/sizeof(size_t);
-            tmp_i_file.seekg (0, std::ifstream::beg);
-
-            if(len>0){
-                rem=len;
-                to_read = std::min<size_t>(buff_size, len);
-
-                while(true){
-                    tmp_i_file.seekg( (rem - to_read) * sizeof(size_t));
-                    tmp_i_file.read((char *)buffer, sizeof(size_t)*to_read);
-                    assert(tmp_i_file.good());
-
-                    //invert data
-                    start =0;end=to_read-1;
-                    while(start<end){
-                        std::swap(buffer[start++], buffer[end--]);
-                    }
-
-                    of.write((char *)buffer, sizeof(size_t)*to_read);
-                    assert(of.good());
-
-                    rem -= tmp_i_file.gcount()/sizeof(size_t);
-                    to_read = std::min<size_t>(buff_size, rem);
-                    if(to_read == 0) break;
-                }
-                tmp_i_file.close();
-                tot_syms+=len;
-            }
-
-            if(remove(file.c_str())){
-                std::cout<<"Error trying to remove temporal file"<<std::endl;
-                std::cout<<"Aborting"<<std::endl;
-                exit(1);
-            }
-        }
-        delete[] buffer;
-        of.close();
-        return tot_syms;
-    }
-
-    /*void remove_files(){
-        //remove remaining files
-        for(size_t i=0;i<threads_data.size();i++){
-            std::string tmp_file =  threads_data[i].ofs.file;
-            if(remove(tmp_file.c_str())){
-                std::cout<<"Error trying to delete file "<<tmp_file<<std::endl;
-            }
-        }
-    }*/
 };
 
 template<class parser_type,
@@ -569,16 +430,16 @@ struct st_parse_strat_t {//parse data for single thread
 
     istream_t           ifs;
     std::string         o_file;
-    std::string         tmp_o_file;
 
     phrase_map_t        map;
     phrase_map_t&       inner_map;
     parsing_info&       p_info;
     std::vector<long>&  str_ptr;
-    size_t              text_size{};
     size_t              max_symbol{};
     size_t              start_str;
     size_t              end_str;
+    size_t              n_phrases=0;
+    size_t              offset=0;
     size_t              active_strings=0;
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
@@ -588,13 +449,9 @@ struct st_parse_strat_t {//parse data for single thread
                                              inner_map(map),
                                              p_info(p_info_),
                                              str_ptr(p_info.str_ptrs),
-                                             text_size(ifs.size()),
                                              max_symbol(p_info.tot_phrases),
                                              start_str(0),
                                              end_str(str_ptr.size()-2){
-        tmp_o_file = o_file.substr(0, o_file.size() - 4);
-        tmp_o_file.append("_inv");
-
         if(p_info.p_round>1){
             //auto n_buckets = std::max<size_t>(size_t(double(ifs.size())*0.2*0.4), 4);
             //n_buckets = next_power_of_two(n_buckets);
@@ -625,13 +482,6 @@ struct st_parse_strat_t {//parse data for single thread
             n_syms += key_w.size(ptr);
             freq = 0;
             map.get_value_from(ptr, freq);
-
-            //TODO testing
-            if(freq==0){
-                std::cout<<"here I have a bug at "<<ptr<<" "<<freq<<std::endl;
-            }
-            //
-
             assert(freq>0);
             if(freq>max_freq) max_freq = freq;
         }
@@ -642,32 +492,14 @@ struct st_parse_strat_t {//parse data for single thread
     size_t parse_text() {
 
         size_t parse_size = parse_functor<st_parse_strat_t, parser_type, o_file_stream<o_sym_type>>()(*this);
-
-        //update string pointers
-        long acc=0, str_len=0;
-        size_t prev = p_info.str_ptrs[start_str];
-        for(size_t j=start_str; j<=end_str; j++){
-            acc += (prev-p_info.str_ptrs[j]);
-            prev = p_info.str_ptrs[j];
-            p_info.str_ptrs[j] = acc;
-            if(j>0 && (p_info.str_ptrs[j]-p_info.str_ptrs[j-1])>str_len){
-                str_len = p_info.str_ptrs[j]-p_info.str_ptrs[j-1];
-            }
-        }
         p_info.str_ptrs.back() = (long)parse_size;
-        if((p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2])>str_len){
-            str_len = (p_info.str_ptrs.back() - p_info.str_ptrs[p_info.str_ptrs.size()-2]);
-        }
-        p_info.longest_str = str_len;
 
-        i_file_stream<o_sym_type> inv_parse(o_file, BUFFER_SIZE);
-        o_file_stream<o_sym_type> final_parse(tmp_o_file, BUFFER_SIZE, std::ios::out);
-        for(size_t i=inv_parse.size();i-->0;){
-            final_parse.push_back(inv_parse.read(i));
+        size_t str_len;
+        p_info.longest_str = 0;
+        for(size_t j=0; j<str_ptr.size()-1; j++){
+            str_len = size_t(p_info.str_ptrs[j+1]-p_info.str_ptrs[j]);
+            if(str_len>p_info.longest_str) p_info.longest_str = str_len;
         }
-        inv_parse.close(true);
-        final_parse.close();
-        rename(tmp_o_file.c_str(), o_file.c_str());
 
         return parse_size;
     }

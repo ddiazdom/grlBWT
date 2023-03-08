@@ -23,11 +23,6 @@ namespace exact_algo {
         size_t pos, new_size=0, l_sym, r_sym;
         vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
 
-        //TODO testing
-        //std::cout<<"\ndist stats"<<std::endl;
-        //new_phrases_ht.ht_stats(10);
-        //
-
         for(size_t u=0;u<s_sa.size();u++) {
 
             pos = s_sa[u];
@@ -46,26 +41,11 @@ namespace exact_algo {
 
                 if(phr_marks[pos]){
 
-                    //TODO
-                    /*if(p_info.p_round==11){
-                        std::cout<<"\n"<<pos<<std::endl;
-                    }*/
-                    //
-
                     phrase.clear();
                     do{
                         phrase.push_back(dict.dict[pos]);
                     }while(!dict.d_lim[pos++]);
                     phrase.mask_tail();
-
-                    //TODO
-                    /*if(p_info.p_round==11){
-                        for(size_t i=0;i<phrase.size();i++){
-                            std::cout<<phrase[i]<<" ";
-                        }
-                        std::cout<<""<<std::endl;
-                    }*/
-                    //
 
                     auto res = new_phrases_ht.find(phrase.data(), phrase.n_bits());
                     assert(res.second);
@@ -198,23 +178,6 @@ namespace exact_algo {
                         assert(res.second);
                         dict.phrases_has_hocc[rank] = true;
 
-                        //TODO
-                        /*if(p_info.p_round==11){
-                            for(size_t i=0;i<phrase.size();i++){
-                                std::cout<<phrase[i]<<" ";
-                            }
-                            std::cout<<" "<<std::endl;
-                            for (size_t j = bg_range; j <= u; j++) {
-                                std::cout<<" -> "<<((sa[j] >> 1UL) - 1)<<" : ";
-                                size_t tmp = ((sa[j] >> 1UL) - 1);
-                                do{
-                                    std::cout<<dict.dict[tmp]<<" ";
-                                }while(!dict.d_lim[tmp++]);
-                                std::cout<<""<<std::endl;
-                            }
-                        }*/
-                        //
-
                         for (size_t j = bg_range; j <= u; j++) {
                             phr_marks[(sa[j] >> 1UL) - 1] = true;
                         }
@@ -326,6 +289,7 @@ namespace exact_algo {
         p_info.str_ptrs.shrink_to_fit();
         p_info.longest_str = str_coll.longest_string;
         p_info.active_strings = str_coll.n_strings;
+        p_info.text_size = str_coll.n_char;
 
         size_t iter = 1;
         size_t n_syms;
@@ -416,7 +380,7 @@ namespace exact_algo {
             std::cout << "    Creating the dictionary from the hash table" << std::flush;
             start = std::chrono::steady_clock::now();
             dictionary dict(map, dict_sym, max_freq, phrase_desc,
-                            p_strategy.text_size, p_info.prev_alph,
+                            p_info.text_size, p_info.prev_alph,
                             std::max<size_t>(p_info.max_sym_freq, p_info.active_strings));
             end = std::chrono::steady_clock::now();
             map.destroy_data();
@@ -486,13 +450,14 @@ namespace exact_algo {
         p_info.max_sym_freq = max_freq;
         p_info.lms_phrases = map.size();
         p_info.tot_phrases = tot_phrases;
+        p_info.text_size = psize;
         p_info.p_round++;
 
         std::cout << "    Stats:" << std::endl;
         std::cout << "      Parsing phrases:                  " << p_info.lms_phrases << std::endl;
         std::cout << "      Number of symbols in the phrases: " << dict_sym << std::endl;
         std::cout << "      Number of unsolved BWT blocks:    " << p_info.tot_phrases << std::endl;
-        std::cout << "      Parse size:                       " << psize << std::endl;
+        std::cout << "      Parse size:                       " << p_info.text_size << std::endl;
 
         map.destroy_data();
         map.destroy_table();
@@ -502,21 +467,5 @@ namespace exact_algo {
 #endif
 
         return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
-        /*else { //just copy the input
-
-            / * std::ifstream in(i_file, std::ios_base::binary);
-            std::ofstream out(o_file, std::ios_base::binary);
-            auto buffer = reinterpret_cast<char*>(malloc(BUFFER_SIZE));
-            do {
-                in.read(&buffer[0], BUFFER_SIZE);
-                out.write(&buffer[0], in.gcount());
-                psize+=in.gcount();
-            } while (in.gcount() > 0);
-            free(buffer);
-            psize/=sizeof(typename parse_strategy_t::sym_type);
-            p_strategy.remove_files();* /
-            std::cout<<"    No new phrases found"<<std::endl;
-            return 0;
-        }*/
     }
 }

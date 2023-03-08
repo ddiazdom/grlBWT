@@ -17,14 +17,7 @@ namespace exact_algo {
 
         void operator()(parse_data_t& data) {
 
-            //auto hash_phrase = [&](string_t& phrase) -> void {
-            //    phrase.mask_tail();
-            //    data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
-            //};
-
             auto init_str = [&](size_t str) -> std::pair<long, long>{
-                //size_t start = data.str_ptr[str];
-                //size_t end = data.str_ptr[str+1]-1;
                 auto range = data.str2range(str);
                 data.active_strings += (range.first<=range.second);
                 return range;//{start, end};
@@ -35,6 +28,7 @@ namespace exact_algo {
                     [&](string_t& phrase) -> void {
                         phrase.mask_tail();
                         data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
+                        data.n_phrases++;
                     },
                     init_str);
             //pthread_exit(nullptr);
@@ -49,31 +43,29 @@ namespace exact_algo {
         size_t operator()(parse_data_t& data) {
 
             o_stream_type ofs(data.o_file, BUFFER_SIZE, std::ios::out);
+            data.offset = data.n_phrases;
 
             auto phrase2symbol = [&](string_t& phrase) -> void {
                 phrase.mask_tail();
                 size_t sym = 0;
                 auto res = data.map.key2value(phrase.data(), phrase.n_bits(), sym);
                 assert(res);
-                ofs.push_back(sym);
+                //ofs.push_back(sym);
+                ofs.write(--data.offset, sym);
             };
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
-
-                //assert(str>=data.start && str<=data.end);
-                //size_t start = data.str_ptr[str];
-                //size_t end = data.str_ptr[str+1]-1;
-                //assert(start<=end);
                 auto range = data.str2range(str);
                 if((str+1)<=data.end_str){
-                    data.str_ptr[str+1] = ofs.size()-1;
+                    data.str_ptr[str+1] = data.offset;
                 }
-                return range; //{start, end};
+                return range;
             };
 
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, phrase2symbol, init_str);
 
-            data.str_ptr[data.start_str] = ofs.size()-1;
+            assert(data.offset==0);//this assert is temporary
+            data.str_ptr[data.start_str] = data.offset;
 
             data.ifs.close();
             ofs.close();

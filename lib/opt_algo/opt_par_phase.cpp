@@ -574,7 +574,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
             std::cout<<"    Creating the dictionary from the hash table"<<std::flush;
             start = std::chrono::steady_clock::now();
             dictionary dict(map, dict_sym, max_freq, phrase_desc,
-                            p_strategy.text_size, p_info.prev_alph,
+                            p_info.text_size, p_info.prev_alph,
                             std::max<size_t>(p_info.max_sym_freq, p_info.active_strings));
             end = std::chrono::steady_clock::now();
             map.destroy_data();
