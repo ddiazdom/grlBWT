@@ -23,6 +23,17 @@ namespace exact_algo {
                 return range;//{start, end};
             };
 
+            //TODO testing
+            parser_t().forward(data.ifs, data.start_str, data.end_str, data.max_symbol,
+                    //hash_phrase,
+                       [&](string_t& phrase) -> void {
+                       },
+                       [&](size_t str){
+                            return data.str2range(str);
+
+                        });
+            //
+
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol,
                     //hash_phrase,
                     [&](string_t& phrase) -> void {
@@ -31,7 +42,6 @@ namespace exact_algo {
                         data.n_phrases++;
                     },
                     init_str);
-            //pthread_exit(nullptr);
         };
     };
 

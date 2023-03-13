@@ -358,12 +358,8 @@ namespace exact_algo {
 #endif
 
         phrase_map_t &map = p_strategy.map;
-        size_t psize;//<- for the iter stats
+        size_t psize;
         assert(map.size() > 0);
-
-        //TODO testing
-        //map.ht_stats(10);
-        //
 
         size_t dict_sym = res.first;
         size_t max_freq = res.second;
@@ -465,7 +461,6 @@ namespace exact_algo {
 #ifdef __linux__
         malloc_trim(0);
 #endif
-
         return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
     }
 }

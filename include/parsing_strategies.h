@@ -28,6 +28,7 @@ struct lms_parsing {
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
 
+    /*
     static void compute_breaks(stream_t& ifs,
                                size_t f_string, size_t l_string,
                                const std::function<void(size_t)>& process_phrase,
@@ -79,11 +80,90 @@ struct lms_parsing {
             }
         }
     }
+     */
+
+    inline void forward(stream_t& ifs,
+                        size_t f_string, size_t l_string, size_t max_symbol,
+                        std::function<void(string_t&)>&& process_phrase,
+                        std::function<std::pair<long, long>(size_t)>&& init_str) const {
+
+        sym_type curr_sym, prev_sym, tmp_sym;
+        string_t phrase(2, sym_width(max_symbol));
+        size_t end_ps, start_ps, prev_i;
+        uint8_t rep;
+        bool phrase_break;
+
+        phrase_map_t ht;
+
+        for(size_t str=f_string;str<=l_string;str++) {
+
+            auto range = init_str(str);
+
+            if(range.first<=range.second) { //if this is not true, it means the string was fully compressed
+
+                start_ps = range.first;
+                end_ps = range.second;
+                prev_sym = 0;
+
+                size_t i = start_ps;
+                if constexpr (first_round){
+                    rep = 3UL;
+                }else{
+                    rep = 0;
+                }
+
+                while(i<=end_ps) {
+
+                    curr_sym = ifs.read(i);
+                    if constexpr (first_round){
+                        tmp_sym = curr_sym;
+                    }else{
+                        rep = (rep << 1UL) | (curr_sym & 1UL);
+                        tmp_sym = curr_sym >> 1UL;
+                    }
+
+                    phrase.push_back(tmp_sym);
+                    prev_i=i;
+                    while(i<end_ps &&  curr_sym==ifs.read(i+1)) i++;
+
+                    if constexpr (first_round){
+                        phrase_break = (i==end_ps) || ((rep & 3UL) == 3 && prev_sym>tmp_sym && tmp_sym<ifs.read(i+1));
+                    }else{
+                        phrase_break = (i==end_ps) || ((rep & 3UL) == 3 && prev_sym>tmp_sym && tmp_sym<(ifs.read(i+1)>>1UL));
+                    }
+
+                    if(phrase_break){
+                        //process the phrase
+                        assert(!phrase.empty());
+
+                        //process_phrase(phrase);
+                        phrase.mask_tail();
+                        ht.increment_value(phrase.data(), phrase.n_bits(), 1);
+
+                        //create the new phrase
+                        phrase.clear();
+                        phrase.push_back(tmp_sym);
+                    }
+
+                    for(size_t j=prev_i;j<i;j++){
+                        phrase.push_back(tmp_sym);
+                    }
+
+                    prev_sym = tmp_sym;
+                    i++;
+                }
+
+                phrase.clear();
+            }
+        }
+        std::cout<<"I produced "<<ht.size()<<" phrases "<<std::endl;
+    }
 
     inline void operator()(stream_t& ifs,
                            size_t f_string, size_t l_string, size_t max_symbol,
                            std::function<void(string_t&)>&& process_phrase,
                            std::function<std::pair<long, long>(size_t)>&& init_str) const {
+
 
         sym_type curr_sym, prev_sym;
         string_t phrase(2, sym_width(max_symbol));
