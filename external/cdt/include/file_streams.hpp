@@ -2,8 +2,8 @@
 // Created by diego on 17-02-20.
 //
 
-#ifndef LMS_COMPRESSOR_FILE_BUFFER_H
-#define LMS_COMPRESSOR_FILE_BUFFER_H
+#ifndef CDT_FILE_STREAMS_H
+#define CDT_FILE_STREAMS_H
 
 #include <fstream>
 #include <cassert>
@@ -11,17 +11,13 @@
 #include <cstring>
 #include <limits>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include "bitstream.h"
 
-#ifdef __linux__
-extern "C" int posix_fadvice(int fd, off_t offset, off_t len, int advice);
-#endif
-
 template<class sym_t>
 struct i_file_stream{
-
-    int fd_advice(int fd, off_t offset, off_t length, int advice);
 
     typedef sym_t sym_type;
     //std::ifstream text_i;
@@ -44,7 +40,7 @@ struct i_file_stream{
     i_file_stream(const std::string& i_file,
                   size_t buff_size_
 #ifdef __linux__
-, int fd_advice = POSIX_FADV_NORMAL
+, int advice = POSIX_FADV_NORMAL
 #endif
                   ){
 
@@ -59,7 +55,7 @@ struct i_file_stream{
         file_size = st.st_size;
 
 #ifdef __linux__
-        fd_advice(fd, 0, file_size, fd_advice);
+        posix_fadvise(fd, 0, file_size, advice);
 #endif
 
         size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
@@ -137,8 +133,7 @@ struct i_file_stream{
 #ifdef __linux__
             if(prev_block_bg<tot_cells){
                 size_t n_cells = std::min(tot_cells-prev_block_bg, buffer.stream_size);
-                //posix_fadvice(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
-                fd_advice(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
+                posix_fadvise(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
             }
 #endif
         }
@@ -545,6 +540,4 @@ struct o_file_stream{
         close();
     }
 };
-
-
-#endif //LMS_COMPRESSOR_FILE_BUFFER_H
+#endif //CDT_FILE_STREAMS_H
