@@ -37,9 +37,9 @@ private:
                std::function<std::pair<long, long>(size_t)>&& init_str){
 
         bool phrase_break;
-        sym_type curr_sym, prev_sym;
+        sym_type curr_sym, prev_sym, tmp_sym;
         string_t phrase(2, sym_width(max_symbol));
-        size_t prev_i, tmp_sym, end_ps, start_ps;
+        size_t prev_i, end_ps, start_ps;
         uint8_t rep;
 
         for(size_t str=f_string;str<=l_string;str++) {
@@ -324,7 +324,7 @@ struct mt_parse_strat_t {//multi thread strategy
             buffer_size = next_power_of_two(buffer_size);
             i_file_stream<size_t> data_disk_buffer(file, buffer_size
 #ifdef __linux__
-                                                  ,POSIX_ADV_SEQUENTIAL
+                                                  ,POSIX_FADV_SEQUENTIAL
 #endif
 );
 
@@ -474,7 +474,7 @@ struct st_parse_strat_t {//parse data for single thread
                      parsing_info& p_info_): ifs(i_file_,
                                                  BUFFER_SIZE
 #ifdef __linux__
-, POSIX_ADV_SEQUENTIAL
+, POSIX_FADV_SEQUENTIAL
 #endif
                                                  ),
                                              o_file(o_file_),

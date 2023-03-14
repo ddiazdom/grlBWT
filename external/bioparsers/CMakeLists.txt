@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_library(biopar
         lib/dna_string.cpp
-        lib/fastx_handler.cpp include/kseq.h)
+        lib/fastx_handler.cpp)
 
 target_compile_options(biopar
         PUBLIC

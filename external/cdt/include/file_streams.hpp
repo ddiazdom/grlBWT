@@ -14,6 +14,10 @@
 #include <fcntl.h>
 #include "bitstream.h"
 
+#ifdef __linux__
+extern "C" int posix_fadvice(int fd, off_t offset, off_t len, int advice);
+#endif
+
 template<class sym_t>
 struct i_file_stream{
 
@@ -38,7 +42,7 @@ struct i_file_stream{
     i_file_stream(const std::string& i_file,
                   size_t buff_size_
 #ifdef __linux__
-, int fd_advice
+, int fd_advice = POSIX_FADV_NORMAL
 #endif
                   ){
 
@@ -53,7 +57,7 @@ struct i_file_stream{
         file_size = st.st_size;
 
 #ifdef __linux__
-        posix_fadvice(fd, 0, file_size, fd_advice);
+        this->posix_fadvice(fd, 0, file_size, fd_advice);
 #endif
 
         size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
@@ -129,9 +133,9 @@ struct i_file_stream{
             assert(read>0);
 
 #ifdef __linux__
-            if((prev_bg<tot_cells){
+            if(prev_block_bg<tot_cells){
                 size_t n_cells = std::min(tot_cells-prev_block_bg, buffer.stream_size);
-                posix_fadvice(fd, prev_bg*w_bytes, n_cells*w_bytes, POSIX_ADV_DONTNEED);
+                this->posix_fadvice(fd, prev_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
             }
 #endif
         }
