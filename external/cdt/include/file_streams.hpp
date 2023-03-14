@@ -57,7 +57,7 @@ struct i_file_stream{
         file_size = st.st_size;
 
 #ifdef __linux__
-        this->posix_fadvice(fd, 0, file_size, fd_advice);
+        posix_fadvice(fd, 0, file_size, fd_advice);
 #endif
 
         size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
@@ -135,7 +135,7 @@ struct i_file_stream{
 #ifdef __linux__
             if(prev_block_bg<tot_cells){
                 size_t n_cells = std::min(tot_cells-prev_block_bg, buffer.stream_size);
-                this->posix_fadvice(fd, prev_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
+                posix_fadvice(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
             }
 #endif
         }
