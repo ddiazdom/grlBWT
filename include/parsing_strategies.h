@@ -30,8 +30,7 @@ public:
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
 
-//private:
-
+private:
     static void forward_parsing(stream_t& ifs,
                size_t f_string, size_t l_string, size_t max_symbol,
                std::function<void(string_t&)>&& process_phrase,
@@ -60,7 +59,7 @@ public:
 
                 while(i<=end_ps) {
 
-                    curr_sym = ifs.read(i);
+                    curr_sym = ifs[i];
                     if constexpr (first_round){
                         tmp_sym = curr_sym;
                     }else{
@@ -70,12 +69,12 @@ public:
 
                     phrase.push_back(tmp_sym);
                     prev_i=i;
-                    while(i<end_ps &&  curr_sym==ifs.read(i+1)) i++;
+                    while(i<end_ps &&  curr_sym==ifs[i+1]) i++;
 
                     if constexpr (first_round){
-                        phrase_break = (i==end_ps) || ((rep & 3UL) == 3 && prev_sym>tmp_sym && tmp_sym<ifs.read(i+1));
+                        phrase_break = (i==end_ps) || ((rep & 3UL) == 3 && prev_sym>tmp_sym && tmp_sym<ifs[i+1]);
                     }else{
-                        phrase_break = (i==end_ps) || ((rep & 3UL) == 3 && prev_sym>tmp_sym && tmp_sym<(ifs.read(i+1)>>1UL));
+                        phrase_break = (i==end_ps) || ((rep & 3UL) == 3 && prev_sym>tmp_sym && tmp_sym<(ifs[i+1]>>1UL));
                     }
 
                     if(phrase_break){
@@ -133,7 +132,7 @@ public:
 
                 for (size_t i = end_ps; i-- > start_ps;) {
 
-                    curr_sym = ifs.read(i);
+                    curr_sym = ifs[i];
 
                     if constexpr (!first_round){
                         rep = (rep << 1UL) | (curr_sym & 1UL);
@@ -211,7 +210,12 @@ struct mt_parse_strat_t {//multi thread strategy
                              const size_t &hb_size, void *hb_addr,
                              size_t max_symbol_): start_str(start_),
                                                   end_str(end_),
-                                                  ifs(i_file, BUFFER_SIZE),
+                                                  ifs(i_file,
+                                                      BUFFER_SIZE
+#ifdef __linux__
+, POSIX_FADV_SEQUENTIAL
+#endif
+                                                      ),
                                                   o_file(o_file_),
                                                   map(map_),
                                                   inner_map(hb_size, o_file +"_"+std::to_string(start_)+"_"+std::to_string(end_)+"_phrases", 0.7, hb_addr, map.description_bits()),
@@ -318,7 +322,11 @@ struct mt_parse_strat_t {//multi thread strategy
             size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, BUFFER_SIZE));
             //size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, 1024));
             buffer_size = next_power_of_two(buffer_size);
-            i_file_stream<size_t> data_disk_buffer(file, buffer_size);
+            i_file_stream<size_t> data_disk_buffer(file, buffer_size
+#ifdef __linux__
+                                                  ,POSIX_ADV_SEQUENTIAL
+#endif
+);
 
             //TODO testing
             //std::ifstream text_i(file, std::ios_base::binary);
@@ -400,7 +408,7 @@ struct mt_parse_strat_t {//multi thread strategy
             //free(key_test);
             //
 
-            data_disk_buffer.close(true);
+            data_disk_buffer.close_reader(true);
             free(key);
         }
         map.shrink_databuff();
@@ -463,7 +471,12 @@ struct st_parse_strat_t {//parse data for single thread
     size_t              active_strings=0;
 
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
-                     parsing_info& p_info_): ifs(i_file_, BUFFER_SIZE),
+                     parsing_info& p_info_): ifs(i_file_,
+                                                 BUFFER_SIZE
+#ifdef __linux__
+, POSIX_ADV_SEQUENTIAL
+#endif
+                                                 ),
                                              o_file(o_file_),
                                              map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                              inner_map(map),

@@ -231,7 +231,7 @@ namespace opt_algo {
             data.str_ptr[data.start_str] = ofs.size()-1;
 
             ofs.close();
-            data.ifs.close();
+            data.ifs.close_reader();
             return ofs.size();
             //pthread_exit(nullptr);
         };

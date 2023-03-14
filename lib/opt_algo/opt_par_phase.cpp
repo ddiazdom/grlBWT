@@ -29,10 +29,10 @@ namespace opt_algo {
         bool is_last;
         string_t phrase(2, sym_width(alphabet));
         while(i<nested_phrases.size()){
-            meta_sym = offset - nested_phrases.read(i++);
+            meta_sym = offset - nested_phrases[i++];
             dict.phrases_has_hocc[meta_sym] = true;
             do{
-                sym = nested_phrases.read(i++);
+                sym = nested_phrases[i++];
                 is_last = sym & 1UL;
                 phrase.push_back(sym>>1UL);
             }while(!is_last);
@@ -41,7 +41,7 @@ namespace opt_algo {
             phrases_ht.insert(phrase.data(), phrase.n_bits(), (alphabet + meta_sym));
             phrase.clear();
         }
-        nested_phrases.close(true);
+        nested_phrases.close_reader(true);
 
         size_t pos, new_size=0, l_sym, r_sym;
         vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
@@ -49,7 +49,7 @@ namespace opt_algo {
         sdsl::load_from_file(meta_sym_marks, ws.get_file("meta_sym_marks"));
 
         for(size_t u=s_sa.size();u-->0;) {
-            pos = s_sa.read(u);
+            pos = s_sa[u];
             assert(pos<dict.dict.size() && !dict.d_lim[pos]);
             pos++;
             while(!meta_sym_marks[pos] && !dict.d_lim[pos]) pos++;
@@ -89,7 +89,7 @@ namespace opt_algo {
         dict.dict.swap(new_dict);
         dict.n_phrases = s_sa.size();
 
-        s_sa.close(true);
+        s_sa.close_reader(true);
         ws.remove_file("meta_sym_marks");
 
         sdsl::util::clear(dict.d_lim);

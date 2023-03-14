@@ -10,16 +10,20 @@
 #include <iostream>
 #include <cstring>
 #include <limits>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "bitstream.h"
 
 template<class sym_t>
 struct i_file_stream{
 
     typedef sym_t sym_type;
-    std::ifstream text_i;
+    //std::ifstream text_i;
+    int fd{};
     size_t tot_cells{};
     size_t block_bg{};
     size_t block_bits{};
+    size_t file_size{};
     bitstream<sym_t> buffer;
 
     std::string file;
@@ -31,15 +35,26 @@ struct i_file_stream{
         move(std::forward<i_file_stream<sym_t>>(other));
     }
 
-    i_file_stream(const std::string& i_file, size_t buff_size_){
+    i_file_stream(const std::string& i_file,
+                  size_t buff_size_
+#ifdef __linux__
+, int fd_advice
+#endif
+                  ){
 
         file =  i_file;
-        text_i = std::ifstream(file, std::ifstream::binary);
-        assert(text_i.good());
+        //text_i = std::ifstream(file, std::ifstream::binary);
+        //assert(text_i.good());
+        fd = open(i_file.c_str(), O_RDONLY);
+        assert(fd>0);
 
-        text_i.seekg (0, std::ifstream::end);
-        size_t file_size =  text_i.tellg();
-        text_i.seekg (0, std::ifstream::beg);
+        struct stat st{};
+        fstat(fd, &st);
+        file_size = st.st_size;
+
+#ifdef __linux__
+        posix_fadvice(fd, 0, file_size, fd_advice);
+#endif
 
         size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
         buffer.stream_size = block_bytes/w_bytes;
@@ -48,8 +63,11 @@ struct i_file_stream{
 
         tot_cells = INT_CEIL(file_size, w_bytes);
 
-        block_bg=0;
-        text_i.read((char*) buffer.stream, std::streamsize(std::min<size_t>(file_size, block_bytes)));
+        block_bg=tot_cells;//small hack to read the first time the [] operator is called
+
+        //ssize_t read = pread(fd,(char *) buffer.stream, ssize_t(std::min<size_t>(file_size, block_bytes)), 0);
+        //assert(read>0);
+        //text_i.read((char*) buffer.stream, std::streamsize(std::min<size_t>(file_size, block_bytes)));
     }
 
     i_file_stream& operator=(i_file_stream<sym_t> &&other) noexcept{
@@ -59,26 +77,29 @@ struct i_file_stream{
 
     void move(i_file_stream<sym_t> &&other){
         std::swap(file, other.file);
-        std::swap(text_i, other.text_i);
+        std::swap(fd, other.fd);
         std::swap(tot_cells, other.tot_cells);
         std::swap(block_bg, other.block_bg);
+        std::swap(file_size, other.file_size);
         buffer.swap(other.buffer);
     }
 
-    inline size_t size() const{
+    [[nodiscard]] inline size_t size() const{
         return tot_cells;
     }
 
-    inline const std::string& filename() const{
+    [[nodiscard]] inline const std::string& filename() const{
         return file;
     }
 
-    void close(bool rem=false){
+    void close_reader(bool rem=false){
         if(buffer.stream!= nullptr){
             delete [] buffer.stream;
             buffer.stream = nullptr;
         }
-        if(text_i.is_open()) text_i.close();
+        //if(text_i.is_open()) text_i.close();
+        close(fd);
+
         if(rem){
             if(remove(file.c_str())){
                 std::cout<<"Error trying to remove file"<<file<<std::endl;
@@ -87,10 +108,37 @@ struct i_file_stream{
     }
 
     ~i_file_stream(){
-        close();
+        close_reader();
     }
 
-    inline size_t read(size_t i) {
+    inline sym_t operator[](size_t i){
+        assert(i<tot_cells);
+        if(i<block_bg || (block_bg+buffer.stream_size)<=i){
+
+#ifdef __linux__
+            size_t prev_block_bg = block_bg;
+#endif
+
+            block_bg = (i/buffer.stream_size)*buffer.stream_size;
+            /*text_i.seekg(block_bg*w_bytes);
+            text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
+            if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
+                text_i.clear();
+            }*/
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            assert(read>0);
+
+#ifdef __linux__
+            if((prev_bg<tot_cells){
+                size_t n_cells = std::min(tot_cells-prev_block_bg, buffer.stream_size);
+                posix_fadvice(fd, prev_bg*w_bytes, n_cells*w_bytes, POSIX_ADV_DONTNEED);
+            }
+#endif
+        }
+        return buffer.stream[i-block_bg];
+    }
+
+    /*inline size_t read(size_t i) {
         assert(i<tot_cells);
         if(i<block_bg || (block_bg+buffer.stream_size)<=i){
 
@@ -102,7 +150,7 @@ struct i_file_stream{
             }
         }
         return buffer.stream[i-block_bg];
-    }
+    }*/
 
     inline void read_bit_chunk(uint8_t *dst, size_t i, size_t j) {
         assert(i<=j);
@@ -114,11 +162,14 @@ struct i_file_stream{
 
         if(cell_i<block_bg || (block_bg+buffer.stream_size)<=cell_i){
             block_bg = (cell_i/buffer.stream_size)*buffer.stream_size;
-            text_i.seekg(block_bg*w_bytes);
+
+            /*text_i.seekg(block_bg*w_bytes);
             text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
-            }
+            }*/
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            assert(read>0);
         }
 
         size_t start = i % block_bits;
@@ -130,11 +181,13 @@ struct i_file_stream{
             size_t bits_read = block_bits-start;
             block_bg+=buffer.stream_size;
 
-            text_i.seekg(block_bg*w_bytes);
+            /*text_i.seekg(block_bg*w_bytes);
             text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
-            }
+            }*/
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            assert(read>0);
 
             size_t bytes_read = INT_CEIL(bits_read, 8);
             size_t offset = std::min((8*bytes_read), (j-i+1))-bits_read;
@@ -168,11 +221,13 @@ struct i_file_stream{
 
         if(cell_i<block_bg || (block_bg+buffer.stream_size)<=cell_i){
             block_bg = (cell_i/buffer.stream_size)*buffer.stream_size;
-            text_i.seekg(block_bg*w_bytes);
+            /*text_i.seekg(block_bg*w_bytes);
             text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
-            }
+            }*/
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            assert(read>0);
         }
 
         size_t start = i % block_bits;
@@ -183,11 +238,13 @@ struct i_file_stream{
             size_t delta = block_bits-start;
             block_bg+=buffer.stream_size;
 
-            text_i.seekg(block_bg*w_bytes);
+            /*text_i.seekg(block_bg*w_bytes);
             text_i.read((char*) buffer.stream, buffer.stream_size*w_bytes);
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
-            }
+            }*/
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            assert(read>0);
             return (buffer.read(0, j % block_bits)<<delta) | data;
         }
     }

@@ -58,7 +58,7 @@ namespace exact_algo {
 
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, phrase2symbol, init_str);
 
-            data.ifs.close();
+            data.ifs.close_reader();
             ofs.close();
 
             return ofs.size();
