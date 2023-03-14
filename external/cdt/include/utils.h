@@ -48,6 +48,9 @@ std::string random_string(size_t length);
 //check if it is in FASTx
 bool is_fastx(const std::string& file);
 
+#ifdef __linux__
+void empty_page_cache(const char *filename);
+#endif
 
 struct tmp_workspace{
 

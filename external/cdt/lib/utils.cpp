@@ -4,14 +4,26 @@
 #include "utils.h"
 #include "macros.h"
 #include <filesystem>
-#ifdef __APPLE__
 #include <unistd.h>
-#endif
 #include <random>
 #include <zlib.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#ifdef __linux__
+void empty_page_cache(const char *filename) {
+    const int fd = open(filename, O_RDWR);
+    if (fd == -1) {
+        std::perror(filename);
+        std::exit(EXIT_FAILURE);
+    }
+    const off_t length = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0L, SEEK_SET);
+    posix_fadvise(fd, 0, length, POSIX_FADV_DONTNEED);
+    close(fd);
+}
+#endif
 
 bool is_fastx(const std::string& input_file){
 
