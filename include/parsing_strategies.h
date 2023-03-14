@@ -22,83 +22,29 @@ struct parsing_info{
 
 template<class stream_t,
         class string_t,
-        bool first_round>
+        bool first_round,
+        bool forward=false>
 struct lms_parsing {
 
+public:
     typedef stream_t                       stream_type;
     typedef typename stream_type::sym_type sym_type;
 
-    /*
-    static void compute_breaks(stream_t& ifs,
-                               size_t f_string, size_t l_string,
-                               const std::function<void(size_t)>& process_phrase,
-                               const std::function<std::pair<long, long>(size_t)>& init_str) {
+//private:
 
-        sym_type curr_sym, prev_sym;
-        size_t end_ps, start_ps;
-        uint8_t type, rep;
+    static void forward_parsing(stream_t& ifs,
+               size_t f_string, size_t l_string, size_t max_symbol,
+               std::function<void(string_t&)>&& process_phrase,
+               std::function<std::pair<long, long>(size_t)>&& init_str){
 
-        for(size_t str=l_string+1;str-->f_string;) {
-
-            auto range = init_str(str);
-
-            if(range.first<=range.second) { //if this is not true, it means the string was fully compressed
-
-                start_ps = range.first;
-                end_ps = range.second;
-
-                prev_sym = ifs.read(end_ps);
-                if constexpr (std::is_same<sym_type, uint8_t>::value){
-                    rep = 3U;
-                }else{
-                    rep = prev_sym & 1U;
-                    prev_sym >>=1UL;
-                }
-
-                type = 0;
-
-                for (size_t i = end_ps; i-- > start_ps;) {
-
-                    curr_sym = ifs.read(i);
-
-                    if constexpr (!std::is_same<sym_type, uint8_t>::value){
-                        rep = (rep << 1UL) | (curr_sym & 1UL);
-                        curr_sym >>=1UL;
-                    }
-
-                    if (curr_sym != prev_sym) {
-                        type = (type<<1UL) | (curr_sym < prev_sym);
-                        if ((type & 3U) == 2 && (rep & 3U)==3U) {//LMS suffix
-                            //process the previous phrase
-                            process_phrase(i+1);
-                        }
-                    } else {
-                        type = (type<<1UL) | (type & 1UL);
-                    }
-                    prev_sym = curr_sym;
-                }
-            }
-        }
-    }
-     */
-
-    inline void forward(stream_t& ifs,
-                        size_t f_string, size_t l_string, size_t max_symbol,
-                        std::function<void(string_t&)>&& process_phrase,
-                        std::function<std::pair<long, long>(size_t)>&& init_str) const {
-
-        sym_type curr_sym, prev_sym, tmp_sym;
-        string_t phrase(2, sym_width(max_symbol));
-        size_t end_ps, start_ps, prev_i;
-        uint8_t rep;
         bool phrase_break;
-
-        phrase_map_t ht;
+        sym_type curr_sym, prev_sym;
+        string_t phrase(2, sym_width(max_symbol));
+        size_t prev_i, tmp_sym, end_ps, start_ps;
+        uint8_t rep;
 
         for(size_t str=f_string;str<=l_string;str++) {
-
             auto range = init_str(str);
-
             if(range.first<=range.second) { //if this is not true, it means the string was fully compressed
 
                 start_ps = range.first;
@@ -135,10 +81,7 @@ struct lms_parsing {
                     if(phrase_break){
                         //process the phrase
                         assert(!phrase.empty());
-
-                        //process_phrase(phrase);
-                        phrase.mask_tail();
-                        ht.increment_value(phrase.data(), phrase.n_bits(), 1);
+                        process_phrase(phrase);
 
                         //create the new phrase
                         phrase.clear();
@@ -152,18 +95,16 @@ struct lms_parsing {
                     prev_sym = tmp_sym;
                     i++;
                 }
-
                 phrase.clear();
             }
         }
-        std::cout<<"I produced "<<ht.size()<<" phrases "<<std::endl;
+
     }
 
-    inline void operator()(stream_t& ifs,
-                           size_t f_string, size_t l_string, size_t max_symbol,
-                           std::function<void(string_t&)>&& process_phrase,
-                           std::function<std::pair<long, long>(size_t)>&& init_str) const {
-
+    static void reverse_parsing(stream_t& ifs,
+               size_t f_string, size_t l_string, size_t max_symbol,
+               std::function<void(string_t&)>&& process_phrase,
+               std::function<std::pair<long, long>(size_t)>&& init_str){
 
         sym_type curr_sym, prev_sym;
         string_t phrase(2, sym_width(max_symbol));
@@ -222,6 +163,23 @@ struct lms_parsing {
                 process_phrase(phrase);
                 phrase.clear();
             }
+        }
+    }
+
+public:
+    inline void operator()(stream_t& ifs,
+               size_t f_string, size_t l_string, size_t max_symbol,
+               std::function<void(string_t&)>&& process_phrase,
+               std::function<std::pair<long, long>(size_t)>&& init_str) const {
+
+        if constexpr (forward){
+            forward_parsing(ifs, f_string, l_string, max_symbol,
+                            std::forward<std::function<void(string_t&)>>(process_phrase),
+                            std::forward<std::function<std::pair<long, long>(size_t)>>(init_str));
+        }else{
+            reverse_parsing(ifs, f_string, l_string, max_symbol,
+                            std::forward<std::function<void(string_t&)>>(process_phrase),
+                            std::forward<std::function<std::pair<long, long>(size_t)>>(init_str));
         }
     }
 };

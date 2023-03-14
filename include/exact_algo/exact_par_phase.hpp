@@ -17,21 +17,20 @@ namespace exact_algo {
 
         void operator()(parse_data_t& data) {
 
-            auto init_str = [&](size_t str) -> std::pair<long, long>{
-                auto range = data.str2range(str);
-                data.active_strings += (range.first<=range.second);
-                return range;//{start, end};
-            };
-
             //TODO testing
-            parser_t().forward(data.ifs, data.start_str, data.end_str, data.max_symbol,
+            phrase_map_t ht;
+            parser_t::forward_parsing(data.ifs, data.start_str, data.end_str, data.max_symbol,
                     //hash_phrase,
                        [&](string_t& phrase) -> void {
+                           phrase.mask_tail();
+                           ht.increment_value(phrase.data(), phrase.n_bits(), 1);
                        },
-                       [&](size_t str){
-                            return data.str2range(str);
-
-                        });
+                       [&](size_t str) -> std::pair<long, long>{
+                           auto range = data.str2range(str);
+                           return range;
+                       }
+            );
+            std::cout<<"I produced "<<ht.size()<<" phrases "<<std::endl;
             //
 
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol,
@@ -41,7 +40,12 @@ namespace exact_algo {
                         data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
                         data.n_phrases++;
                     },
-                    init_str);
+                    [&](size_t str) -> std::pair<long, long>{
+                        auto range = data.str2range(str);
+                        data.active_strings += (range.first<=range.second);
+                        return range;
+                    }
+            );
         };
     };
 
