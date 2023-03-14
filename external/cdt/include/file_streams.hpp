@@ -21,6 +21,8 @@ extern "C" int posix_fadvice(int fd, off_t offset, off_t len, int advice);
 template<class sym_t>
 struct i_file_stream{
 
+    int fd_advice(int fd, off_t offset, off_t length, int advice);
+
     typedef sym_t sym_type;
     //std::ifstream text_i;
     int fd{};
@@ -57,7 +59,7 @@ struct i_file_stream{
         file_size = st.st_size;
 
 #ifdef __linux__
-        posix_fadvice(fd, 0, file_size, fd_advice);
+        fd_advice(fd, 0, file_size, fd_advice);
 #endif
 
         size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
@@ -135,7 +137,8 @@ struct i_file_stream{
 #ifdef __linux__
             if(prev_block_bg<tot_cells){
                 size_t n_cells = std::min(tot_cells-prev_block_bg, buffer.stream_size);
-                posix_fadvice(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
+                //posix_fadvice(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
+                fd_advice(fd, prev_block_bg*w_bytes, n_cells*w_bytes, POSIX_FADV_DONTNEED);
             }
 #endif
         }
@@ -441,6 +444,7 @@ struct o_file_stream{
         return true;
     }
 
+
     inline size_type buff_size() const {
         return buffer.stream_size;
     }
@@ -541,4 +545,6 @@ struct o_file_stream{
         close();
     }
 };
+
+
 #endif //LMS_COMPRESSOR_FILE_BUFFER_H
