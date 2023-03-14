@@ -22,7 +22,6 @@ struct i_file_stream{
     typedef sym_t sym_type;
     //std::ifstream text_i;
     int fd{};
-    FILE * stream{};
     size_t tot_cells{};
     size_t block_bg{};
     size_t block_bits{};
@@ -58,11 +57,6 @@ struct i_file_stream{
 #ifdef __linux__
         posix_fadvise(fd, 0, file_size, advice);
 #endif
-        stream = fdopen (fd, "rb");
-        if(!stream){
-            std::cout<<"Error "<<std::endl;
-            exit(1);
-        }
 
         size_t block_bytes = INT_CEIL(buff_size_, w_bytes)*w_bytes;
         buffer.stream_size = block_bytes/w_bytes;
@@ -106,7 +100,7 @@ struct i_file_stream{
             buffer.stream = nullptr;
         }
         //if(text_i.is_open()) text_i.close();
-        fclose(stream);
+        close(fd);
 
         if(rem){
             if(remove(file.c_str())){
@@ -133,9 +127,7 @@ struct i_file_stream{
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
             }*/
-            fseek(stream, block_bg*w_bytes, SEEK_SET);
-            ssize_t read = fread((char*) buffer.stream, w_bytes, buffer.stream_size, stream);
-            //ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
             assert(read>0);
 
 #ifdef __linux__
@@ -178,9 +170,7 @@ struct i_file_stream{
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
             }*/
-            fseek(stream, block_bg*w_bytes, SEEK_SET);
-            ssize_t read = fread((char*) buffer.stream, w_bytes, buffer.stream_size, stream);
-            //ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
             assert(read>0);
         }
 
@@ -198,9 +188,7 @@ struct i_file_stream{
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
             }*/
-            fseek(stream, block_bg*w_bytes, SEEK_SET);
-            ssize_t read = fread((char*) buffer.stream, w_bytes, buffer.stream_size, stream);
-            //ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
             assert(read>0);
 
             size_t bytes_read = INT_CEIL(bits_read, 8);
@@ -240,9 +228,7 @@ struct i_file_stream{
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
             }*/
-            fseek(stream, block_bg*w_bytes, SEEK_SET);
-            ssize_t read = fread((char*) buffer.stream, w_bytes, buffer.stream_size, stream);
-            //ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
             assert(read>0);
         }
 
@@ -259,9 +245,7 @@ struct i_file_stream{
             if((unsigned int)text_i.gcount()<(buffer.stream_size*w_bytes)){
                 text_i.clear();
             }*/
-            fseek(stream, block_bg*w_bytes, SEEK_SET);
-            ssize_t read = fread((char*) buffer.stream, w_bytes, buffer.stream_size, stream);
-            //ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
+            ssize_t read = pread(fd, (char*) buffer.stream, buffer.stream_size*w_bytes, block_bg*w_bytes);
             assert(read>0);
             return (buffer.read(0, j % block_bits)<<delta) | data;
         }
