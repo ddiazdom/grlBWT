@@ -97,7 +97,6 @@ private:
                 phrase.clear();
             }
         }
-
     }
 
     static void reverse_parsing(stream_t& ifs,
