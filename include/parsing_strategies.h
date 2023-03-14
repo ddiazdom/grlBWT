@@ -23,7 +23,7 @@ struct parsing_info{
 template<class stream_t,
         class string_t,
         bool first_round,
-        bool forward=false>
+        bool forward=true>
 struct lms_parsing {
 
 public:
@@ -412,7 +412,7 @@ struct mt_parse_strat_t {//multi thread strategy
 
         size_t offset=0;
         for(size_t i=0;i<threads_data.size();i++){
-            threads_data[i].offset = offset+threads_data[i].n_phrases;
+            threads_data[i].offset = offset;
             offset += threads_data[i].n_phrases;
         }
 
@@ -511,7 +511,7 @@ struct st_parse_strat_t {//parse data for single thread
     template<class o_sym_type>
     size_t parse_text() {
 
-        offset = n_phrases;
+        offset = 0;
         size_t parse_size = parse_functor<st_parse_strat_t, parser_type, o_file_stream<o_sym_type>>()(*this);
         p_info.str_ptrs.back() = (long)parse_size;
 

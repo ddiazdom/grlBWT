@@ -406,8 +406,7 @@ namespace exact_algo {
                 map.insert_value_at(ptr, val);
 
                 //the first bit marks if the phrase is repeated or not.
-                // We need to shift it to get the real id
-                new_phrase_desc[(val >> 1UL)] = phrase_desc[key_w.read(ptr, 0)];
+                new_phrase_desc[(val >> 1UL)] = phrase_desc[key_w.back(ptr)];
             }
             ws.remove_file("phr_ranks");
             std::string suffix_file = ws.get_file("suffix_file");

@@ -17,22 +17,6 @@ namespace exact_algo {
 
         void operator()(parse_data_t& data) {
 
-            //TODO testing
-            phrase_map_t ht;
-            parser_t::forward_parsing(data.ifs, data.start_str, data.end_str, data.max_symbol,
-                    //hash_phrase,
-                       [&](string_t& phrase) -> void {
-                           phrase.mask_tail();
-                           ht.increment_value(phrase.data(), phrase.n_bits(), 1);
-                       },
-                       [&](size_t str) -> std::pair<long, long>{
-                           auto range = data.str2range(str);
-                           return range;
-                       }
-            );
-            std::cout<<"I produced "<<ht.size()<<" phrases "<<std::endl;
-            //
-
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol,
                     //hash_phrase,
                     [&](string_t& phrase) -> void {
@@ -63,26 +47,20 @@ namespace exact_algo {
                 size_t sym = 0;
                 auto res = data.map.key2value(phrase.data(), phrase.n_bits(), sym);
                 assert(res);
-                //ofs.push_back(sym);
-                ofs.write(--data.offset, sym);
+                ofs.write(data.offset++, sym);
             };
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
                 auto range = data.str2range(str);
-                if((str+1)<=data.end_str){
-                    data.str_ptr[str+1] = data.offset;
-                }
+                data.str_ptr[str] = data.offset;
                 return range;
             };
 
             parser_t()(data.ifs, data.start_str, data.end_str, data.max_symbol, phrase2symbol, init_str);
 
-            data.str_ptr[data.start_str] = data.offset;
-
             data.ifs.close();
             ofs.close();
 
-            //pthread_exit(nullptr);
             return ofs.size();
         };
     };
@@ -125,64 +103,17 @@ namespace exact_algo {
             key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
             size_t j = 0, k = 0, freq;
 
-            //TODO testing
-            //std::vector<std::vector<size_t>> plain_dict;
-            //
-
             for (auto const &ptr: mp_map) {
-                //TODO
-                //std::vector<size_t> phrase;
-                //
-
-                for (size_t i = key_w.size(ptr); i-- > 0;) {
+                for (size_t i =0; i<key_w.size(ptr); i++) {
                     dict[j] = key_w.read(ptr, i);
-                    //phrase.push_back(dict[j]);
                     d_lim[j++] = false;
                 }
-                //plain_dict.emplace_back(phrase);
                 d_lim[j - 1] = true;
-
                 freq = 0;
                 mp_map.get_value_from(ptr, freq);
-                assert(freq <= max_freq);
+                assert(freq>0 && freq <= max_freq);
                 freqs[k++] = freq;
             }
-
-            //TODO
-            //std::cout<<"storing the dictionary in plain format, delete this"<<std::endl;
-            //std::sort(plain_dict.begin(), plain_dict.end(), [](auto a, auto b){
-            //    for(size_t i=0;i<std::min(a.size(), b.size()); i++){
-            //        if(a[i]!=b[i]) return a[i]<b[i];
-            //    }
-            //    return a.size()<b.size();
-            //});
-
-            //std::ifstream ifs("serialized_dict_"+std::to_string(t_size), std::ios::in | std::ios::binary);
-            //std::vector<std::vector<size_t>> correct_dict;
-            //for(size_t i=0;i<plain_dict.size();i++){
-            //    std::vector<size_t> correct_phrase;
-            //    load_plain_vector(ifs, correct_phrase);
-            //    if(correct_phrase.size()!=plain_dict[i].size()){
-            //        std::cout<<i<<" -> length corr "<<correct_phrase.size()<<" length malo "<<plain_dict[i].size()<<std::endl;
-            //        std::cout<<"bueno: "<<std::endl;
-            //        for(size_t u=0;u<correct_phrase.size();u++){
-            //            std::cout<<correct_phrase[u]<<" ";
-            //        }
-            //        std::cout<<"malo: "<<std::endl;
-            //        for(size_t u=0;u<plain_dict[i].size();u++){
-            //            std::cout<<plain_dict[i][u]<<" ";
-            //        }
-            //    }
-            //    assert(correct_phrase.size()==plain_dict[i].size());
-            //    for(size_t u=0;u<correct_phrase.size();u++){
-            //        assert(correct_phrase[u]==plain_dict[i][u]);
-            //    }
-            //}
-            //ifs.close();
-            //for(auto const &vector : plain_dict ){
-            //    serialize_plain_vector(ofs, vector);
-            //}
-            //
             assert(j == dict_syms);
         }
 

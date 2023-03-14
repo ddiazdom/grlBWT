@@ -39,6 +39,11 @@ struct key_wrapper{
         return stream.read(offset, offset + d_bits - 1) / width;
     }
 
+    //offset is the bit where the key description starts
+    [[nodiscard]] inline size_t back(size_t offset) const{
+        return read(offset, size(offset)-1);
+    }
+
     //compare two phrases are different positions of the bit stream
     [[nodiscard]] inline bool compare(size_t a, size_t b) const{
 
