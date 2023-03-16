@@ -129,7 +129,7 @@ str_collection collection_stats(std::string& input_file){
 
     off_t buffer_size = 1024*1024*8;
     off_t last_block = INT_CEIL(fsz, buffer_size);
-    uint8_t *buffer;
+    uint8_t *buffer={};
 
 #ifdef __linux__
     long page_size = sysconf(_SC_PAGESIZE);
@@ -144,7 +144,7 @@ str_collection collection_stats(std::string& input_file){
 
     str_collection str_coll;
     size_t str_len;
-    uint8_t sym;
+    uint8_t sym{};
     size_t sym_frq[256] = {0};
     size_t pos = 0, cont=0;
 

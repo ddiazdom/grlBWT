@@ -93,7 +93,7 @@ target_compile_options(text_stats PRIVATE -Wall -Wextra -Wno-ignored-qualifiers 
 add_executable(test_dbuff scripts/test_dbuff.cpp)
 target_compile_options(test_dbuff PRIVATE -Wall -Wextra -Wno-ignored-qualifiers -pedantic -O3 -funroll-loops -fomit-frame-pointer -ffast-math INTERFACE -Wshadow)
 target_include_directories(test_dbuff PUBLIC external/cdt/include)
-target_link_libraries(test_dbuff pthread)
+target_link_libraries(test_dbuff cdt pthread z)
 
 #add_executable(test_bv_rs scripts/test_bv_and_rank_supp.cpp external/cdt/lib/cdt_common.cpp)
 #target_link_libraries(test_bv_rs ${LIBSDSL_LIBRARIES})

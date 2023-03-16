@@ -7,6 +7,7 @@
 
 #include <thread>
 #include "common.h"
+#include "file_iterator.h"
 
 struct parsing_info{
     size_t lms_phrases=0; //number of LMS phrases in the current parsing round
