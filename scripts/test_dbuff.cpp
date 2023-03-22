@@ -4,14 +4,14 @@
 #include <iostream>
 #include <vector>
 #include <cassert>
-#include <cstring>
 #include "utils.h"
 #include <thread>
 #include <queue>
 #include <mutex>
-#include "file_iterator.h"
+#include <fcntl.h>
 
 using namespace std::chrono;
+off_t acc=0;
 
 template<class sym_t>
 struct string_buffer {
@@ -86,14 +86,15 @@ void next_string_from_file(int fd, off_t buff_len, string_buffer<sym_t>& string)
     off_t len = string.len*sizeof(sym_t);
     auto *tmp = (char *)string.string;
     off_t read_bytes;
-    buff_len = std::min(buff_len, len);
 
     while(len>0){
+        buff_len = std::min(buff_len, len);
         read_bytes = read(fd, tmp, buff_len);
+        len-=read_bytes;
         assert(read_bytes>0);
         tmp+=read_bytes;
-        len-=read_bytes;
     }
+    assert(string.string[string.len-1]=='\n');
 }
 
 int main (int argc, char** argv){
@@ -108,7 +109,7 @@ int main (int argc, char** argv){
 
     std::cout<<" Computing collection stats "<<std::endl;
     str_collection str_col = collection_stats(input_file);
-    str_col.str_ptrs.push_back(str_col.n_char);
+    str_col.str_ptrs.push_back((long)str_col.n_char);
 
     std::cout<<"File has "<<str_col.n_strings<<" strings "<<std::endl;
     std::cout<<" Running in parallel "<<std::endl;
