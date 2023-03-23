@@ -9,15 +9,35 @@
 #include <queue>
 #include <mutex>
 #include <fcntl.h>
-
-using namespace std::chrono;
-off_t acc=0;
+#include <sys/stat.h>
+#include <unistd.h>
 
 template<class sym_t>
-struct string_buffer {
-    sym_t * string;
-    size_t len;
-    size_t id;
+struct text_chunk {
+    size_t id{};
+    off_t len{};
+    sym_t * buffer = nullptr;
+
+    size_t n_string{};
+    long * str_star{};
+
+    explicit text_chunk(off_t chunk_len): len(chunk_len){
+        buffer = (uint8_t*) malloc(sizeof(uint8_t)*len);
+    }
+
+    text_chunk(text_chunk&& other)  noexcept {
+        std::swap(id, other.id);
+        std::swap(len, other.len);
+        std::swap(buffer, other.buffer);
+        std::swap(n_string, other.n_string);
+        std::swap(str_star, other.str_star);
+    }
+
+    ~text_chunk(){
+        if(buffer!= nullptr){
+            free(buffer);
+        }
+    }
 };
 
 template<typename T>
@@ -81,20 +101,24 @@ private:
 };
 
 template<class sym_t>
-void next_string_from_file(int fd, off_t buff_len, string_buffer<sym_t>& string){
+void read_chunk_from_file(int fd, text_chunk<sym_t>& chunk, off_t& rem_text_bytes){
 
-    off_t len = string.len*sizeof(sym_t);
-    auto *tmp = (char *)string.string;
+    off_t chunk_len = off_t(chunk.len*sizeof(sym_t))<rem_text_bytes ? chunk.len*sizeof(sym_t): rem_text_bytes;
+    chunk.len = chunk_len/sizeof(sym_t);
+
+    off_t idx = 0;
     off_t read_bytes;
+    off_t fd_buff_len = 8388608;// 8MB buffer
 
-    while(len>0){
-        buff_len = std::min(buff_len, len);
-        read_bytes = read(fd, tmp, buff_len);
-        len-=read_bytes;
+    while(chunk_len>0) {
+        fd_buff_len = fd_buff_len<chunk_len ? fd_buff_len : chunk_len;
+        read_bytes = read(fd, &chunk.buffer[idx], fd_buff_len);
         assert(read_bytes>0);
-        tmp+=read_bytes;
+        chunk_len-=read_bytes;
+        idx+=read_bytes;
     }
-    assert(string.string[string.len-1]=='\n');
+    rem_text_bytes-=idx;
+    assert(chunk_len==0 || rem_text_bytes==0);
 }
 
 int main (int argc, char** argv){
@@ -107,61 +131,58 @@ int main (int argc, char** argv){
 
     std::string input_file = std::string(argv[1]);
 
-    std::cout<<" Computing collection stats "<<std::endl;
-    str_collection str_col = collection_stats(input_file);
-    str_col.str_ptrs.push_back((long)str_col.n_char);
-
-    std::cout<<"File has "<<str_col.n_strings<<" strings "<<std::endl;
     std::cout<<" Running in parallel "<<std::endl;
+    size_t active_chunks=20;
+    off_t chunk_size = 1024*1024*80;
 
-    size_t active_strings=20;
     unbounded_queue<size_t> in_strings;
     unbounded_queue<size_t> out_strings;
-    std::mutex print_mutex;
-    auto string_buffs = (string_buffer<uint8_t> *)malloc(sizeof(string_buffer<uint8_t>)*active_strings);
+    std::mutex mutex;
+
+    std::vector<text_chunk<uint8_t>> text_chunks;
     bool all_strings_submitted=false;
     size_t sym_freqs[256]={0};
 
-    auto file_reader = [&](){
+    auto file_reader = [&]() -> void{
 
         int fd = open(input_file.c_str(), O_RDONLY);
-        size_t proc_str=0;
 
-        size_t str_id;
-        for(size_t i=0;i<active_strings;i++){
-            string_buffs[i].len = str_col.str_ptrs[i+1]-str_col.str_ptrs[i];
-            string_buffs[i].string = (uint8_t*) malloc(sizeof(uint8_t)*str_col.longest_string);
-            string_buffs[i].id = i;
-            next_string_from_file<uint8_t>(fd, 1024*1024, string_buffs[i]);
+        struct stat st{};
+        if(stat(input_file.c_str(), &st) != 0)  return;
+        off_t rem_bytes = st.st_size;
 
-            in_strings.push(i);
+#ifdef __linux__
+        posix_fadvise(fd, 0, rem_bytes, POSIX_FADV_SEQUENTIAL);
+#endif
+
+        size_t chunk_id=0;
+        while(chunk_id<active_chunks && rem_bytes>0){
+            text_chunks.emplace_back(chunk_size);
+            text_chunks[chunk_id].id = chunk_id;
+            read_chunk_from_file<uint8_t>(fd, text_chunks[chunk_id], rem_bytes);
+            in_strings.push(chunk_id++);
         }
-        str_id = active_strings;
+        active_chunks = chunk_id;
 
-        while(str_id<str_col.n_strings){
-            size_t buff_idx;
+        size_t buff_idx;
+        while(rem_bytes>0){
             out_strings.pop(buff_idx);
-
-            proc_str++;
-            string_buffs[buff_idx].len = str_col.str_ptrs[str_id+1]-str_col.str_ptrs[str_id];
-            string_buffs[buff_idx].id = str_id++;
-            next_string_from_file<uint8_t>(fd, 1024*1024, string_buffs[buff_idx]);
-
+            text_chunks[buff_idx].id = chunk_id++;
+            read_chunk_from_file<uint8_t>(fd, text_chunks[buff_idx], rem_bytes);
             in_strings.push(buff_idx);
         }
 
-        while(proc_str<str_col.n_strings){
-            size_t buff_idx;
+        while(!out_strings.empty()){
             out_strings.pop(buff_idx);
-            proc_str++;
         }
 
         in_strings.done();
         out_strings.done();
 
         close(fd);
+
         {
-            std::lock_guard<std::mutex> guard(print_mutex);
+            std::lock_guard<std::mutex> guard(mutex);
             all_strings_submitted = true;
         }
     };
@@ -174,19 +195,14 @@ int main (int argc, char** argv){
         while(true){
             res = in_strings.pop(buff_id);
             if(!res) break;
-
-            /*{
-                std::lock_guard<std::mutex> guard(print_mutex);
-                std::cout <<"Thread "<<std::this_thread::get_id()<<" is consuming string buff_id: "<<buff_id<<" -> str_id: "<< string_buffs[buff_id].id <<" len: "<<string_buffs[buff_id].len<<" "<<in_strings.size()<<std::endl;
-            }*/
-            for(size_t i=0;i<string_buffs[buff_id].len;i++){
-                t_sym_freqs[string_buffs[buff_id].string[i]]++;
+            for(off_t i=0;i<text_chunks[buff_id].len;i++){
+                t_sym_freqs[text_chunks[buff_id].buffer[i]]++;
             }
             out_strings.push(buff_id);
         }
 
         {
-            std::lock_guard<std::mutex> guard(print_mutex);
+            std::lock_guard<std::mutex> guard(mutex);
             for(size_t i=0;i<256;i++){
                 sym_freqs[i]+=t_sym_freqs[i];
             }
@@ -209,11 +225,7 @@ int main (int argc, char** argv){
             std::cout<<(char)i<<" "<<sym_freqs[i]<<std::endl;
         }
     }
-
-    for(size_t i=0;i<active_strings;i++){
-        free(string_buffs[i].string);
-    }
-    free(string_buffs);
+    std::vector<text_chunk<uint8_t>>().swap(text_chunks);
 
     /*uint8_t sep_sym;
     {
