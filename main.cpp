@@ -57,7 +57,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_flag("-v,--version",
                  args.ver, "Print the software version and exit");
     app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
-    app.add_flag("-m,--min-bwt", args.opt_bwt, "Produce the optimal BCR BWT instead of the regular one");
+    //app.add_flag("-m,--min-bwt", args.opt_bwt, "Produce the optimal BCR BWT instead of the regular one");
 
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
