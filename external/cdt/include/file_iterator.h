@@ -45,7 +45,7 @@ public:
 
 #ifdef __linux__
             ssize_t tot_bytes = (end-start)*w_bytes;
-            posix_advise(fd, start*w_bytes, tot_bytes, POSIX_FADV_SEQUENTIAL);
+            posix_fadvise(fd, start*w_bytes, tot_bytes, POSIX_FADV_SEQUENTIAL);
 #endif
             buff_size = std::min(buff_size, fsz);
             buffer = (sym_t *)malloc(buff_size);
