@@ -86,23 +86,3 @@ target_include_directories(grlbwt2rle PUBLIC scripts/)
 add_executable(grl2plain scripts/grl2plain.cpp)
 target_link_libraries(grl2plain grlbwt biopar)
 target_include_directories(grl2plain PUBLIC scripts/)
-
-add_executable(test_bv_rs scripts/test_bv_and_rank_supp.cpp external/cdt/lib/cdt_common.cpp)
-target_link_libraries(test_bv_rs ${LIBSDSL_LIBRARIES})
-target_include_directories(test_bv_rs PUBLIC external/cdt/include ${LIBSDSL_INCLUDE_DIRS})
-
-add_executable(fix_bug_ht
-        scripts/fix_bug_ht.cpp
-               external/cdt/lib/cdt_common.cpp
-        external/cdt/include/xxHash-dev/xxhash.c)
-
-target_include_directories(fix_bug_ht PUBLIC
-        external/cdt/include
-        external/cdt/include/xxHash-dev)
-
-target_compile_options(fix_bug_ht
-        PRIVATE
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic
-        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
-        INTERFACE
-        -Wshadow)
