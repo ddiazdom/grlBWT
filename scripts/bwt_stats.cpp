@@ -75,7 +75,7 @@ int main(int argc, char** argv){
     std::cout<<"Run stats:"<<std::endl;
 
     size_t k=1;
-    size_t n_bits = sizeof(unsigned int)*8 - __builtin_clz(acc);
+    //size_t n_bits = sizeof(unsigned int)*8 - __builtin_clz(acc);
     size_t space_acc=0, space;
     for(auto const& tuple : rl_stats){
         space=32*std::get<1>(tuple)*2;
