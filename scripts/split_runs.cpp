@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
     size_t q1=(tot_blocks+1)/4;
     size_t q2 = (tot_blocks+1)/2;
     size_t q3 = (3*(tot_blocks+1))/4;
-    size_t res1, res2, res3;
+    size_t res1=0, res2, res3;
     bool b_q1=false, b_q2=false, b_q3=false;
     size_t block_acc=0;
     std::string output_dist_file = output_file+".dist";
