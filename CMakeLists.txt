@@ -41,17 +41,12 @@ else()
     message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
 
-#for the file system functionality on Linux
+#for the file_system functionality on Linux
 if(UNIX AND NOT APPLE)
     target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC
-        z
-        pthread
-        #${LIBSDSL_LIBRARIES}
-        cdt
-        dl)
+target_link_libraries(grlbwt LINK_PUBLIC z pthread cdt dl)
 
 target_include_directories(grlbwt
         PUBLIC
