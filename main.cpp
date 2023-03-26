@@ -16,7 +16,7 @@ struct arguments{
     bool ver=false;
     bool rev_comp=false;
     bool opt_bwt=false;
-    std::string version= "0.0.1";
+    std::string version= "v1.0.1 alpha";
 };
 
 class MyFormatter : public CLI::Formatter {
@@ -48,7 +48,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
             check(CLI::Range(0.0,1.0))->default_val(0.15);
     app.add_option("-b,--run-len-bytes",
                    args.b_f_r,
-                   "Number of bytes to encode the length of the BWT runs (def. 1)")->
+                   "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->
             check(CLI::Range(0,5))->default_val(1);
     app.add_option("-T,--tmp",
                       args.tmp_dir,
