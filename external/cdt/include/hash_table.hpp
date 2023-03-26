@@ -23,8 +23,7 @@
 //#include <arm_neon.h>
 //#include <intrin.h>
 //#endif
-
-#include <arm_neon.h>
+//#include <arm_neon.h>
 
 #define HASH(stream, bytes) XXH3_64bits(stream, bytes);
 //#define HASH(stream, bytes) mx3::hash((const uint8_t*)stream, bytes, 0);
