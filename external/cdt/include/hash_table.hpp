@@ -19,10 +19,10 @@
 #include <malloc.h>
 #endif
 
-#ifdef __ARM_NEON
-#include <arm_neon.h>
-#include <intrin.h>
-#endif
+//#ifdef __ARM_NEON
+//#include <arm_neon.h>
+//#include <intrin.h>
+//#endif
 
 #include <arm_neon.h>
 
