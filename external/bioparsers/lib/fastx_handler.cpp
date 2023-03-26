@@ -44,15 +44,15 @@ str_collection fastx2plain_format(const std::string& input_file, std::string con
     gzclose(fp);
     o_buffer.close();
 
-    for(uint8_t i=0;i<255;i++){
+    /*for(uint8_t i=0;i<255;i++){
         if(sym_freqs[i]!=0){
             str_col.alphabet.push_back(i);
             str_col.sym_freqs.push_back(sym_freqs[i]);
-            str_col.n_char+=sym_freqs[i];
+            str_col.n_syms+=sym_freqs[i];
         }
     }
     str_col.min_sym = str_col.alphabet[0];
-    str_col.max_sym = str_col.alphabet.back();
+    str_col.max_sym = str_col.alphabet.back();*/
 
     return str_col;
 }
@@ -227,9 +227,9 @@ void get_hp_DNA_rc(std::string const& r_heads_file, std::string const& r_len_fil
     free(out_l_buffer);
 
     str_coll.n_strings*=2;
-    str_coll.n_char*=2;
+    str_coll.n_syms*=2;
     size_t inv_alph[255]={0};
-    for(size_t i=0;i<str_coll.alphabet.size();i++){
+    /*for(size_t i=0;i<str_coll.alphabet.size();i++){
         inv_alph[str_coll.alphabet[i]] = i;
     }
 
@@ -241,5 +241,5 @@ void get_hp_DNA_rc(std::string const& r_heads_file, std::string const& r_len_fil
         if(sym>=85) rc_sym =dna_string::comp[sym-84]+84;
         new_freqs[i] = str_coll.sym_freqs[i] + str_coll.sym_freqs[inv_alph[rc_sym]];
     }
-    std::swap(new_freqs, str_coll.sym_freqs);
+    std::swap(new_freqs, str_coll.sym_freqs);*/
 }

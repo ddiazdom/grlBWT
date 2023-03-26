@@ -681,7 +681,11 @@ typedef i_file_stream<uint16_t>                       uint16t_i_stream;
 typedef i_file_stream<uint32_t>                       uint32t_i_stream;
 typedef i_file_stream<uint64_t>                       uint64t_i_stream;
 
-typedef lms_parsing<uint8t_i_stream, string_t, true>    char_parser_t;
+typedef lms_parsing<uint8t_i_stream, string_t, true>    f_uint8t_parser_t;
+typedef lms_parsing<uint16t_i_stream, string_t, true>   f_uint16t_parser_t;
+typedef lms_parsing<uint32t_i_stream, string_t, true>   f_uint32t_parser_t;
+typedef lms_parsing<uint64t_i_stream, string_t, true>   f_uint64t_parser_t;
+
 typedef lms_parsing<uint8t_i_stream, string_t, false>   uint8t_parser_t;
 typedef lms_parsing<uint16t_i_stream, string_t, false>  uint16t_parser_t;
 typedef lms_parsing<uint32t_i_stream, string_t, false>  uint32t_parser_t;

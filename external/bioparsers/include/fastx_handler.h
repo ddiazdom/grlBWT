@@ -209,16 +209,16 @@ hp_collection fasta_parser<is_gzipped>::operator()() {
     free(head_buffer);
     free(len_buffer);
 
-    for(uint8_t i=0;i<255;i++){
+    /*for(uint8_t i=0;i<255;i++){
         if(sym_freqs[i]!=0){
             hp_coll.str_coll.alphabet.push_back(i);
             hp_coll.str_coll.sym_freqs.push_back(sym_freqs[i]);
-            hp_coll.str_coll.n_char+=sym_freqs[i];
+            hp_coll.str_coll.n_syms+=sym_freqs[i];
         }
     }
 
     hp_coll.str_coll.min_sym = hp_coll.str_coll.alphabet[0];
-    hp_coll.str_coll.max_sym = hp_coll.str_coll.alphabet.back();
+    hp_coll.str_coll.max_sym = hp_coll.str_coll.alphabet.back();*/
     hp_coll.hp_lengths = r_len_file;
     hp_coll.hp_heads = r_heads_file;
     hp_coll.max_hp_len = max_hp;
@@ -320,16 +320,16 @@ hp_collection fastq_parser<is_gzipped>::operator()() {
         ifs.close();
     }
 
-    for(uint8_t j=0;j<255;j++){
+    /*for(uint8_t j=0;j<255;j++){
         if(sym_freqs[j]!=0){
             hp_coll.str_coll.alphabet.push_back(j);
             hp_coll.str_coll.sym_freqs.push_back(sym_freqs[j]);
-            hp_coll.str_coll.n_char+=sym_freqs[j];
+            hp_coll.str_coll.n_syms+=sym_freqs[j];
         }
     }
 
     hp_coll.str_coll.min_sym = hp_coll.str_coll.alphabet[0];
-    hp_coll.str_coll.max_sym = hp_coll.str_coll.alphabet.back();
+    hp_coll.str_coll.max_sym = hp_coll.str_coll.alphabet.back();*/
     hp_coll.hp_lengths = r_len_file;
     hp_coll.hp_heads = r_heads_file;
     hp_coll.max_hp_len = max_hp;
@@ -340,14 +340,14 @@ hp_collection fastq_parser<is_gzipped>::operator()() {
     std::cout<<"    Number of homopolymers:                           "<<n_hp<<std::endl;
     std::cout<<"    Longest homopolymer:                              "<<hp_coll.max_hp_len<<std::endl;
     std::cout<<"    Maximum number of homopolymers in a read:         "<<hp_coll.max_n_s_hp<<std::endl;
-    std::cout<<"    Number of symbols in the input after compression: "<<hp_coll.str_coll.n_char<<std::endl;
-    std::cout<<"    Size reduction:                                   "<<100-(double(hp_coll.str_coll.n_char)/double(n_syms))*100<<"%"<<std::endl;
-    std::cout<<"    Number of strings:                                "<<hp_coll.str_coll.sym_freqs[0]<<std::endl;
+    std::cout<<"    Number of symbols in the input after compression: "<<hp_coll.str_coll.n_syms<<std::endl;
+    std::cout<<"    Size reduction:                                   "<<100-(double(hp_coll.str_coll.n_syms)/double(n_syms))*100<<"%"<<std::endl;
+    std::cout<<"    Number of strings:                                "<<hp_coll.str_coll.n_strings<<std::endl;
 
     std::cout<<"  Inserting the reverse complements symbols"<<std::endl;
     get_hp_DNA_rc(r_heads_file, r_len_file, hp_coll.str_coll);
 
-    std::cout<<"  Symbol frequencies in the new file: "<<std::endl;
+    /*std::cout<<"  Symbol frequencies in the new file: "<<std::endl;
     uint8_t sym;
     for(size_t j=0;j<hp_coll.str_coll.alphabet.size();j++){
         sym = hp_coll.str_coll.alphabet[j];
@@ -361,8 +361,8 @@ hp_collection fastq_parser<is_gzipped>::operator()() {
             }
         }
         std::cout<<"\t"<<hp_coll.str_coll.sym_freqs[j]<<std::endl;
-    }
-    std::cout<<"  Total symbols: "<<hp_coll.str_coll.n_char<<std::endl;
+    }*/
+    std::cout<<"  Total symbols: "<<hp_coll.str_coll.n_syms<<std::endl;
     std::cout<<"  Total strings: "<<hp_coll.str_coll.n_strings<<std::endl;
     std::cout<<"  Results were stored in:"<<std::endl;
     std::cout<<"    "<<r_heads_file<<std::endl;

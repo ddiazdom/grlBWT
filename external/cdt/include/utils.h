@@ -17,14 +17,13 @@
 #endif
 
 struct str_collection {
-    std::vector<uint8_t> alphabet;
-    std::vector<size_t> sym_freqs;
     std::vector<long> str_ptrs;
     size_t n_strings=0;
     size_t longest_string=0;
-    uint8_t max_sym=0;
-    uint8_t min_sym=255;
-    size_t n_char=0;
+    size_t max_sym=0;
+    size_t min_sym=std::numeric_limits<size_t>::max();
+    size_t n_syms=0;
+    size_t max_sym_freq=0;
 };
 
 //check if the file is gzipped
@@ -102,6 +101,8 @@ struct tmp_workspace{
         return tmp_folder;
     }
 };
+
+template<class sym_type>
 str_collection collection_stats(std::string& input_file);
 
 template<class time_t>

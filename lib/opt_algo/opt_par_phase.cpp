@@ -472,18 +472,14 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         std::string tmp_i_file = ws.get_file("tmp_input");
 
         // mark which symbols represent string boundaries
-        bv_t symbol_desc(str_coll.alphabet.back()+1,false);
-        symbol_desc[str_coll.alphabet[0]] = true;
+        bv_t symbol_desc(str_coll.max_sym+1,false);
+        symbol_desc[str_coll.min_sym] = true;
 
         parsing_info p_info;
-        for(unsigned long sym_freq : str_coll.sym_freqs){
-            if(p_info.max_sym_freq<sym_freq){
-                p_info.max_sym_freq = sym_freq;
-            }
-        }
-        p_info.tot_phrases = str_coll.alphabet.back()+1;
+        p_info.max_sym_freq = str_coll.max_sym_freq;
+        p_info.tot_phrases = str_coll.max_sym+1;
         p_info.str_ptrs.swap(str_coll.str_ptrs);
-        p_info.str_ptrs.push_back((long)str_coll.n_char);
+        p_info.str_ptrs.push_back((long)str_coll.n_syms);
         p_info.str_ptrs.shrink_to_fit();
         p_info.longest_str = str_coll.longest_string;
         p_info.active_strings = str_coll.n_strings;

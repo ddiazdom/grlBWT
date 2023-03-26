@@ -198,23 +198,6 @@ namespace exact_algo {
                         assert(res.second);
                         dict.phrases_has_hocc[rank] = true;
 
-                        //TODO
-                        /*if(p_info.p_round==11){
-                            for(size_t i=0;i<phrase.size();i++){
-                                std::cout<<phrase[i]<<" ";
-                            }
-                            std::cout<<" "<<std::endl;
-                            for (size_t j = bg_range; j <= u; j++) {
-                                std::cout<<" -> "<<((sa[j] >> 1UL) - 1)<<" : ";
-                                size_t tmp = ((sa[j] >> 1UL) - 1);
-                                do{
-                                    std::cout<<dict.dict[tmp]<<" ";
-                                }while(!dict.d_lim[tmp++]);
-                                std::cout<<""<<std::endl;
-                            }
-                        }*/
-                        //
-
                         for (size_t j = bg_range; j <= u; j++) {
                             phr_marks[(sa[j] >> 1UL) - 1] = true;
                         }
@@ -297,11 +280,20 @@ namespace exact_algo {
         return alph_size;
     }
 
-    size_t par_phase(std::string &i_file, size_t n_threads, size_t hbuff_size,
-                     str_collection &str_coll, tmp_workspace &ws) {
+    template<class sym_type>
+    size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws) {
+
+        std::cout<<"Reading the file"<<std::endl;
+        str_collection str_coll = collection_stats<sym_type>(i_file);
+        std::cout<<"Stats: "<<std::endl;
+        std::cout<<"  Smallest symbol               : "<<str_coll.min_sym<<std::endl;
+        std::cout<<"  Greatest symbol               : "<<str_coll.max_sym<<std::endl;
+        std::cout<<"  Number of symbols in the file : "<<str_coll.n_syms<<std::endl;
+        std::cout<<"  Number of strings             : "<<str_coll.n_strings<<std::endl;
+
+        auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
 
         std::cout << "Parsing the text:    " << std::endl;
-
         if(n_threads>1){
             std::cout<<"  Running with up to "<<n_threads<<" working threads "<<std::endl;
             std::cout<<"  Using "<<float(hbuff_size)/1000000<<" megabytes for the thread hash tables ("<< (float(hbuff_size)/1000000)/float(n_threads)<<" megabytes each)"<<std::endl;
@@ -311,29 +303,25 @@ namespace exact_algo {
         std::string tmp_i_file = ws.get_file("tmp_input");
 
         // mark which symbols represent string boundaries
-        bv_t symbol_desc(str_coll.alphabet.back() + 1, false);
-        symbol_desc[str_coll.alphabet[0]] = true;
+        bv_t symbol_desc(str_coll.max_sym + 1, false);
+        symbol_desc[str_coll.min_sym] = true;
 
         parsing_info p_info;
-        for (unsigned long sym_freq: str_coll.sym_freqs) {
-            if (p_info.max_sym_freq < sym_freq) {
-                p_info.max_sym_freq = sym_freq;
-            }
-        }
-        p_info.tot_phrases = str_coll.alphabet.back() + 1;
+        p_info.max_sym_freq = str_coll.max_sym_freq;
+        p_info.tot_phrases = str_coll.max_sym + 1;
         p_info.str_ptrs.swap(str_coll.str_ptrs);
-        p_info.str_ptrs.push_back((long) str_coll.n_char);
+        p_info.str_ptrs.push_back((long) str_coll.n_syms);
         p_info.str_ptrs.shrink_to_fit();
         p_info.longest_str = str_coll.longest_string;
         p_info.active_strings = str_coll.n_strings;
 
         size_t iter = 1;
         size_t n_syms;
+        using f_parser_t = lms_parsing<i_file_stream<sym_type>, string_t, true>;
 
         std::cout << "  Parsing round " << iter++ << std::endl;
         auto start = std::chrono::steady_clock::now();
-        n_syms = par_phase_int<char_parser_t>(i_file, tmp_i_file, p_info,
-                                                hbuff_size, n_threads, symbol_desc, ws);
+        n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws);
         auto end = std::chrono::steady_clock::now();
 
         report_time(start, end, 4);
@@ -384,7 +372,6 @@ namespace exact_algo {
         auto end = std::chrono::steady_clock::now();
         report_time(start, end, 42);
 
-        //if(p_strategy.map.size()!=p_info.lms_phrases){
 
         store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
         std::vector<long>().swap(p_info.str_ptrs);
@@ -396,10 +383,6 @@ namespace exact_algo {
         phrase_map_t &map = p_strategy.map;
         size_t psize;//<- for the iter stats
         assert(map.size() > 0);
-
-        //TODO testing
-        //map.ht_stats(10);
-        //
 
         size_t dict_sym = res.first;
         size_t max_freq = res.second;
@@ -416,8 +399,7 @@ namespace exact_algo {
             std::cout << "    Creating the dictionary from the hash table" << std::flush;
             start = std::chrono::steady_clock::now();
             dictionary dict(map, dict_sym, max_freq, phrase_desc,
-                            p_strategy.text_size, p_info.prev_alph,
-                            std::max<size_t>(p_info.max_sym_freq, p_info.active_strings));
+                            p_strategy.text_size, p_info.prev_alph, p_info.max_sym_freq);
             end = std::chrono::steady_clock::now();
             map.destroy_data();
             report_time(start, end, 18);
@@ -500,23 +482,11 @@ namespace exact_algo {
 #ifdef __linux__
         malloc_trim(0);
 #endif
-
         return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
-        /*else { //just copy the input
-
-            / * std::ifstream in(i_file, std::ios_base::binary);
-            std::ofstream out(o_file, std::ios_base::binary);
-            auto buffer = reinterpret_cast<char*>(malloc(BUFFER_SIZE));
-            do {
-                in.read(&buffer[0], BUFFER_SIZE);
-                out.write(&buffer[0], in.gcount());
-                psize+=in.gcount();
-            } while (in.gcount() > 0);
-            free(buffer);
-            psize/=sizeof(typename parse_strategy_t::sym_type);
-            p_strategy.remove_files();* /
-            std::cout<<"    No new phrases found"<<std::endl;
-            return 0;
-        }*/
     }
+
+    template unsigned long exact_algo::par_phase<uint8_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
+    template unsigned long exact_algo::par_phase<uint16_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
+    template unsigned long exact_algo::par_phase<uint32_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
+    template unsigned long exact_algo::par_phase<uint64_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
 }
