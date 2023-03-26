@@ -123,7 +123,7 @@ str_collection collection_stats(std::string& input_file){
     auto buffer = (sym_type *) calloc(n_elms, sizeof(sym_type));
 
     size_t read_bytes, str_len, read_syms;
-    sym_type sym, min_sym=std::numeric_limits<sym_type>::max(), max_sym=0;
+    sym_type sym=0, min_sym=std::numeric_limits<sym_type>::max(), max_sym=0;
 
     while(true){
         ifs.read((char *)buffer, buff_size);
@@ -174,8 +174,8 @@ str_collection collection_stats(std::string& input_file){
         str_coll.max_sym_freq = max_sym_freq;
     }
 
-    if(sep_sym!=min_sym){
-        std::cout<<"Error: separator symbol is not the smallest symbol in the file"<<std::endl;
+    if(sep_sym!=min_sym || sym!=sep_sym){
+        std::cout<<"Error: the file is ill formed"<<std::endl;
         exit(1);
     }
 
@@ -184,11 +184,6 @@ str_collection collection_stats(std::string& input_file){
     str_coll.n_strings = str_coll.str_ptrs.size();
 
     ifs.close();
-    if(sym!=str_coll.min_sym){
-        std::cerr<<"Error: the file does not end with the separator symbol"<<std::endl;
-        exit(1);
-    }
-
     free(buffer);
     return str_coll;
 }
