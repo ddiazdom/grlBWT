@@ -97,6 +97,7 @@ void report_mem_peak(){
     std::cout<<"\n peak : "<<usage.ru_maxrss<<" megabytes "<<std::endl;
 }
 
+template<class sym_type>
 str_collection collection_stats(std::string& input_file){
 
     //We assume that the smallest symbol in the collection is the separator symbol.
@@ -107,24 +108,41 @@ str_collection collection_stats(std::string& input_file){
 
     std::ifstream ifs(input_file, std::ios::binary);
 
-    uint8_t sep_sym;
-    ifs.seekg(-1, std::ios::end);
-    ifs.read((char *)&sep_sym, 1);
+    sym_type sep_sym;
+    ifs.seekg(-1*sizeof(sym_type), std::ios::end);
+
+    ifs.read((char *)&sep_sym, 1*sizeof(sym_type));
+    str_coll.n_syms = ifs.tellg()/sizeof(sym_type);
+    assert(str_coll.n_syms>0);
+    str_coll.max_sym_freq = str_coll.n_syms;
     ifs.seekg(0, std::ios::beg);
     size_t pos = 0, cont=0;
 
-    char buffer[8192]={0};
-    size_t read_bytes, str_len;
-    std::streampos buff_size=8192;
-    uint8_t sym=255;
+    std::streampos buff_size = 8388608;
+    std::streampos n_elms = buff_size/sizeof(sym_type);
+    auto buffer = (sym_type *) calloc(n_elms, sizeof(sym_type));
+
+    size_t read_bytes, str_len, read_syms;
+    sym_type sym, min_sym=std::numeric_limits<sym_type>::max(), max_sym=0;
 
     while(true){
-        ifs.read((char *)&buffer, buff_size);
+        ifs.read((char *)buffer, buff_size);
+
         read_bytes = ifs.gcount();
+
         if(read_bytes>0){
-            for(size_t i=0;i<read_bytes;i++){
-                sym = (uint8_t)buffer[i];
-                sym_frq[sym]++;
+
+            read_syms = read_bytes/sizeof(sym_type);
+            for(size_t i=0;i<read_syms;i++){
+                sym = buffer[i];
+
+                if constexpr (std::is_same<sym_type, uint8_t>::value){
+                    sym_frq[sym]++;
+                }else{
+                    if(sym>max_sym) max_sym = sym;
+                    if(sym<min_sym) min_sym = sym;
+                }
+
                 cont++;
                 if(sym==sep_sym){
                     str_coll.str_ptrs.push_back((long)pos);
@@ -140,22 +158,45 @@ str_collection collection_stats(std::string& input_file){
 
     str_coll.str_ptrs.shrink_to_fit();
 
-    for(size_t i=0;i<256;i++){
-        if(sym_frq[i]!=0){
-            str_coll.alphabet.push_back(i);
-            str_coll.sym_freqs.push_back(sym_frq[i]);
-            str_coll.n_char+=sym_frq[i];
+    if constexpr (std::is_same<sym_type, uint8_t>::value) {
+        size_t i=0;
+        while(sym_frq[i] == 0) i++;
+        min_sym = i;
+
+        i=255;
+        while(sym_frq[i]==0) i--;
+        max_sym = i;
+
+        size_t max_sym_freq = 0;
+        for(unsigned long frq : sym_frq){
+            if(frq>max_sym_freq) max_sym_freq = frq;
         }
+        str_coll.max_sym_freq = max_sym_freq;
     }
 
-    str_coll.min_sym = str_coll.alphabet[0];
-    str_coll.max_sym = str_coll.alphabet.back();
-    str_coll.n_strings = sym_frq[str_coll.alphabet[0]];
-    ifs.close();
+    if(sep_sym!=min_sym){
+        std::cout<<"Error: separator symbol is not the smallest symbol in the file"<<std::endl;
+        exit(1);
+    }
 
+    str_coll.min_sym = min_sym;
+    str_coll.max_sym = max_sym;
+    str_coll.n_strings = str_coll.str_ptrs.size();
+
+    ifs.close();
     if(sym!=str_coll.min_sym){
         std::cerr<<"Error: the file does not end with the separator symbol"<<std::endl;
         exit(1);
     }
+
+    free(buffer);
     return str_coll;
 }
+
+
+template str_collection collection_stats<uint8_t>(std::string& input_file);
+template str_collection collection_stats<uint16_t>(std::string& input_file);
+template str_collection collection_stats<uint32_t>(std::string& input_file);
+template str_collection collection_stats<uint64_t>(std::string& input_file);
+
+

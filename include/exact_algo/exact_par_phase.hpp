@@ -217,8 +217,8 @@ namespace exact_algo {
         }
     };
 
-    size_t par_phase(std::string &i_file, size_t n_threads, size_t hbuff_size, str_collection &str_coll,
-                     tmp_workspace &ws);
+    template<class sym_type>
+    size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
 
     template<class parse_strategy>
     size_t par_round(parse_strategy &p_strat, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);

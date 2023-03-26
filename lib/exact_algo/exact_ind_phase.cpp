@@ -35,15 +35,16 @@ namespace exact_algo {
         }
     }
 
-    size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buckets,
-                                   size_t p_round, tmp_workspace &ws) {
+    size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buckets, size_t p_round, tmp_workspace &ws) {
 
         std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
         bwt_buff_reader bwt_buff(prev_bwt_f);
 
         size_t sym, pos, dummy_sym = dict.bwt_dummy + 1, left_sym, freq = 0, al_b, fr_b, bps, n_runs = 0;
+
         al_b = INT_CEIL(sym_width(dict.alphabet), 8);
         fr_b = INT_CEIL(sym_width(dict.max_sym_freq), 8);
+
         bps = al_b + fr_b;
         size_t tot_bytes = bps * hocc_rs(dict.phrases_has_hocc.size());
         auto *hocc_counts = (char *) malloc(tot_bytes);
@@ -260,11 +261,6 @@ namespace exact_algo {
 #endif
         end = std::chrono::steady_clock::now();
         report_time(start, end, 2);
-
-        //TODO fixing bug
-        //ofs.close();
-        //ht.ht_stats(10);
-        //
 
         std::cout << "    Assembling the new BWT" << std::flush;
         start = std::chrono::steady_clock::now();
