@@ -290,6 +290,9 @@ namespace exact_algo {
         std::cout<<"  Greatest symbol               : "<<str_coll.max_sym<<std::endl;
         std::cout<<"  Number of symbols in the file : "<<str_coll.n_syms<<std::endl;
         std::cout<<"  Number of strings             : "<<str_coll.n_strings<<std::endl;
+        if constexpr (std::is_same<uint8_t, sym_type>::value){
+            std::cout<<"  Max sym freq.                 : "<<str_coll.max_sym_freq<<std::endl;
+        }
 
         auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
 
