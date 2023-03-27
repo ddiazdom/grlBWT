@@ -27,7 +27,7 @@ struct CellWidthValidator : public CLI::Validator {
         func_ = [](const std::string &str) {
             bool valid = (str=="1") || (str=="2") || (str=="4") || (str=="8");
             if(!valid)
-                return std::string(str+" is not a valid number of bytes for an native integer type");
+                return std::string(str+" is not a valid number of bytes for a native integer type");
             else
                 return std::string();
         };
