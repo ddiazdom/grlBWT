@@ -86,13 +86,13 @@ length of the longest equal-symbol run in the BCR BWT.
 
 ## Reversing the BCR BWT to the original text
 
-If you want to print the original strings, please use the *print_seqs* binary:
+If you want to print the original strings, please use the ``reverse_bwt`` binary:
 
 ```
 ./reverse_bwt sample_file.txt.rl_bwt reversed_strings.txt 10
 ```
 
-This command will store the first 10 strings of the original file in ``reversed_strings``. If you don't specify
+This command will store the first 10 strings of the original input in the file ``reversed_strings``. If you don't specify
 a number of strings, the script will decompress all the strings.
 
 ## Store the output BCR BWT in other formats  
@@ -111,7 +111,7 @@ It is also possible to have the BWT in standard run-length-encoding:
 ```
 
 The file `sample_file_bwt_plain.rle` is a sequence of pairs $(a_1, \ell_1), \ldots , (a_r, \ell_r)$ that encodes the 
-$r$ runs of the BCR BWT. Each pair $(a_i, \ell_i)$ uses 16 bytes, 8 for $a_i$ and 8 for $l_i$. 
+$r$ runs of the BCR BWT. Each pair $(a_i, \ell_i)$ uses 16 bytes, 8 for $a_i$ and 8 for $\ell_i$. 
 
 ## Multithreading
 
