@@ -55,10 +55,10 @@ the smallest in the alphabet.
 ### Inputs with integer alphabets
 
 grlBWT assumes by default that the input has a byte alphabet (<256 symbols). However, it is also possible to build the
-BCR BWT of a collection that has an arbitrarily large integer alphabet by using the ``-a/--alphabet`` flag. 
+BCR BWT of a collection that has an arbitrarily large integer alphabet by using the ``-a/--alphabet`` parameter. 
 
 In this case, the program expects the collection to be encoded in a serialized integer vector (the restrictions
-on the separator symbol remain the same). The parameter for the ``a`` flags tells the program the native integer type
+on the separator symbol remain the same). The value for ``-a`` tells the program the native integer type
 the input uses. These are all the possible values:
 
 * 1 : 1-byte cells (uint8_t)
