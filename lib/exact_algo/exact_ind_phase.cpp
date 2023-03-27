@@ -590,8 +590,8 @@ namespace exact_algo {
         std::cout << "      Number of runs (r):           " << new_bwt_buff.size() << std::endl;
         std::cout << "      n/r:                          " << double(new_bwt_size) / double(new_bwt_buff.size()) << std::endl;
         //std::cout << "      Bytes per run:      " << bps << std::endl;
-        std::cout << "      Bytes per symbol:             " << new_al_b << std::endl;
-        std::cout << "      Bytes per freq.:              " << fr_b << std::endl;
+        std::cout << "      Bytes per run symbol:         " << new_al_b << std::endl;
+        std::cout << "      Bytes per run len:            " << fr_b << std::endl;
         std::cout << "      Bytes per induced run length: " <<fr_b<<std::endl;
         free(hocc);
     }
