@@ -84,7 +84,7 @@ lengths using cells of different widths to reduce space usage. The width for the
 that fits the alphabet. On the other hand, the width for the lengths is the smallest number of bytes that fits the
 length of the longest equal-symbol run in the BCR BWT.
 
-## Reversing the BCR BWT to the original text
+## Reversing the BCR BWT to the original text (only byte alphabet)
 
 If you want to print the original strings, please use the ``reverse_bwt`` binary:
 
@@ -95,7 +95,7 @@ If you want to print the original strings, please use the ``reverse_bwt`` binary
 This command will store the first 10 strings of the original input in the file ``reversed_strings``. If you don't specify
 a number of strings, the script will decompress all the strings.
 
-## Store the output BCR BWT in other formats  
+## Store the output BCR BWT in other formats (only byte alphabet)  
 
 The output of our tool is in a custom run-length-encoded format. However, you can easily transform it to
 plain format.  
