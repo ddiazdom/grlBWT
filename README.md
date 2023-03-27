@@ -35,17 +35,51 @@ make
 ## Example execution
 
 ```
-./grlbwt ../tests/sample_file.txt
+./grlbwt sample_file.txt
 ```
 
-Our tool currently supports string collections in one-string-per-line format or the classical FASTA and FASTQ formats.
-It also handles gzipped inputs. In principle, grlBWT automatically detects the format. However,
-we have not tested the automatic detection functionality exhaustively yet.
+## Input 
+
+Our tool currently assumes the input is a concatenated collection of one or more strings, where every string ends with
+the same separator symbol. The only restriction on the separator is that it has be the smallest symbol in the input's
+alphabet.
+
+For collections of ASCII characters (i.e, regular text, DNA, protein, etc), inputs in one-string-per-line format should
+work just fine. 
+
+Notice that, when the collection has only one string, grlBWT produces the standard BWT. Still, one can produce the standard
+BWT of a multi-string collection by tweaking the input as follows: concatenate all the strings separated 
+by a special symbol (any). Then append another special symbol at the end of the resulting string, which in this case, has to be
+the smallest in the alphabet.
+
+### Inputs with integer alphabets
+
+grlBWT assumes by default that the input has a byte alphabet (<256 symbols). However, it is also possible to build the
+BCR BWT of a collection that has an arbitrarily large integer alphabet by using the ``-a/--alphabet`` flag. 
+
+In this case, the program expects the collection to be encoded in a serialized integer vector (the restrictions
+on the separator symbol remain the same). The parameter for the ``a`` flags tells the program the native integer type
+the input uses. These are all the possible values:
+
+* 1 : 1-byte cells (uint8_t)
+* 2 : 2-byte cells (uint16_t)
+* 4 : 4-byte cells (uint32_t)
+* 8 : 8-byte cells (uint64_t)
+
+For instance, if your collection has an alphabet of *at most* $2^{16} = 65536$ symbols, then store it using 2-byte cells
+(i.e., short integers) and run grlBWT as:
+
+```
+./grlbwt sample_file.txt -a 2
+```
+
+**Disclaimer**: the performance of grlBWT has not been extensively tested in inputs with integer alphabets. From a practical point of view,
+the algorithms makes non difference between byte and integer alphabets, but bugs can always be present.
 
 ## Output
 
 Our tool outputs the BCR BWT as a run-length compressed array. Concretely, it produces a sequence of equal-symbol runs
-encoded as pairs (*a*,*l*), where *a* is the run symbol and *l* is its length. We represent the run symbols and the run
+encoded as pairs $(a,\ell)$, where $a$ is the run symbol and $\ell$ is its length. We represent the run symbols and the run
 lengths using cells of different widths to reduce space usage. The width for the symbols is the smallest number of bytes
 that fits the alphabet. On the other hand, the width for the lengths is the smallest number of bytes that fits the
 length of the longest equal-symbol run in the BCR BWT.
@@ -55,16 +89,16 @@ length of the longest equal-symbol run in the BCR BWT.
 If you want to print the original strings, please use the *print_seqs* binary:
 
 ```
-./print_seqss sample_file.txt.rl_bwt 10
+./reverse_bwt sample_file.txt.rl_bwt reversed_strings.txt 10
 ```
 
-This command will print the first 10 strings of the original file used in example execution above. If you don't specify
+This command will store the first 10 strings of the original file in ``reversed_strings``. If you don't specify
 a number of strings, the script will decompress all the strings.
 
 ## Store the output BCR BWT in other formats  
 
 The output of our tool is in a custom run-length-encoded format. However, you can easily transform it to
-plain text.  
+plain format.  
 
 ```
 ./grl2plain sample_file.txt.rl_bwt sample_file_bwt_plain.txt 
@@ -76,8 +110,8 @@ It is also possible to have the BWT in standard run-length-encoding:
 ./grl2rle sample_file.txt.rl_bwt sample_file_bwt_plain.rle 
 ```
 
-The file `sample_file_bwt_plain.rle` is a sequence of pairs (a_1, l_1), (a_2, l_2), .... , (a_r, l_r) that encodes the 
-r runs of the BCR BWT. Each pair (a_i, l_i) uses 16 bytes, 8 for a_i and 8 for l_i. 
+The file `sample_file_bwt_plain.rle` is a sequence of pairs $(a_1, \ell_1), \ldots , (a_r, \ell_r)$ that encodes the 
+$r$ runs of the BCR BWT. Each pair $(a_i, \ell_i)$ uses 16 bytes, 8 for $a_i$ and 8 for $l_i$. 
 
 ## Multithreading
 
