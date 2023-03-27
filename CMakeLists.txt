@@ -11,6 +11,7 @@ add_subdirectory(external/cdt)
 add_subdirectory(external/bioparsers)
 
 add_library(grlbwt
+            OBJECT
             lib/exact_algo/exact_ind_phase.cpp
             lib/exact_algo/exact_par_phase.cpp
             lib/opt_algo/opt_ind_phase.cpp
