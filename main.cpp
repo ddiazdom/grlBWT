@@ -17,7 +17,6 @@ struct arguments{
     bool rev_comp=false;
     bool opt_bwt=false;
     uint8_t alph_bytes=1;
-    size_t sep_symbol=0;
     std::string version= "v1.0.1 alpha";
 };
 
