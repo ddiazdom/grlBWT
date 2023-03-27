@@ -21,6 +21,20 @@ struct arguments{
     std::string version= "v1.0.1 alpha";
 };
 
+struct CellWidthValidator : public CLI::Validator {
+    CellWidthValidator() {
+        name_ = "ValidCellWidth";
+        func_ = [](const std::string &str) {
+            bool valid = (str=="1") || (str=="2") || (str=="4") || (str=="8");
+            if(!valid)
+                return std::string(str+" is not a valid number of bytes for an native integer type");
+            else
+                return std::string();
+        };
+    }
+};
+const static CellWidthValidator ValidCellWidth;
+
 class MyFormatter : public CLI::Formatter {
 public:
     MyFormatter() : Formatter() {}
@@ -37,12 +51,12 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_option("TEXT",
                       args.input_file,
                       //"Input file in one-string-per-line or FASTA/Q format (automatically detected)"
-                      "Input file in one-string-per-line")->check(CLI::ExistingFile)->required();
+                      "Input file in one-string-per-line format")->check(CLI::ExistingFile)->required();
     app.add_option("-o,--output-file",
                       args.output_file,
                       "Output file")->type_name("");
     app.add_option("-a,--alphabet", args.alph_bytes, "Number of bytes for the alphabet (def. 1)")->
-            check(CLI::Range(1, 8))->default_val(1);
+            check(CLI::Range(1, 8))->default_val(1)->check(ValidCellWidth);
     app.add_option("-t,--threads",
                       args.n_threads,
                       "Maximum number of working threads")->default_val(1);

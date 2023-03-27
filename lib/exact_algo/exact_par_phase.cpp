@@ -366,11 +366,11 @@ namespace exact_algo {
 #ifdef __linux__
         malloc_trim(0);
 #endif
-        std::cout << "    Hashing the phrases" << std::flush;
+        std::cout << "    Computing the dictionary of LMS phrases" << std::flush;
         auto start = std::chrono::steady_clock::now();
         auto res = p_strategy.get_phrases();
         auto end = std::chrono::steady_clock::now();
-        report_time(start, end, 42);
+        report_time(start, end, 22);
 
 
         store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
@@ -396,13 +396,13 @@ namespace exact_algo {
         size_t tot_phrases;
         {
             //create a dictionary from where the ids will be computed
-            std::cout << "    Creating the dictionary from the hash table" << std::flush;
+            std::cout << "    Compacting the dictionary" << std::flush;
             start = std::chrono::steady_clock::now();
             dictionary dict(map, dict_sym, max_freq, phrase_desc,
                             p_strategy.text_size, p_info.prev_alph, p_info.max_sym_freq);
             end = std::chrono::steady_clock::now();
             map.destroy_data();
-            report_time(start, end, 18);
+            report_time(start, end, 36);
 
             //process the dictionary
             tot_phrases = exact_algo::process_dictionary(dict, p_info, ws);
@@ -414,7 +414,7 @@ namespace exact_algo {
         ws.remove_file("ht_data");
 
         {
-            std::cout << "    Assigning ranks to the new phrases" << std::flush;
+            std::cout << "    Assigning metasymbols to the LMS phrases" << std::flush;
             start = std::chrono::steady_clock::now();
             bv_t new_phrase_desc(tot_phrases, false);
             key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
@@ -435,7 +435,7 @@ namespace exact_algo {
             std::string suffix_file = ws.get_file("suffix_file");
             sdsl::store_to_file(new_phrase_desc, suffix_file);
             end = std::chrono::steady_clock::now();
-            report_time(start, end, 27);
+            report_time(start, end, 21);
         }
 
         std::cout << "    Creating the parse of the text" << std::flush;

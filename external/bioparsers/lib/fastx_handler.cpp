@@ -228,7 +228,7 @@ void get_hp_DNA_rc(std::string const& r_heads_file, std::string const& r_len_fil
 
     str_coll.n_strings*=2;
     str_coll.n_syms*=2;
-    size_t inv_alph[255]={0};
+    //size_t inv_alph[255]={0};
     /*for(size_t i=0;i<str_coll.alphabet.size();i++){
         inv_alph[str_coll.alphabet[i]] = i;
     }

@@ -256,6 +256,7 @@ namespace exact_algo {
         hocc_buckets.erase();
         sdsl::util::clear(hocc_rs);
 
+
 #ifdef __linux__
         malloc_trim(0);
 #endif
@@ -365,17 +366,17 @@ namespace exact_algo {
         report_time(start, end, 26);
 
         std::cout << "    Stats:       " << std::endl;
-        std::cout << "      BWT size (n):                  " << new_bwt_size << std::endl;
-        std::cout << "      Number of runs (r):            " << new_bwt_buff.size() << std::endl;
-        std::cout << "      n/r:                           " << double(new_bwt_size) / double(new_bwt_buff.size())<< std::endl;
-        std::cout << "      Run stats:                     " << std::endl;
-        std::cout << "        Bytes for the symbol:        " << (int) new_al_b << std::endl;
-        std::cout << "        Bytes for the length:        " << (int) new_fr_b << std::endl;
+        std::cout << "      BWT size (n):                        " << new_bwt_size << std::endl;
+        std::cout << "      Number of runs (r):                  " << new_bwt_buff.size() << std::endl;
+        std::cout << "      n/r:                                 " << double(new_bwt_size) / double(new_bwt_buff.size())<< std::endl;
+        std::cout << "      Bytes per run symbol:                " << (int) new_al_b << std::endl;
+        std::cout << "      Bytes per run length:                " << (int) new_fr_b << std::endl;
+        std::cout << "      Bytes per induced run length:        " <<fr_b<<" (fixed by CLI)"<<std::endl;
         if (ht.size() > 0) {
-            std::cout << "        Runs with length overflow:   " << ht.size() << " ("
-                      << (double(ht.size()) / double(new_bwt_buff.size())) * 100 << "%)" << std::endl;
+            std::cout << "        Induced runs with length overflow: " << ht.size() << " ("
+                      << (double(ht.size()) / double(n_runs)) * 100 << "%)" << std::endl;
         } else {
-            std::cout << "        Runs with length overflow:   0" << std::endl;
+            std::cout << "        Induced runs with length overflow: 0" << std::endl;
         }
         free(hocc);
     }
@@ -501,7 +502,7 @@ namespace exact_algo {
         start = std::chrono::steady_clock::now();
         std::string new_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round));
 
-        uint8_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
+        size_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
         bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, fr_b);
 
         std::string p_bwt_file = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
@@ -585,12 +586,13 @@ namespace exact_algo {
         report_time(start, end, 26);
 
         std::cout << "    Stats:       " << std::endl;
-        std::cout << "      BWT size (n):       " << new_bwt_size << std::endl;
-        std::cout << "      Number of runs (r): " << new_bwt_buff.size() << std::endl;
-        std::cout << "      n/r:                " << double(new_bwt_size) / double(new_bwt_buff.size()) << std::endl;
-        std::cout << "      Bytes per run:      " << bps << std::endl;
-        std::cout << "        Bytes per symbol: " << al_b << std::endl;
-        std::cout << "        Bytes per freq.:  " << fr_b << std::endl;
+        std::cout << "      BWT size (n):                 " << new_bwt_size << std::endl;
+        std::cout << "      Number of runs (r):           " << new_bwt_buff.size() << std::endl;
+        std::cout << "      n/r:                          " << double(new_bwt_size) / double(new_bwt_buff.size()) << std::endl;
+        //std::cout << "      Bytes per run:      " << bps << std::endl;
+        std::cout << "      Bytes per symbol:             " << new_al_b << std::endl;
+        std::cout << "      Bytes per freq.:              " << fr_b << std::endl;
+        std::cout << "      Bytes per induced run length: " <<fr_b<<std::endl;
         free(hocc);
     }
 
@@ -635,17 +637,18 @@ namespace exact_algo {
             std::cout << "Error trying to delete file " << parse_file << std::endl;
         }
 
-        std::cout << "    Stats:       " << std::endl;
-        std::cout << "      BWT size (n):       " << len << std::endl;
-        std::cout << "      Number of runs (r): " << bwt_buff.size() << std::endl;
-        std::cout << "      n/r:                " << double(len) / double(bwt_buff.size()) << std::endl;
-        std::cout << "      Bytes per run:      " << (sb + fb) << std::endl;
-        std::cout << "        Bytes per symbol: " << sb << std::endl;
-        std::cout << "        Bytes per freq.:  " << fb << std::endl;
+        std::cout << "  Stats:       " << std::endl;
+        std::cout << "    BWT size (n):         " << len << std::endl;
+        std::cout << "    Number of runs (r):   " << bwt_buff.size() << std::endl;
+        std::cout << "    n/r:                  " << double(len) / double(bwt_buff.size()) << std::endl;
+        //std::cout << "    Run stats:          " << (sb + fb) << std::endl;
+        std::cout << "    Bytes per run symbol: " << sb << std::endl;
+        std::cout << "    Bytes per run length: " << fb << std::endl;
     }
 
     void parse2bwt(tmp_workspace &ws, size_t& p_round) {
 
+        std::cout<<"  Computing the deepest recursive BWT"<<std::endl;
         std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
         dictionary dict;
         sdsl::load_from_file(dict, dict_file);
