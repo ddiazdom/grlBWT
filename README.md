@@ -165,6 +165,8 @@ Please use the following bibtex entry to cite this repository:
 }
 ```
 
+We hope to update this cite to a more recent version of our work soon.
+
 ## Bugs
 
 This tool still contains experimental code, so you will probably find bugs. Please report them in this repository.
