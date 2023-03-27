@@ -152,8 +152,10 @@ it actually needed.
 
 ## How to cite
 
+Please use the following bibtex entry to cite this repository:
+
 ```tex
-@InProceedings{diazdominguez_et_al:LIPIcs.CPM.2022.29,
+@inproceedings{ddgncpm22,
   author ={D{\'\i}az-Dom{\'\i}nguez, Diego and Navarro, Gonzalo},
   title ={Efficient Construction of the {BWT} for Repetitive Text Using String Compression},
   booktitle ={33rd Annual Symposium on Combinatorial Pattern Matching (CPM 2022)},
