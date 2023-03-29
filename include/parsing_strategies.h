@@ -119,7 +119,7 @@ private:
                 start_ps = range.first;
                 end_ps = range.second;
 
-                prev_sym = ifs.read(end_ps);
+                prev_sym = ifs[end_ps];
                 if constexpr (first_round){
                     rep = 3U;
                 }else{

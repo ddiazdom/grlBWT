@@ -5,6 +5,8 @@
 #include <vector>
 #include <cassert>
 #include "utils.h"
+#include "../include/common.h"
+#include "../include/parsing_strategies.h"
 #include <thread>
 #include <queue>
 #include <mutex>
@@ -18,25 +20,38 @@ struct text_chunk {
     typedef sym_t sym_type;
     size_t id{};
     off_t bytes{};
+    size_t max_len{};
     sym_t * buffer = nullptr;
 
     std::vector<long> str_ptr;
 
-    explicit text_chunk(off_t chunk_bytes): bytes(chunk_bytes){
+    explicit text_chunk(off_t chunk_bytes): bytes(chunk_bytes),
+                                            max_len(chunk_bytes/sizeof(sym_t)){
         buffer = (sym_t*) malloc(bytes);
     }
+
+    text_chunk() =default;
 
     text_chunk(text_chunk&& other)  noexcept {
         std::swap(id, other.id);
         std::swap(bytes, other.bytes);
         std::swap(buffer, other.buffer);
         std::swap(str_ptr, other.str_ptr);
+        std::swap(max_len, other.max_len);
     }
 
     ~text_chunk(){
         if(buffer!= nullptr){
             free(buffer);
         }
+    }
+
+    inline sym_type operator[](size_t idx) const {
+        if(idx>=max_len){
+            std::cout<<idx<<" "<<max_len<<" "<<bytes<<" "<<id<<std::endl;
+        }
+        assert(idx<max_len);
+        return buffer[idx];
     }
 };
 
@@ -146,11 +161,12 @@ void read_chunk_from_file(int fd, text_chunk_t& chunk, off_t& rem_text_bytes){
     assert(!chunk.str_ptr.empty());
     off_t offset = acc_bytes-(chunk.str_ptr.back()*sizeof(sym_t));
 
-    std::cout<<acc_bytes<<" "<<chunk.str_ptr.back()*sizeof(sym_t)<<" "<<offset<<std::endl;
+    std::cout<<chunk.id<<" "<<acc_bytes<<" "<<chunk.str_ptr.back()*sizeof(sym_t)<<" "<<offset<<" "<<chunk.str_ptr.back()-1<<std::endl;
 
     lseek(fd, offset*-1, SEEK_CUR);
 
     rem_text_bytes-=chunk.str_ptr.back()*sizeof(sym_t);
+    std::cout<<"rem bytes: "<<rem_text_bytes<<std::endl;
     assert(chunk_bytes==0);
 }
 
@@ -174,7 +190,6 @@ int main (int argc, char** argv){
 
     std::vector<text_chunk<uint8_t>> text_chunks;
     bool all_strings_submitted=false;
-    size_t sym_freqs[256]={0};
 
     auto file_reader = [&]() -> void{
 
@@ -189,14 +204,17 @@ int main (int argc, char** argv){
 #endif
 
         size_t chunk_id=0;
+        text_chunks.resize(active_chunks);
         while(chunk_id<active_chunks && rem_bytes>0){
             chunk_size = std::min(chunk_size, rem_bytes);
-            text_chunks.emplace_back(chunk_size);
+            text_chunks[chunk_id].bytes = chunk_size;
+            text_chunks[chunk_id].max_len = chunk_size/sizeof(uint8_t);
+            text_chunks[chunk_id].buffer = (uint8_t *)malloc(chunk_size);
             text_chunks[chunk_id].id = chunk_id;
             read_chunk_from_file<text_chunk<uint8_t>>(fd, text_chunks[chunk_id], rem_bytes);
-            in_strings.push(chunk_id++);
+            in_strings.push(chunk_id);
+            chunk_id++;
         }
-        active_chunks = chunk_id;
 
         size_t buff_idx;
         while(rem_bytes>0){
@@ -205,6 +223,7 @@ int main (int argc, char** argv){
             read_chunk_from_file<text_chunk<uint8_t>>(fd, text_chunks[buff_idx], rem_bytes);
             in_strings.push(buff_idx);
         }
+        while(!in_strings.empty());
 
         while(!out_strings.empty()){
             out_strings.pop(buff_idx);
@@ -221,26 +240,35 @@ int main (int argc, char** argv){
         }
     };
 
+
     auto string_consumer = [&](){
+        phrase_map_t map;
+
+        auto hasher=[&](string_t& phrase){
+            phrase.mask_tail();
+            map.increment_value(phrase.data(), phrase.n_bits(), 1);
+        };
+
         size_t buff_id;
-        size_t t_sym_freqs[256]={0};
         bool res;
 
         while(true){
             res = in_strings.pop(buff_id);
+            assert(text_chunks[buff_id].bytes>0);
             if(!res) break;
-            for(off_t i=0;i<text_chunks[buff_id].str_ptr.back();i++){
-                t_sym_freqs[text_chunks[buff_id].buffer[i]]++;
-            }
+            auto init_str=[&](size_t idx)-> std::pair<long, long>{
+                return {text_chunks[buff_id].str_ptr[idx], text_chunks[buff_id].str_ptr[idx+1]-1};
+            };
+            lms_parsing<text_chunk<uint8_t>, string_t, true>()(text_chunks[buff_id], 0, text_chunks[buff_id].str_ptr.size()-2, 90,  hasher, init_str);
             out_strings.push(buff_id);
         }
 
-        {
+        /*{
             std::lock_guard<std::mutex> guard(mutex);
             for(size_t i=0;i<256;i++){
                 sym_freqs[i]+=t_sym_freqs[i];
             }
-        }
+        }*/
     };
 
     size_t n_threads=4;
@@ -254,14 +282,14 @@ int main (int argc, char** argv){
         thread.join();
     }
 
-    size_t acc=0;
+    /*size_t acc=0;
     for(size_t i=0;i<256;i++){
         if(sym_freqs[i]!=0){
             acc+=sym_freqs[i];
             std::cout<<(char)i<<" "<<sym_freqs[i]<<std::endl;
         }
     }
-    std::cout<<"Total symbols "<<acc<<std::endl;
+    std::cout<<"Total symbols "<<acc<<std::endl;*/
     std::vector<text_chunk<uint8_t>>().swap(text_chunks);
 
 #ifdef __linux__
