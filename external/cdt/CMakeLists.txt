@@ -30,7 +30,7 @@ else()
     message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
 
-target_link_libraries(cdt LINK_PUBLIC ${LIBSDSL_LIBRARIES})
+target_link_libraries(cdt LINK_PUBLIC ${LIBSDSL_LIBRARIES} z)
 
 target_include_directories(cdt PUBLIC
                            ${CMAKE_CURRENT_SOURCE_DIR}/include
