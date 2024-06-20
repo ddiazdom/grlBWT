@@ -14,8 +14,8 @@ struct arguments{
     uint8_t b_f_r=1;
     float hbuff_frac=0.5;
     bool ver=false;
-    bool rev_comp=false;
-    bool opt_bwt=false;
+    //bool rev_comp=false;
+    //bool opt_bwt=false;
     uint8_t alph_bytes=1;
     std::string version= "v1.0.1 alpha";
 };
@@ -74,33 +74,40 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_flag("-v,--version",
                  args.ver, "Print the software version and exit");
     //app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
-    //app.add_flag("-m,--min-bwt", args.opt_bwt, "Produce the optimal BCR BWT instead of the regular one");
-
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
+}
+
+template<class sym_type, uint8_t bytes_per_run>
+void run_int2(std::string input_collection, arguments& args){
+    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.hbuff_frac, args.tmp_dir);
 }
 
 template<class sym_type>
 void run_int(std::string input_collection, arguments& args){
-
-    tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
-    std::cout<< "Temporary folder: "<<tmp_ws.folder()<<std::endl;
-
-    if(args.opt_bwt){
-        //grl_bwt_algo<true>(input_collection, args.output_file, tmp_ws, args.n_threads, str_coll, args.hbuff_frac, args.b_f_r);
-        //TODO this option is broken
-        std::cout<<"BWT type:         BCR optimal"<<std::endl;
-        std::cout<<"This option is broken"<<std::endl;
-        exit(0);
-    }else{
-        std::cout<<"BWT type:         BCR exact"<<std::endl;
-        grl_bwt_algo<sym_type, false>(input_collection, args.output_file, tmp_ws, args.n_threads, args.hbuff_frac, args.b_f_r);
-    }
+    switch (args.b_f_r) {
+        case 0:
+            run_int2<sym_type, 0>(input_collection, args);
+            break;
+        case 1:
+            run_int2<sym_type, 1>(input_collection, args);
+            break;
+        case 2:
+            run_int2<sym_type, 2>(input_collection, args);
+            break;
+        case 3:
+            run_int2<sym_type, 3>(input_collection, args);
+            break;
+        case 4:
+            run_int2<sym_type, 4>(input_collection, args);
+            break;
+        default:
+            run_int2<sym_type, 5>(input_collection, args);
+    };
 }
 
 int main(int argc, char** argv) {
 
     arguments args;
-
     CLI::App app("Repetition-aware BWT construction");
     parse_app(app, args);
 
@@ -142,7 +149,6 @@ int main(int argc, char** argv) {
     }else{
         std::cout<<"Alphabet type:    byte"<<std::endl;
     }
-
     if(args.alph_bytes==1){
         run_int<uint8_t>(input_collection, args);
     }else if(args.alph_bytes==2){

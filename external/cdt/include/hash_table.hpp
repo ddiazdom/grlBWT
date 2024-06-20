@@ -9,9 +9,8 @@
 #include <cassert>
 #include <fstream>
 #include <utility>
-#include "xxHash-dev/xxhash.h"
+#include "xxhash.h"
 #include "bitstream.h"
-#include "mxm3.h"
 #include <algorithm>
 #include <type_traits>
 #include <utility>

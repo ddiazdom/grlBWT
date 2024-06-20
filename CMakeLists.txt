@@ -12,10 +12,8 @@ add_subdirectory(external/bioparsers)
 
 add_library(grlbwt
             #OBJECT
-            lib/exact_algo/exact_ind_phase.cpp
-            lib/exact_algo/exact_par_phase.cpp
-            lib/opt_algo/opt_ind_phase.cpp
-            lib/opt_algo/opt_par_phase.cpp
+            lib/ind_phase.cpp
+            lib/par_phase.cpp
             external/malloc_count-master/malloc_count.c
         )
 
@@ -54,7 +52,7 @@ target_include_directories(grlbwt
         ${LIBSDSL_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/include/exact_algo
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/opt_algo
+        old_v2/opt_algo
         ${CMAKE_CURRENT_SOURCE_DIR}/external
         )
 

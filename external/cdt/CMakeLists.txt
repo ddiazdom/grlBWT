@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 add_library(cdt
         lib/cdt_common.cpp
         lib/utils.cpp
-        include/xxHash-dev/xxhash.c)
+        lib/xxhash.c)
 
 target_compile_options(cdt
         PUBLIC
