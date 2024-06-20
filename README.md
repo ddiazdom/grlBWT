@@ -155,7 +155,7 @@ it actually needed.
 Please use the following bibtex entry to cite this repository:
 
 ```tex
-@article{diaz2023efficient,
+@article{di23eff,
   title={Efficient construction of the BWT for repetitive text using string compression},
   author={D{\'\i}az-Dom{\'\i}nguez, Diego and Navarro, Gonzalo},
   journal={Information and Computation},
