@@ -155,17 +155,15 @@ it actually needed.
 Please use the following bibtex entry to cite this repository:
 
 ```tex
-@inproceedings{ddgncpm22,
-  author ={D{\'\i}az-Dom{\'\i}nguez, Diego and Navarro, Gonzalo},
-  title ={Efficient Construction of the {BWT} for Repetitive Text Using String Compression},
-  booktitle ={33rd Annual Symposium on Combinatorial Pattern Matching (CPM 2022)},
-  pages ={article 29},
-  year ={2022},
-  volume ={223}
+@article{diaz2023efficient,
+  title={Efficient construction of the BWT for repetitive text using string compression},
+  author={D{\'\i}az-Dom{\'\i}nguez, Diego and Navarro, Gonzalo},
+  journal={Information and Computation},
+  volume={294},
+  pages={105088},
+  year={2023}
 }
 ```
-
-We hope to update this cite to a more recent version of our work soon.
 
 ## Bugs
 
