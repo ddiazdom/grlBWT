@@ -1,9 +1,5 @@
-#include <thread>
-
 #include "CLI11.hpp"
-#include "utils.h"
 #include "grl_bwt.hpp"
-#include "fastx_handler.h"
 
 struct arguments{
     std::string input_file;
@@ -12,10 +8,8 @@ struct arguments{
     std::string tmp_dir;
     size_t n_threads{};
     uint8_t b_f_r=1;
-    float hbuff_frac=0.5;
+    //float hbuff_frac=0.5;
     bool ver=false;
-    //bool rev_comp=false;
-    //bool opt_bwt=false;
     uint8_t alph_bytes=1;
     std::string version= "v1.0.1 alpha";
 };
@@ -59,10 +53,10 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_option("-t,--threads",
                       args.n_threads,
                       "Maximum number of working threads")->default_val(1);
-    app.add_option("-f,--hbuff",
-                      args.hbuff_frac,
-                      "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->
-            check(CLI::Range(0.0,1.0))->default_val(0.15);
+    //app.add_option("-f,--hbuff",
+    //                  args.hbuff_frac,
+    //                  "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.15)")->
+    //        check(CLI::Range(0.0,1.0))->default_val(0.15);
     app.add_option("-b,--run-len-bytes",
                    args.b_f_r,
                    "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->
@@ -73,13 +67,12 @@ static void parse_app(CLI::App& app, struct arguments& args){
             check(CLI::ExistingDirectory)->default_val("/tmp");
     app.add_flag("-v,--version",
                  args.ver, "Print the software version and exit");
-    //app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
 
 template<class sym_type, uint8_t bytes_per_run>
 void run_int2(std::string input_collection, arguments& args){
-    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.hbuff_frac, args.tmp_dir);
+    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.tmp_dir);
 }
 
 template<class sym_type>
@@ -149,6 +142,7 @@ int main(int argc, char** argv) {
     }else{
         std::cout<<"Alphabet type:    byte"<<std::endl;
     }
+
     if(args.alph_bytes==1){
         run_int<uint8_t>(input_collection, args);
     }else if(args.alph_bytes==2){

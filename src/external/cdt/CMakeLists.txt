@@ -33,7 +33,7 @@ endif()
 target_link_libraries(cdt LINK_PUBLIC ${LIBSDSL_LIBRARIES} z)
 
 target_include_directories(cdt PUBLIC
-                           ${CMAKE_CURRENT_SOURCE_DIR}/include
+        include
                            ${CMAKE_CURRENT_SOURCE_DIR}/external)
 
 target_include_directories(cdt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS})

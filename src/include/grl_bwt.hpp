@@ -16,15 +16,17 @@
  * @param hbuff_size : buffer size for the hashing step
  */
 template<class sym_type, uint8_t bytes_per_run>
-void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, float hbuff_frac, std::string tmp_dir=""){
+void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, const std::string& tmp_dir=""){
+
+    logger log(LOG_INFO);
 
     tmp_workspace tmp_ws(tmp_dir, true, "grl.bwt");
-    std::cout<< "Temporary folder: "<<tmp_ws.folder()<<std::endl;
+    log.info("Temporary folder: "+tmp_ws.folder());
 
-    size_t p_rounds = par_phase<sym_type>(i_file, n_threads, hbuff_frac,  tmp_ws);
+    size_t p_rounds = par_phase<sym_type>(i_file, n_threads, tmp_ws, log);
     ind_phase<bytes_per_run>(tmp_ws, p_rounds);
 
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
-    std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
+    log.info("The resulting BCR BWT was stored in "+o_file);
 }
 #endif //GRLBWT_HPP

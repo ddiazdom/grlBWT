@@ -1,0 +1,56 @@
+project(grlBWT)
+
+set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
+
+find_package(LibSDSL REQUIRED)
+add_subdirectory(external/cdt)
+
+add_library(grlbwt
+        lib/ind_phase.cpp
+        lib/par_phase.cpp
+        external/malloc_count-master/malloc_count.c
+)
+
+target_compile_options(grlbwt
+        PRIVATE
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic
+        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        INTERFACE
+        -Wshadow)
+
+#compiler-dependent flags
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
+    target_compile_options(grlbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
+    target_compile_options(grlbwt PUBLIC -march=native)
+endif()
+
+# there seems to be problem with the msse4.2 compiler flag and the new Apple chips
+if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
+    target_compile_options(grlbwt PUBLIC -msse4.2)
+else()
+    message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+endif()
+
+#for the file_system functionality on Linux
+if(UNIX AND NOT APPLE)
+    target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
+endif()
+
+target_link_libraries(grlbwt LINK_PUBLIC pthread cdt dl)
+
+target_include_directories(grlbwt
+        PUBLIC
+        ${LIBSDSL_INCLUDE_DIRS}
+        include
+)
+
+target_include_directories(grlbwt
+        SYSTEM PUBLIC
+        ${LIBSDSL_INCLUDE_DIRS}
+        external/malloc_count-master
+)

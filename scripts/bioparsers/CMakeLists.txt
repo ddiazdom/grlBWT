@@ -30,4 +30,4 @@ else()
     message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
 
-target_include_directories(biopar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(biopar PUBLIC include)

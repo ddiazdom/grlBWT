@@ -16,6 +16,8 @@
 #include <unistd.h>
 #endif
 
+
+
 struct str_collection {
     std::vector<long> str_ptrs;
     size_t n_strings=0;
@@ -24,6 +26,17 @@ struct str_collection {
     size_t min_sym=std::numeric_limits<size_t>::max();
     size_t n_syms=0;
     size_t max_sym_freq=0;
+
+    [[nodiscard]] std::string to_string(size_t padding) const {
+        std::string pad(padding,' ');
+        std::string stat = "Stats: \n"+
+                           pad+"  Smallest symbol               : "+std::to_string(min_sym)+"\n"+
+                           pad+"  Greatest symbol               : "+std::to_string(max_sym)+"\n"+
+                           pad+"  Number of symbols in the file : "+std::to_string(n_syms)+"\n"+
+                           pad+"  Number of strings             : "+std::to_string(n_strings)+"\n"+
+                           pad+"  Max sym freq.                 : "+std::to_string(max_sym_freq);
+        return stat;
+    }
 };
 
 //check if the file is gzipped
@@ -124,6 +137,85 @@ void report_time(time_t start, time_t end, size_t padding){
         std::cout<<"Elapsed time (ms): "<<ms.count()<<std::endl;
     }
 }
+
+// Define log levels
+enum LogLevel {
+    LOG_NONE = 0,
+    LOG_ERROR = 1,
+    LOG_WARNING = 2,
+    LOG_INFO = 3,
+    LOG_VERBOSE = 4
+};
+
+class logger {
+
+public:
+
+    explicit logger(LogLevel lvl_): log_lvl(lvl_){};
+
+    // Logging methods
+    void log(const std::string& message) {
+        std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
+        std::cout <<pad<< message << std::endl;
+    }
+
+    void error(const std::string& message) {
+        if (log_lvl<=LOG_ERROR){
+            log("ERROR: " + message);
+        }
+    }
+
+    void warning(const std::string& message) {
+        if (log_lvl<=LOG_WARNING){
+            log("WARNING: " + message);
+        }
+    }
+
+    void info(const std::string& message) {
+        if(log_lvl<=LOG_INFO){
+            log(message);
+        }
+    }
+
+    void verbose(const std::string& message) {
+        if(log_lvl<=LOG_VERBOSE){
+            log(message);
+        }
+    }
+
+    // Measure and log the execution time of a block of code
+    void measure_and_log_time(LogLevel level, const std::function<void()>& codeBlock, const std::string& description = "") {
+        if (level <= log_lvl) {
+            log(description);
+            auto start = std::chrono::high_resolution_clock::now();
+            codeBlock();
+            auto end = std::chrono::high_resolution_clock::now();
+            std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
+            report_time(start, end, pad.length());
+        } else {
+            codeBlock();
+        }
+    }
+
+    [[nodiscard]] size_t get_padding() const {
+        return pad.size();
+    }
+
+    void inc_pad(){
+        pad.push_back(' ');
+        pad.push_back(' ');
+    }
+
+    void dec_pad(){
+        pad.pop_back();
+        pad.pop_back();
+    }
+
+private:
+    std::string pad;
+    LogLevel log_lvl;
+    std::mutex logMutex; // To ensure thread safety
+};
 
 void report_mem_peak();
 #endif //LHTIGS_UTILS_H

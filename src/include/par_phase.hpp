@@ -216,10 +216,10 @@ struct dictionary {
 };
 
 template<class sym_type>
-size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
+size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log);
 
 template<class parse_strategy>
-size_t par_round(parse_strategy &p_strat, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws);
+size_t par_round(parse_strategy &p_strat, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws, logger& log);
 
 size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws);
 

@@ -260,44 +260,37 @@ size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace 
 
 template<class par_type>
 size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_info,
-                     size_t hbuff_size, size_t n_threads, bv_t& symbol_desc, tmp_workspace& ws){
+                     size_t hbuff_size, size_t n_threads, bv_t& symbol_desc, tmp_workspace& ws, logger& log){
     size_t alph_size;
     if (n_threads > 1) {
-        {
-            using par_strat_t = mt_parse_strat_t<par_type, ext_hash_functor, ext_parse_functor>;
-            par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
-            alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
-        }
+        using par_strat_t = mt_parse_strat_t<par_type, ext_hash_functor, ext_parse_functor>;
+        par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
+        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws, log);
     } else {
-        {
-            using par_strat_t = st_parse_strat_t<par_type, ext_hash_functor, ext_parse_functor>;
-            par_strat_t p_strat(i_file, o_file, p_info);
-            alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
-        }
+        using par_strat_t = st_parse_strat_t<par_type, ext_hash_functor, ext_parse_functor>;
+        par_strat_t p_strat(i_file, o_file, p_info);
+        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws, log);
     }
     return alph_size;
 }
 
 template<class sym_type>
-size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws) {
+size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log) {
 
-    std::cout<<"Reading the file"<<std::endl;
+    log.info("Reading the file");
     str_collection str_coll = collection_stats<sym_type>(i_file);
-    std::cout<<"Stats: "<<std::endl;
-    std::cout<<"  Smallest symbol               : "<<str_coll.min_sym<<std::endl;
-    std::cout<<"  Greatest symbol               : "<<str_coll.max_sym<<std::endl;
-    std::cout<<"  Number of symbols in the file : "<<str_coll.n_syms<<std::endl;
-    std::cout<<"  Number of strings             : "<<str_coll.n_strings<<std::endl;
-    if constexpr (std::is_same<uint8_t, sym_type>::value){
-        std::cout<<"  Max sym freq.                 : "<<str_coll.max_sym_freq<<std::endl;
-    }
+    log.inc_pad();
+    std::string stats = str_coll.to_string(log.get_padding());
+    log.info(stats);
+    log.dec_pad();
 
+    float hbuff_frac = 0.15;
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
 
-    std::cout << "Parsing the text:    " << std::endl;
+    log.info("Parsing the text:");
     if(n_threads>1){
-        std::cout<<"  Running with up to "<<n_threads<<" working threads "<<std::endl;
-        std::cout<<"  Using "<<float(hbuff_size)/1000000<<" megabytes for the thread hash tables ("<< (float(hbuff_size)/1000000)/float(n_threads)<<" megabytes each)"<<std::endl;
+        log.info("Running with up to "+std::to_string(n_threads)+" working threads ");
+        log.info("Using "+std::to_string(float(hbuff_size)/1000000)+" megabytes for the thread hash tables ("+std::to_string((float(hbuff_size)/1000000)/float(n_threads))+" megabytes each)");
     }
 
     std::string output_file = ws.get_file("tmp_output");
@@ -320,9 +313,10 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
     size_t n_syms;
     using f_parser_t = lms_parsing<i_file_stream<sym_type>, string_t, true>;
 
-    std::cout << "  Parsing round " << iter++ << std::endl;
+    log.inc_pad();
+    log.info("Parsing round "+std::to_string(iter++));
     auto start = std::chrono::steady_clock::now();
-    n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws);
+    n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws, log);
     auto end = std::chrono::steady_clock::now();
 
     report_time(start, end, 4);
@@ -331,20 +325,20 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
 
     while (n_syms > 0) {
         start = std::chrono::steady_clock::now();
-        std::cout << "  Parsing round " << iter++ << std::endl;
+        log.info("Parsing round "+std::to_string(iter++));
         size_t bps = sym_width(n_syms)+1;
         if(bps<=8){
             n_syms = par_phase_int<uint8t_parser_t>(tmp_i_file, output_file, p_info,
-                                                    hbuff_size, n_threads, symbol_desc, ws);
+                                                    hbuff_size, n_threads, symbol_desc, ws, log);
         }else if(bps<=16){
             n_syms = par_phase_int<uint16t_parser_t>(tmp_i_file, output_file, p_info,
-                                                     hbuff_size, n_threads, symbol_desc, ws);
+                                                     hbuff_size, n_threads, symbol_desc, ws, log);
         } else if(bps<=32){
             n_syms = par_phase_int<uint32t_parser_t>(tmp_i_file, output_file, p_info,
-                                                     hbuff_size, n_threads, symbol_desc, ws);
+                                                     hbuff_size, n_threads, symbol_desc, ws, log);
         } else{
             n_syms = par_phase_int<uint64t_parser_t>(tmp_i_file, output_file, p_info,
-                                                     hbuff_size, n_threads, symbol_desc, ws);
+                                                     hbuff_size, n_threads, symbol_desc, ws, log);
         }
         end = std::chrono::steady_clock::now();
         report_time(start, end, 4);
@@ -357,22 +351,23 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
 
     sdsl::util::clear(symbol_desc);
     ws.remove_file("suffix_file");
+    log.dec_pad();
 
     return iter - 2;
 }
 
 template<class parse_strategy_t>
-size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws) {
+size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws, logger& log) {
 
 #ifdef __linux__
     malloc_trim(0);
 #endif
-    std::cout << "    Computing the dictionary of LMS phrases" << std::flush;
+    log.inc_pad();
+    log.info("Computing the dictionary of LMS phrases");
     auto start = std::chrono::steady_clock::now();
     auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();
     report_time(start, end, 22);
-
 
     store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
@@ -397,14 +392,14 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     size_t tot_phrases;
     {
         //create a dictionary from where the ids will be computed
-        std::cout << "    Compacting the dictionary" << std::flush;
+        log.info("Compacting the dictionary");
         start = std::chrono::steady_clock::now();
         dictionary dict(map, dict_sym, max_freq, phrase_desc,
                         p_strategy.text_size, p_info.prev_alph, p_info.max_sym_freq);
         end = std::chrono::steady_clock::now();
-        map.destroy_data();
         report_time(start, end, 36);
 
+        map.destroy_data();
         //process the dictionary
         tot_phrases = process_dictionary(dict, p_info, ws);
         p_info.prev_alph = dict.alphabet;
@@ -415,7 +410,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     ws.remove_file("ht_data");
 
     {
-        std::cout << "    Assigning metasymbols to the LMS phrases" << std::flush;
+        log.info("Assigning metasymbols to the LMS phrases");
         start = std::chrono::steady_clock::now();
         bv_t new_phrase_desc(tot_phrases, false);
         key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
@@ -439,10 +434,10 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
         report_time(start, end, 21);
     }
 
-    std::cout << "    Creating the parse of the text" << std::flush;
+    log.info("Creating the parse of the text");
     start = std::chrono::steady_clock::now();
-    load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
 
+    load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     size_t bps = sym_width(tot_phrases)+1;
     if(bps<=8){
         psize = p_strategy.template parse_text<uint8_t>();
@@ -471,11 +466,11 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     p_info.tot_phrases = tot_phrases;
     p_info.p_round++;
 
-    std::cout << "    Stats:" << std::endl;
-    std::cout << "      Parsing phrases:                  " << p_info.lms_phrases << std::endl;
-    std::cout << "      Number of symbols in the phrases: " << dict_sym << std::endl;
-    std::cout << "      Number of unsolved BWT blocks:    " << p_info.tot_phrases << std::endl;
-    std::cout << "      Parse size:                       " << psize << std::endl;
+    log.info("Stats:");
+    log.info("  Parsing phrases:                  "+std::to_string(p_info.lms_phrases));
+    log.info("  Number of symbols in the phrases: "+std::to_string(dict_sym));
+    log.info("  Number of unsolved BWT blocks:    "+std::to_string(p_info.tot_phrases));
+    log.info("  Parse size:                       "+std::to_string(psize));
 
     map.destroy_data();
     map.destroy_table();
@@ -483,10 +478,12 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
 #ifdef __linux__
     malloc_trim(0);
 #endif
+
+    log.dec_pad();
     return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
 }
 
-template unsigned long par_phase<uint8_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
-template unsigned long par_phase<uint16_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
-template unsigned long par_phase<uint32_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
-template unsigned long par_phase<uint64_t>(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws);
+template unsigned long par_phase<uint8_t>(std::string &i_file, size_t n_threads,  tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint16_t>(std::string &i_file, size_t n_threads,  tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint32_t>(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint64_t>(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log);
