@@ -465,7 +465,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
         if(n_threads>1){
             std::cout<<"  Running with up to "<<n_threads<<" working threads "<<std::endl;
-            std::cout<<"  Using "<<hbuff_size<<" bytes for the thread hash tables ("<< hbuff_size/n_threads<<" bytes each)"<<std::endl;
+            std::cout<<"  Using "<<report_space((off_t)hbuff_size)<<" for the thread hash tables ("<< report_space((off_t)(hbuff_size/n_threads))<<" each)"<<std::endl;
         }
 
         std::string output_file = ws.get_file("tmp_output");
