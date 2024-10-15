@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.7)
 
 project(grlBWT)
-
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
@@ -10,36 +9,48 @@ find_package(LibSDSL REQUIRED)
 add_subdirectory(external/cdt)
 add_subdirectory(external/bioparsers)
 
-add_library(grlbwt
-            #OBJECT
-            lib/exact_algo/exact_ind_phase.cpp
-            lib/exact_algo/exact_par_phase.cpp
-            lib/opt_algo/opt_ind_phase.cpp
-            lib/opt_algo/opt_par_phase.cpp
-            external/malloc_count-master/malloc_count.c
-        )
+# Declare MALLOC_COUNT as an option
+option(MALLOC_COUNT "Compile grlBWT with malloc count (only for debugging purposes)" OFF)
+
+set(GRLBWT_LIB_FILES
+        lib/exact_algo/exact_ind_phase.cpp
+        lib/exact_algo/exact_par_phase.cpp
+        lib/opt_algo/opt_ind_phase.cpp
+        lib/opt_algo/opt_par_phase.cpp
+)
+
+#using malloc_count for monitoring memory usage during debug mode
+if(MALLOC_COUNT)
+    message(STATUS "Compiling with malloc count (only for debugging purposes)")
+    list(APPEND GRLBWT_LIB_FILES external/malloc_count-master/malloc_count.c)
+endif()
+
+add_library(grlbwt ${GRLBWT_LIB_FILES})
+
+if(MALLOC_COUNT)
+    target_compile_definitions(grlbwt PRIVATE USE_MALLOC_COUNT)
+endif()
 
 target_compile_options(grlbwt
         PRIVATE
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic
         -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
-        -Wshadow)
+        -Wshadow
+)
 
 #compiler-dependent flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
+    #message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
     target_compile_options(grlbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
     target_compile_options(grlbwt PUBLIC -march=native)
 endif()
 
-# there seems to be problem with the msse4.2 compiler flag and the new Apple chips
+#SSE instructions
 if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
     target_compile_options(grlbwt PUBLIC -msse4.2)
-else()
-    message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
 
 #for the file_system functionality on Linux
@@ -47,7 +58,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC z pthread cdt dl)
+target_link_libraries(grlbwt LINK_PUBLIC z pthread cdt)
 
 target_include_directories(grlbwt
         PUBLIC
@@ -58,7 +69,14 @@ target_include_directories(grlbwt
         ${CMAKE_CURRENT_SOURCE_DIR}/external
         )
 
-target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS} external/malloc_count-master)
+target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS})
+
+#for malloc_count in debug mode
+if(MALLOC_COUNT)
+    target_link_libraries(grlbwt LINK_PUBLIC dl)
+    target_include_directories(grlbwt SYSTEM PUBLIC external/malloc_count-master)
+endif()
+
 add_executable(grlbwt-cli main.cpp)
 target_link_libraries(grlbwt-cli grlbwt biopar)
 target_include_directories(grlbwt-cli PUBLIC external/bioparsers/include)
