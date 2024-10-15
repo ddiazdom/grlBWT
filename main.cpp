@@ -3,7 +3,7 @@
 #include "CLI11.hpp"
 #include "utils.h"
 #include "grl_bwt.hpp"
-#include "fastx_handler.h"
+//#include "fastx_handler.h"
 
 struct arguments{
     std::string input_file;
@@ -61,8 +61,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
                       "Maximum number of working threads")->default_val(1);
     app.add_option("-f,--hbuff",
                       args.hbuff_frac,
-                      "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->
-            check(CLI::Range(0.0,1.0))->default_val(0.15);
+                      "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->check(CLI::Range(0.0,1.0))->default_val(0.15);
     app.add_option("-b,--run-len-bytes",
                    args.b_f_r,
                    "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->
@@ -75,8 +74,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
                  args.ver, "Print the software version and exit");
     //app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
     //app.add_flag("-m,--min-bwt", args.opt_bwt, "Produce the optimal BCR BWT instead of the regular one");
-
-    app.footer("Report bugs to <diego.diaz@helsinki.fi>");
+    //app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
 
 template<class sym_type>

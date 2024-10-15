@@ -4,10 +4,14 @@
 #include "exact_ind_phase.hpp"
 #include "bwt_io.h"
 #include <filesystem>
+
 #ifdef __linux__
 #include <malloc.h>
 #endif
+
+#ifdef USE_MALLOC_COUNT
 #include "malloc_count.h"
+#endif
 
 namespace exact_algo {
 
@@ -685,8 +689,10 @@ namespace exact_algo {
             }
             auto end = std::chrono::steady_clock::now();
             report_time(start, end, 4);
+#if USE_MALLOC_COUNT
             malloc_count_print_status();
             malloc_count_reset_peak();
+#endif
         }
     }
 
