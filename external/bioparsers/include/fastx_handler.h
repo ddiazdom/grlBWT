@@ -151,9 +151,10 @@ hp_collection fasta_parser<is_gzipped>::operator()() {
     assert(j+1<read_bytes);
 
     p_sym = in_buffer[j++];
-    size_t r_len=1, n_hp=0, n_syms=0, max_hp=0, n_s_hp=0, max_n_s_hp=0;
+    size_t r_len=1, max_hp=0, n_s_hp=0, max_n_s_hp=0;
     hp_coll.str_coll.n_strings = 1;
     uint8_t r_head;
+    [[maybe_unused]] size_t n_hp=0, n_syms=0;
 
     while (read_bytes>0) {
         while(j<read_bytes){

@@ -5,7 +5,9 @@
 #include "exact_par_phase.hpp"
 #include "exact_LMS_induction.h"
 
+#ifdef USE_MALLOC_COUNT
 #include "malloc_count.h"
+#endif
 
 namespace exact_algo {
 
@@ -290,9 +292,9 @@ namespace exact_algo {
         std::cout<<"  Greatest symbol               : "<<str_coll.max_sym<<std::endl;
         std::cout<<"  Number of symbols in the file : "<<str_coll.n_syms<<std::endl;
         std::cout<<"  Number of strings             : "<<str_coll.n_strings<<std::endl;
-        if constexpr (std::is_same<uint8_t, sym_type>::value){
-            std::cout<<"  Max sym freq.                 : "<<str_coll.max_sym_freq<<std::endl;
-        }
+        //if constexpr (std::is_same<uint8_t, sym_type>::value){
+        //    std::cout<<"  Max sym freq.                 : "<<str_coll.max_sym_freq<<std::endl;
+        //}
 
         auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
 
@@ -328,8 +330,10 @@ namespace exact_algo {
         auto end = std::chrono::steady_clock::now();
 
         report_time(start, end, 4);
+#ifdef USE_MALLOC_COUNT
         malloc_count_print_status();
         malloc_count_reset_peak();
+#endif
 
         while (n_syms > 0) {
             start = std::chrono::steady_clock::now();
@@ -353,8 +357,12 @@ namespace exact_algo {
 
             remove(tmp_i_file.c_str());
             rename(output_file.c_str(), tmp_i_file.c_str());
+
+#ifdef USE_MALLOC_COUNT
             malloc_count_print_status();
             malloc_count_reset_peak();
+#endif
+
         }
 
         sdsl::util::clear(symbol_desc);
