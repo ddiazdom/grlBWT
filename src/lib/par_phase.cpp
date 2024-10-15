@@ -91,7 +91,7 @@ void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases
 }
 
 template<class vector_type, class sa_type>
-size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws, logger& log) {
 
     sa_type sa;
     if constexpr (std::is_same<sa_type, vector_t>::value) {
@@ -104,7 +104,7 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
         memset(sa.data(), 0, sa.size()*sizeof(typename sa_type::value_type));
     }
 
-    std::cout <<"    Sorting the dictionary and constructing the preliminary BWT" << std::flush;
+    log.info_start("Sorting the dictionary and constructing the preliminary BWT  ");
     auto start = std::chrono::steady_clock::now();
     suffix_induction<vector_type, sa_type>(dict, sa);
 
@@ -112,16 +112,21 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     bv_t phr_marks(dict.dict.size(), false);
     size_t n_phrases = produce_pre_bwt<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 2);
+
+    std::string e_time = time2str(start, end);
+    //report_time(start, end, 2);
+    log.info_end("elap. time: "+e_time);
 
     //malloc_count_print_status();
     //malloc_count_reset_peak();
 
-    std::cout << "    Compressing the dictionary" << std::flush;
+    log.info_start("Compressing the dictionary"+std::string(35, ' '));
     start = std::chrono::steady_clock::now();
     produce_grammar<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 35);
+    e_time = time2str(start, end);
+    log.info_end("elap. time: "+e_time);
+    //report_time(start, end, 35);
 
 #ifdef __linux__
     malloc_trim(0);
@@ -237,23 +242,23 @@ produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_ht, bv_
     return rank;
 }
 
-size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws, logger& log) {
 
     uint8_t width = sym_width(dict.dict.size()) + 1;
     size_t n_phrases;
 
     if (width <= 8) {
         using uint8_vector_t = std::vector<uint8_t, mallocator<uint8_t>>;
-        n_phrases = process_dictionary_int<uint8_vector_t, uint8_vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint8_vector_t, uint8_vector_t>(dict, p_info, ws, log);
     } else if (width <= 16) {
         using uint16_vector_t = std::vector<uint16_t, mallocator<uint16_t>>;
-        n_phrases = process_dictionary_int<uint16_vector_t, uint16_vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint16_vector_t, uint16_vector_t>(dict, p_info, ws, log);
     } else if (width <= 32) {
         using uint32_vector_t = std::vector<uint32_t, mallocator<uint32_t>>;
-        n_phrases = process_dictionary_int<uint32_vector_t, uint32_vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint32_vector_t, uint32_vector_t>(dict, p_info, ws, log);
     } else {
         using uint64_vector_t = std::vector<uint64_t, mallocator<uint64_t>>;
-        n_phrases = process_dictionary_int<uint64_vector_t, vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint64_vector_t, vector_t>(dict, p_info, ws, log);
     }
     return n_phrases;
 }
@@ -319,7 +324,10 @@ size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logge
     n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws, log);
     auto end = std::chrono::steady_clock::now();
 
-    report_time(start, end, 4);
+    std::string e_time = time2str(start, end);
+    //report_time(start, end, 4);
+    log.info("Elap. time: "+e_time);
+
     malloc_count_print_status();
     malloc_count_reset_peak();
 
@@ -341,7 +349,9 @@ size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logge
                                                      hbuff_size, n_threads, symbol_desc, ws, log);
         }
         end = std::chrono::steady_clock::now();
-        report_time(start, end, 4);
+        e_time = time2str(start, end);
+        //report_time(start, end, 4);
+        log.info("Elap. time: "+e_time);
 
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
@@ -363,11 +373,13 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     malloc_trim(0);
 #endif
     log.inc_pad();
-    log.info("Computing the dictionary of LMS phrases");
+    log.info_start("Computing the dictionary of LMS phrases"+std::string(22,' '));
     auto start = std::chrono::steady_clock::now();
     auto res = p_strategy.get_phrases();
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 22);
+    std::string e_time = time2str(start, end);
+    log.info_end("elap. time: "+e_time);
+    //report_time(start, end, 22);
 
     store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
@@ -392,16 +404,18 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     size_t tot_phrases;
     {
         //create a dictionary from where the ids will be computed
-        log.info("Compacting the dictionary");
+        log.info_start("Compacting the dictionary"+std::string(36,' '));
         start = std::chrono::steady_clock::now();
         dictionary dict(map, dict_sym, max_freq, phrase_desc,
                         p_strategy.text_size, p_info.prev_alph, p_info.max_sym_freq);
         end = std::chrono::steady_clock::now();
-        report_time(start, end, 36);
+        //report_time(start, end, 36);
+        e_time = time2str(start, end);
+        log.info_end("elap. time: "+e_time);
 
         map.destroy_data();
         //process the dictionary
-        tot_phrases = process_dictionary(dict, p_info, ws);
+        tot_phrases = process_dictionary(dict, p_info, ws, log);
         p_info.prev_alph = dict.alphabet;
     }
 
@@ -410,7 +424,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     ws.remove_file("ht_data");
 
     {
-        log.info("Assigning metasymbols to the LMS phrases");
+        log.info_start("Assigning metasymbols to the LMS phrases"+std::string(21,' '));
         start = std::chrono::steady_clock::now();
         bv_t new_phrase_desc(tot_phrases, false);
         key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
@@ -431,10 +445,13 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
         std::string suffix_file = ws.get_file("suffix_file");
         sdsl::store_to_file(new_phrase_desc, suffix_file);
         end = std::chrono::steady_clock::now();
-        report_time(start, end, 21);
+
+        e_time = time2str(start, end);
+        log.info_end("elap. time: "+e_time);
+        //report_time(start, end, 21);
     }
 
-    log.info("Creating the parse of the text");
+    log.info_start("Creating the parse of the text"+std::string(31, ' '));
     start = std::chrono::steady_clock::now();
 
     load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
@@ -451,7 +468,9 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     assert(psize>=map.size());//the parse can't be smaller than the number of phrases
 
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 31);
+    //report_time(start, end, 31);
+    e_time = time2str(start, end);
+    log.info_end("elap. time: "+e_time);
 
     {
         //keep track of the phrases that have to be rephrased

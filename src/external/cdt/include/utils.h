@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <cassert>
 
 #ifdef __APPLE__
@@ -138,6 +139,27 @@ void report_time(time_t start, time_t end, size_t padding){
     }
 }
 
+template<class time_t>
+std::string time2str(time_t start, time_t end){
+    auto dur = end - start;
+    auto h = std::chrono::duration_cast<std::chrono::hours>(dur);
+    auto m = std::chrono::duration_cast<std::chrono::minutes>(dur -= h);
+    auto s = std::chrono::duration_cast<std::chrono::seconds>(dur -= m);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur -= s);
+
+    std::stringstream ss;
+    if(h.count()>0){
+        ss <<"(hh:mm:ss.ms) "<<std::setfill('0')<<std::setw(2)<<h.count()<<":"<<std::setfill('0')<<std::setw(2)<<m.count()<<":"<<std::setfill('0')<<std::setw(2)<<s.count()<<"."<<ms.count();
+    }else if(m.count()>0){
+        ss<<"(mm:ss.ms) "<<std::setfill('0')<<std::setw(2)<<size_t(m.count())<<":"<<std::setfill('0')<<std::setw(2)<<s.count()<<"."<<ms.count();
+    }else if(s.count()>0){
+        ss<<"(ss.ms) "<<std::setfill('0')<<std::setw(2)<<size_t(s.count())<<"."<<ms.count();
+    }else{
+        ss<<"(ms) "<<std::setfill('0')<<std::setw(2)<<ms.count();
+    }
+    return ss.str();
+}
+
 // Define log levels
 enum LogLevel {
     LOG_NONE = 0,
@@ -154,43 +176,59 @@ public:
     explicit logger(LogLevel lvl_): log_lvl(lvl_){};
 
     // Logging methods
-    void log(const std::string& message) {
+    /*void log(const std::string& message) {
         std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
         std::cout <<pad<< message << std::endl;
-    }
+    }*/
 
     void error(const std::string& message) {
         if (log_lvl<=LOG_ERROR){
-            log("ERROR: " + message);
+            std::cout <<pad<<"ERROR: "<< message << std::endl;
         }
     }
 
     void warning(const std::string& message) {
         if (log_lvl<=LOG_WARNING){
-            log("WARNING: " + message);
+            std::cout <<pad<<"WARNING: "<< message << std::endl;
         }
     }
 
-    void info(const std::string& message) {
+    inline void info(const std::string& message) const {
         if(log_lvl<=LOG_INFO){
-            log(message);
+            std::cout <<pad<< message << std::endl;
+        }
+    }
+
+    inline void info_start(const std::string& message) const {
+        if(log_lvl<=LOG_INFO){
+            std::cout <<pad<< message << std::flush;
+        }
+    }
+    inline void info_app(const std::string& message) const {
+        if(log_lvl<=LOG_INFO){
+            std::cout << message << std::flush;
+        }
+    }
+    inline void info_end(const std::string& message) const {
+        if(log_lvl<=LOG_INFO){
+            std::cout << message << std::endl;
         }
     }
 
     void verbose(const std::string& message) {
         if(log_lvl<=LOG_VERBOSE){
-            log(message);
+            std::cout <<pad<< message << std::endl;
         }
     }
 
     // Measure and log the execution time of a block of code
     void measure_and_log_time(LogLevel level, const std::function<void()>& codeBlock, const std::string& description = "") {
         if (level <= log_lvl) {
-            log(description);
+            std::cout <<pad<< description << std::flush;
             auto start = std::chrono::high_resolution_clock::now();
             codeBlock();
             auto end = std::chrono::high_resolution_clock::now();
-            std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
+            //std::lock_guard<std::mutex> guard(logMutex); // Ensure thread safety
             report_time(start, end, pad.length());
         } else {
             codeBlock();
@@ -214,7 +252,7 @@ public:
 private:
     std::string pad;
     LogLevel log_lvl;
-    std::mutex logMutex; // To ensure thread safety
+    //std::mutex logMutex; // To ensure thread safety
 };
 
 void report_mem_peak();
