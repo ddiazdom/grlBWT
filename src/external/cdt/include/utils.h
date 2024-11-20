@@ -169,8 +169,8 @@ enum LogLevel {
     LOG_VERBOSE = 4
 };
 
-class logger {
 
+class logger {
 public:
 
     explicit logger(LogLevel lvl_): log_lvl(lvl_){};
@@ -252,7 +252,6 @@ public:
 private:
     std::string pad;
     LogLevel log_lvl;
-    //std::mutex logMutex; // To ensure thread safety
 };
 
 void report_mem_peak();
