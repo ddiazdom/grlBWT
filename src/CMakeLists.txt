@@ -11,7 +11,6 @@ add_subdirectory(external/cdt)
 set(GRLBWT_LIB_FILES
         lib/ind_phase.cpp
         lib/par_phase.cpp
-        external/malloc_count-master/malloc_count.c
 )
 
 if(MALLOC_COUNT)

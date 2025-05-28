@@ -283,7 +283,7 @@ size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_i
 }
 
 template<class sym_type>
-size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log) {
+size_t par_phase(std::string &i_file, size_t n_threads, float ht_frac, tmp_workspace &ws, logger& log) {
 
     log.info("Reading the file");
     str_collection str_coll = collection_stats<sym_type>(i_file);
@@ -292,8 +292,7 @@ size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logge
     log.info(stats);
     log.dec_pad();
 
-    float hbuff_frac = 0.15;
-    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
+    auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * ht_frac)));
 
     log.info("Parsing the text:");
     if(n_threads>1){
@@ -328,7 +327,6 @@ size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logge
     auto end = std::chrono::steady_clock::now();
 
     std::string e_time = time2str(start, end);
-    //report_time(start, end, 4);
     log.info("Elap. time: "+e_time);
 
 #ifdef USE_MALLOC_COUNT
@@ -509,7 +507,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     return (p_info.str_ptrs.size()-1) == psize ? 0 : p_info.tot_phrases;
 }
 
-template unsigned long par_phase<uint8_t>(std::string &i_file, size_t n_threads,  tmp_workspace &ws, logger& log);
-template unsigned long par_phase<uint16_t>(std::string &i_file, size_t n_threads,  tmp_workspace &ws, logger& log);
-template unsigned long par_phase<uint32_t>(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log);
-template unsigned long par_phase<uint64_t>(std::string &i_file, size_t n_threads, tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint8_t>(std::string &i_file, size_t n_threads, float ht_frac, tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint16_t>(std::string &i_file, size_t n_threads, float ht_frac, tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint32_t>(std::string &i_file, size_t n_threads, float ht_frac, tmp_workspace &ws, logger& log);
+template unsigned long par_phase<uint64_t>(std::string &i_file, size_t n_threads, float ht_frac, tmp_workspace &ws, logger& log);

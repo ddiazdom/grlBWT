@@ -8,7 +8,7 @@ struct arguments{
     std::string tmp_dir;
     size_t n_threads{};
     uint8_t b_f_r=1;
-    float hbuff_frac=0.1;
+    float ht_frac=0.1;
     bool ver=false;
     bool ebwt=false;
     uint8_t alph_bytes=1;
@@ -48,7 +48,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_option("-a,--alphabet", args.alph_bytes, "Number of bytes for the alphabet (def. 1)")->check(CLI::Range(1, 8))->default_val(1)->check(ValidCellWidth);
     app.add_option("-t,--threads", args.n_threads, "Maximum number of working threads")->default_val(1);
     app.add_flag("-e,--ebwt", args.ebwt, "Compute the dollar eBWT")->default_val(false);
-    app.add_option("-f,--hbuff", args.hbuff_frac,"Hash tables will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.1)")->check(CLI::Range(0.0001,1.0))->default_val(0.1);
+    app.add_option("-f,--hbuff", args.ht_frac,"Hash tables will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.1)")->check(CLI::Range(0.0001,1.0))->default_val(0.1);
     app.add_option("-b,--run-len-bytes", args.b_f_r, "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->check(CLI::Range(0,5))->default_val(1);
     app.add_option("-T,--tmp", args.tmp_dir, "Temporary folder (def. /tmp/grl.bwt.xxxx)")-> check(CLI::ExistingDirectory)->default_val("/tmp");
     app.add_flag("-v,--version", args.ver, "Print the software version and exit");
@@ -57,7 +57,7 @@ static void parse_app(CLI::App& app, struct arguments& args){
 
 template<class sym_type, uint8_t bytes_per_run>
 void run_int2(std::string input_collection, arguments& args){
-    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.ebwt, args.verbose_level, args.tmp_dir);
+    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.ht_frac, args.ebwt, args.verbose_level, args.tmp_dir);
 }
 
 template<class sym_type>
