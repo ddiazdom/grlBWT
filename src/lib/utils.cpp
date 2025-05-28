@@ -1,7 +1,7 @@
 //
 // Created by Diaz, Diego on 27.10.2021.
 //
-#include "utils.h"
+#include "../include/utils.h"
 #include <filesystem>
 #ifdef __APPLE__
 #include <unistd.h>
@@ -204,6 +204,25 @@ std::string report_space(off_t bytes){
         double b = double(bytes)/1000000000000L;
         return to_string_with_precision(b, 2)+" TB";
     }
+}
+
+uint8_t sym_width(unsigned long val){
+    if(val==0) return 0;
+    return (sizeof(unsigned long)*8) - __builtin_clzl(val);
+}
+
+size_t next_power_of_two(unsigned long val){
+    uint8_t width = sym_width(val);
+    return 1UL<<width;
+}
+
+size_t prev_power_of_two(unsigned long val){
+    uint8_t width = sym_width(val);
+    return 1UL<<(width-1);
+}
+
+bool is_power_of_two(unsigned long val){
+    return !(val & (val-1));
 }
 
 template str_collection collection_stats<uint8_t>(std::string& input_file);

@@ -12,6 +12,13 @@ target_link_libraries(grlbwt-cli grlbwt)
 add_executable(reverse_bwt scripts/reverse_bwt.cpp)
 target_link_libraries(reverse_bwt grlbwt)
 target_include_directories(reverse_bwt PUBLIC scripts/)
+target_compile_options(reverse_bwt
+        PRIVATE
+        -Wall -Wextra -Wno-ignored-qualifiers -pedantic
+        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
+        INTERFACE
+        -Wshadow
+)
 #
 #add_executable(bwt_stats scripts/bwt_stats.cpp)
 #target_link_libraries(bwt_stats grlbwt biopar)

@@ -8,7 +8,7 @@
 #include<iostream>
 #include <limits>
 #include "macros.h"
-#include "cdt_common.hpp"
+#include "utils.h"
 
 template<class word_t,
          uint8_t max_dist=std::numeric_limits<word_t>::digits>

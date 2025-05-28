@@ -6,15 +6,16 @@ option(MALLOC_COUNT "Compiling grlBWT with malloc count (only for debugging purp
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 
 find_package(LibSDSL REQUIRED)
-add_subdirectory(external/cdt)
 
 set(GRLBWT_LIB_FILES
         lib/ind_phase.cpp
         lib/par_phase.cpp
+        lib/xxhash.c
+        lib/utils.cpp
 )
 
 if(MALLOC_COUNT)
-    list(APPEND GRLBWT_LIB_FILES external/malloc_count-master/malloc_count.c)
+    list(APPEND GRLBWT_LIB_FILES malloc_count-master/malloc_count.c)
 endif()
 
 add_library(grlbwt ${GRLBWT_LIB_FILES})
@@ -52,10 +53,10 @@ endif()
 if(MALLOC_COUNT)
     message(STATUS "Adding malloc count")
     target_link_libraries(grlbwt LINK_PUBLIC dl)
-    target_include_directories(grlbwt SYSTEM PUBLIC external/malloc_count-master)
+    target_include_directories(grlbwt SYSTEM PUBLIC malloc_count-master)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC pthread cdt)
+target_link_libraries(grlbwt LINK_PUBLIC pthread ${LIBSDSL_LIBRARIES} z)
 
 target_include_directories(grlbwt
         PUBLIC
@@ -66,5 +67,5 @@ target_include_directories(grlbwt
 target_include_directories(grlbwt
         SYSTEM PUBLIC
         ${LIBSDSL_INCLUDE_DIRS}
-        external/malloc_count-master
+        malloc_count-master
 )

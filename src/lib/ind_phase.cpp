@@ -378,9 +378,9 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
     log.info("  Bytes per run length:              "+std::to_string(int(new_fr_b)));
     log.info("  Bytes per induced run length:      "+std::to_string(fr_b)+" (fixed by CLI)");
     if (ht.size() > 0) {
-        log.info("  Induced runs with length overflow: "+std::to_string(ht.size())+" ("+std::to_string((double(ht.size())/double(n_runs)) * 100)+"%)");
+        log.info("    Induced runs with length overflow: "+std::to_string(ht.size())+" ("+std::to_string((double(ht.size())/double(n_runs)) * 100)+"%)");
     } else {
-        log.info("  Induced runs with length overflow: 0");
+        log.info("    Induced runs with length overflow: 0");
     }
     free(hocc);
     log.dec_pad();
