@@ -166,9 +166,7 @@ enum LogLevel {
     LOG_ERROR = 1,
     LOG_WARNING = 2,
     LOG_INFO = 3,
-    LOG_VERBOSE = 4
 };
-
 
 class logger {
 public:
@@ -182,48 +180,43 @@ public:
     }*/
 
     void error(const std::string& message) {
-        if (log_lvl<=LOG_ERROR){
+        if (log_lvl>=LOG_ERROR){
             std::cout <<pad<<"ERROR: "<< message << std::endl;
         }
     }
 
     void warning(const std::string& message) {
-        if (log_lvl<=LOG_WARNING){
+        if (log_lvl>=LOG_WARNING){
             std::cout <<pad<<"WARNING: "<< message << std::endl;
         }
     }
 
     inline void info(const std::string& message) const {
-        if(log_lvl<=LOG_INFO){
+        if(log_lvl>=LOG_INFO){
             std::cout <<pad<< message << std::endl;
         }
     }
 
     inline void info_start(const std::string& message) const {
-        if(log_lvl<=LOG_INFO){
+        if(log_lvl>=LOG_INFO){
             std::cout <<pad<< message << std::flush;
         }
     }
     inline void info_app(const std::string& message) const {
-        if(log_lvl<=LOG_INFO){
+        if(log_lvl>=LOG_INFO){
             std::cout << message << std::flush;
         }
     }
     inline void info_end(const std::string& message) const {
-        if(log_lvl<=LOG_INFO){
+        if(log_lvl>=LOG_INFO){
             std::cout << message << std::endl;
         }
     }
 
-    void verbose(const std::string& message) {
-        if(log_lvl<=LOG_VERBOSE){
-            std::cout <<pad<< message << std::endl;
-        }
-    }
 
     // Measure and log the execution time of a block of code
     void measure_and_log_time(LogLevel level, const std::function<void()>& codeBlock, const std::string& description = "") {
-        if (level <= log_lvl) {
+        if (log_lvl>=level) {
             std::cout <<pad<< description << std::flush;
             auto start = std::chrono::high_resolution_clock::now();
             codeBlock();

@@ -16,10 +16,15 @@
  * @param hbuff_size : buffer size for the hashing step
  */
 template<class sym_type, uint8_t bytes_per_run>
-void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, bool ebwt, const std::string& tmp_dir=""){
+void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, bool ebwt, LogLevel verbose_level, const std::string& tmp_dir=""){
 
-    logger log(LOG_INFO);
+    logger log(verbose_level);
 
+    std::string bwt_format = (ebwt?"dollar eBWT":"BCR BWT");
+    std::string alphabet_type = ((std::is_same<sym_type, uint8_t>::value) ?"byte":"integer");
+    log.info("Input file:       "+i_file);
+    log.info("Alphabet type:    "+alphabet_type);
+    log.info("BWT type:         "+bwt_format);
     tmp_workspace tmp_ws(tmp_dir, true, "grl.bwt");
     log.info("Temporary folder: "+tmp_ws.folder());
 

@@ -115,7 +115,8 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1, max_run_len = (1UL << (b_f_r * 8)) - 1;
 
-    std::cout << "    Computing the number of induced symbols" << std::flush;
+    log.inc_pad();
+    log.info_start("Computing the number of induced symbols"+std::string(9, ' '));
     auto start = std::chrono::steady_clock::now();
     vector_t hocc_buckets;
     size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
@@ -133,9 +134,10 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
     std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
     auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 9);
+    std::string e_time = time2str(start, end);
+    log.info_end("elap. time: "+e_time);
 
-    std::cout << "    Performing the induction from the previous BWT" << std::flush;
+    log.info_start("Performing the induction from the previous BWT  ");
     start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < bwt_buff.size(); i++) {
 
@@ -262,9 +264,10 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
     malloc_trim(0);
 #endif
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 2);
+    e_time = time2str(start, end);
+    log.info_end("elap. time: "+e_time);
 
-    std::cout << "    Assembling the new BWT" << std::flush;
+    log.info_start("Assembling the new BWT"+std::string(26,' '));
     start = std::chrono::steady_clock::now();
     std::string new_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round));
 
@@ -360,26 +363,27 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
     p_bwt.close(true);
     bwt_buff.close(true);
     new_bwt_buff.close();
-    if (remove(dict_file.c_str())) {
-        std::cout << "Error trying to remove file " << dict_file << std::endl;
+    if(remove(dict_file.c_str())) {
+        log.error("Error trying to remove file "+dict_file);
     }
     end = std::chrono::steady_clock::now();
-    report_time(start, end, 26);
+    e_time = time2str(start, end);
+    log.info_end("elap. time: "+e_time);
 
-    std::cout << "    Stats:       " << std::endl;
-    std::cout << "      BWT size (n):                        " << new_bwt_size << std::endl;
-    std::cout << "      Number of runs (r):                  " << new_bwt_buff.size() << std::endl;
-    std::cout << "      n/r:                                 " << double(new_bwt_size) / double(new_bwt_buff.size())<< std::endl;
-    std::cout << "      Bytes per run symbol:                " << (int) new_al_b << std::endl;
-    std::cout << "      Bytes per run length:                " << (int) new_fr_b << std::endl;
-    std::cout << "      Bytes per induced run length:        " <<fr_b<<" (fixed by CLI)"<<std::endl;
+    log.info("Stats:");
+    log.info("  BWT size (n):");
+    log.info("  Number of runs (r):                "+std::to_string(new_bwt_buff.size()));
+    log.info("  n/r:                               "+std::to_string(double(new_bwt_size) / double(new_bwt_buff.size())));
+    log.info("  Bytes per run symbol:              "+std::to_string(int(new_al_b)));
+    log.info("  Bytes per run length:              "+std::to_string(int(new_fr_b)));
+    log.info("  Bytes per induced run length:      "+std::to_string(fr_b)+" (fixed by CLI)");
     if (ht.size() > 0) {
-        std::cout << "        Induced runs with length overflow: " << ht.size() << " ("
-                  << (double(ht.size()) / double(n_runs)) * 100 << "%)" << std::endl;
+        log.info("  Induced runs with length overflow: "+std::to_string(ht.size())+" ("+std::to_string((double(ht.size())/double(n_runs)) * 100)+"%)");
     } else {
-        std::cout << "        Induced runs with length overflow: 0" << std::endl;
+        log.info("  Induced runs with length overflow: 0");
     }
     free(hocc);
+    log.dec_pad();
 }
 
 void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
