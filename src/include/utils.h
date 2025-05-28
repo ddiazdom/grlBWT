@@ -18,6 +18,8 @@
 #include <unistd.h>
 #endif
 
+#define INT_CEIL(a,b) (a>0? 1+(a-1)/b : 0)
+
 struct str_collection {
     std::vector<long> str_ptrs;
     size_t n_strings=0;

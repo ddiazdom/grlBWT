@@ -7,7 +7,6 @@
 
 #include<iostream>
 #include <limits>
-#include "macros.h"
 #include "utils.h"
 
 template<class word_t,
