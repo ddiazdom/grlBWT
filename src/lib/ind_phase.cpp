@@ -602,47 +602,60 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log) {
 }
 
 template<class sym_type>
-void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round, logger& log) {
+void parse2bwt_int(tmp_workspace &ws, bool ebwt, size_t &p_round, dictionary &dict, logger &log) {
 
     log.inc_pad();
     std::string parse_file = ws.get_file("tmp_input");
-    std::ifstream c_vec(parse_file, std::ifstream::binary);
-    c_vec.seekg(0, std::ifstream::end);
-    size_t tot_bytes = c_vec.tellg();
-    c_vec.seekg(0, std::ifstream::beg);
-    auto *buffer = reinterpret_cast<sym_type *>(malloc(BUFFER_SIZE));
-    size_t read_bytes = 0;
+    std::ifstream c_vec_ifs(parse_file, std::ifstream::binary);
+    c_vec_ifs.seekg(0, std::ifstream::end);
+    size_t tot_bytes = c_vec_ifs.tellg();
+    c_vec_ifs.seekg(0, std::ifstream::beg);
     size_t len = tot_bytes / sizeof(sym_type);
 
     size_t sb = INT_CEIL(sym_width(std::max(dict.prev_alphabet, dict.alphabet)) + 1, 8);
     size_t fb = INT_CEIL(sym_width(len) + 1, 8);
+    bwt_buff_writer bwt_buff(ws.get_file("bwt_lev_" + std::to_string(p_round+1)), std::ios::out, sb, fb);
 
-    std::string bwt_lev_file = ws.get_file("bwt_lev_" + std::to_string(p_round+1));
-    bwt_buff_writer bwt_buff(bwt_lev_file, std::ios::out, sb, fb);
-
-    while (read_bytes < tot_bytes) {
-        c_vec.read((char *) buffer, BUFFER_SIZE);
-        read_bytes += c_vec.gcount();
-        assert((c_vec.gcount() % sizeof(sym_type)) == 0);
-
-        for (size_t i = 0; i < c_vec.gcount() / sizeof(sym_type); i++) {
+    if(ebwt){
+        std::vector<sym_type> buffer(len, 0);
+        c_vec_ifs.read((char *) buffer.data(), (off_t)tot_bytes);
+        for(size_t i = 0; i < len; i++) {
             buffer[i]>>=1UL;//the symbols are shifted by one as I use the first bit to mark repeated elements
-            if (bwt_buff.size() == 0 || buffer[i] != bwt_buff.last_sym()) {
+        }
+        std::sort(buffer.begin(), buffer.end());
+        for (size_t i = 0; i < len; i++) {
+            if(bwt_buff.size() == 0 || buffer[i] != bwt_buff.last_sym()) {
                 bwt_buff.push_back(buffer[i], 1);
             } else {
                 assert(buffer[i] == bwt_buff.last_sym());
                 bwt_buff.inc_freq_last(1);
             }
         }
+    } else {
+        auto *buffer = reinterpret_cast<sym_type *>(malloc(BUFFER_SIZE));
+        size_t read_bytes = 0;
+        while (read_bytes < tot_bytes) {
+            c_vec_ifs.read((char *) buffer, BUFFER_SIZE);
+            read_bytes += c_vec_ifs.gcount();
+            assert((c_vec_ifs.gcount() % sizeof(sym_type)) == 0);
+            for (size_t i = 0; i < c_vec_ifs.gcount() / sizeof(sym_type); i++) {
+                buffer[i]>>=1UL;//the symbols are shifted by one as I use the first bit to mark repeated elements
+                if (bwt_buff.size() == 0 || buffer[i] != bwt_buff.last_sym()) {
+                    bwt_buff.push_back(buffer[i], 1);
+                } else {
+                    assert(buffer[i] == bwt_buff.last_sym());
+                    bwt_buff.inc_freq_last(1);
+                }
+            }
+        }
+        free(buffer);
     }
-    c_vec.close();
-    free(buffer);
-    bwt_buff.close();
 
+    c_vec_ifs.close();
+    bwt_buff.close();
     if (remove(parse_file.c_str())) {
         std::cout << "Error trying to delete file " << parse_file << std::endl;
     }
-
     log.info("Stats:");
     log.info("  BWT size (n):         "+std::to_string(len));
     log.info("  Number of runs (r):   "+std::to_string(bwt_buff.size()));
@@ -652,10 +665,11 @@ void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round, logger&
     log.dec_pad();
 }
 
-void parse2bwt(tmp_workspace &ws, size_t& p_round, logger& log) {
+void parse2bwt(logger &log, bool ebwt, tmp_workspace &ws, size_t &p_round) {
 
     log.inc_pad();
     log.info("Computing the deepest recursive BWT");
+
     auto start = std::chrono::steady_clock::now();
     std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
     dictionary dict;
@@ -663,13 +677,13 @@ void parse2bwt(tmp_workspace &ws, size_t& p_round, logger& log) {
     size_t bps = sym_width(dict.n_phrases)+1;
 
     if(bps<=8){
-        parse2bwt_int<uint8_t>(ws, dict, p_round, log);
+        parse2bwt_int<uint8_t>(ws, ebwt, p_round, dict, log);
     }else if(bps<=16){
-        parse2bwt_int<uint16_t>(ws, dict, p_round, log);
+        parse2bwt_int<uint16_t>(ws, ebwt, p_round, dict, log);
     } else if(bps<=32){
-        parse2bwt_int<uint32_t>(ws, dict, p_round, log);
+        parse2bwt_int<uint32_t>(ws, ebwt, p_round, dict, log);
     } else{
-        parse2bwt_int<uint64_t>(ws, dict, p_round, log);
+        parse2bwt_int<uint64_t>(ws, ebwt, p_round, dict, log);
     }
     auto end = std::chrono::steady_clock::now();
     std::string e_time = time2str(start, end);
@@ -679,12 +693,12 @@ void parse2bwt(tmp_workspace &ws, size_t& p_round, logger& log) {
 }
 
 template<uint8_t b_f_r> //b_f_r = number of bytes to encode the length of a BWT run
-void ind_phase(tmp_workspace &ws, size_t p_round, logger& log) {
+void ind_phase(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt) {
 
     static_assert(b_f_r >= 0 && b_f_r <= 5);
 
     log.info("Inferring the BWT");
-    parse2bwt(ws, p_round, log);
+    parse2bwt(log, ebwt, ws, p_round);
     log.inc_pad();
 
     while (p_round-- > 0) {
@@ -706,9 +720,9 @@ void ind_phase(tmp_workspace &ws, size_t p_round, logger& log) {
     log.dec_pad();
 }
 
-template void ind_phase<0>(tmp_workspace &ws, size_t p_round, logger& log);
-template void ind_phase<1>(tmp_workspace &ws, size_t p_round, logger& log);
-template void ind_phase<2>(tmp_workspace &ws, size_t p_round, logger& log);
-template void ind_phase<3>(tmp_workspace &ws, size_t p_round, logger& log);
-template void ind_phase<4>(tmp_workspace &ws, size_t p_round, logger& log);
-template void ind_phase<5>(tmp_workspace &ws, size_t p_round, logger& log);
+template void ind_phase<0>(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);
+template void ind_phase<1>(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);
+template void ind_phase<2>(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);
+template void ind_phase<3>(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);
+template void ind_phase<4>(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);
+template void ind_phase<5>(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);

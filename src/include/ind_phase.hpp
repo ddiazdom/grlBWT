@@ -14,9 +14,9 @@ size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buck
 template<uint8_t b_f_r>
 void infer_lvl_bwt(tmp_workspace &ws, size_t p_round);
 template<uint8_t b_f_r>
-void ind_phase(tmp_workspace &ws, size_t p_round, logger& log);
+void ind_phase(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt);
 
 void infer_lvl_bwt(tmp_workspace &ws, size_t p_round, logger& log);
-void parse2bwt(tmp_workspace &ws, size_t &p_round, logger& log);
+void parse2bwt(logger &log, bool ebwt, tmp_workspace &ws, size_t &p_round);
 
 #endif //EXACT_GRLBWT_HPP

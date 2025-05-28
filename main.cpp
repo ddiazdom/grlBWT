@@ -10,6 +10,7 @@ struct arguments{
     uint8_t b_f_r=1;
     //float hbuff_frac=0.5;
     bool ver=false;
+    bool ebwt=false;
     uint8_t alph_bytes=1;
     std::string version= "v1.0.1 alpha";
 };
@@ -41,38 +42,24 @@ static void parse_app(CLI::App& app, struct arguments& args){
     fmt->column_width(23);
     app.formatter(fmt);
 
-    app.add_option("TEXT",
-                      args.input_file,
-                      //"Input file in one-string-per-line or FASTA/Q format (automatically detected)"
-                      "Input file in one-string-per-line format")->check(CLI::ExistingFile)->required();
-    app.add_option("-o,--output-file",
-                      args.output_file,
-                      "Output file")->type_name("");
-    app.add_option("-a,--alphabet", args.alph_bytes, "Number of bytes for the alphabet (def. 1)")->
-            check(CLI::Range(1, 8))->default_val(1)->check(ValidCellWidth);
-    app.add_option("-t,--threads",
-                      args.n_threads,
-                      "Maximum number of working threads")->default_val(1);
+    app.add_option("TEXT", args.input_file, "Input file in one-string-per-line format")->check(CLI::ExistingFile)->required();
+    app.add_option("-o,--output-file", args.output_file, "Output file")->type_name("");
+    app.add_option("-a,--alphabet", args.alph_bytes, "Number of bytes for the alphabet (def. 1)")->check(CLI::Range(1, 8))->default_val(1)->check(ValidCellWidth);
+    app.add_option("-t,--threads", args.n_threads, "Maximum number of working threads")->default_val(1);
+    app.add_flag("-e,--ebwt", args.ebwt, "Compute the dollar eBWT")->default_val(false);
     //app.add_option("-f,--hbuff",
     //                  args.hbuff_frac,
     //                  "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.15)")->
     //        check(CLI::Range(0.0,1.0))->default_val(0.15);
-    app.add_option("-b,--run-len-bytes",
-                   args.b_f_r,
-                   "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->
-            check(CLI::Range(0,5))->default_val(1);
-    app.add_option("-T,--tmp",
-                      args.tmp_dir,
-                      "Temporary folder (def. /tmp/grl.bwt.xxxx)")->
-            check(CLI::ExistingDirectory)->default_val("/tmp");
-    app.add_flag("-v,--version",
-                 args.ver, "Print the software version and exit");
+    app.add_option("-b,--run-len-bytes", args.b_f_r, "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->check(CLI::Range(0,5))->default_val(1);
+    app.add_option("-T,--tmp", args.tmp_dir, "Temporary folder (def. /tmp/grl.bwt.xxxx)")-> check(CLI::ExistingDirectory)->default_val("/tmp");
+    app.add_flag("-v,--version", args.ver, "Print the software version and exit");
     app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
 
 template<class sym_type, uint8_t bytes_per_run>
 void run_int2(std::string input_collection, arguments& args){
-    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.tmp_dir);
+    grl_bwt_algo<sym_type, bytes_per_run>(input_collection, args.output_file, args.n_threads, args.ebwt, args.tmp_dir);
 }
 
 template<class sym_type>
@@ -112,7 +99,7 @@ int main(int argc, char** argv) {
 
     std::cout << "Input file:       "<<args.input_file<<std::endl;
     if(args.output_file.empty()) args.output_file = std::filesystem::path(args.input_file).filename();
-    args.output_file = std::filesystem::path(args.output_file).replace_extension(".rl_bwt");
+    args.output_file = std::filesystem::path(args.output_file).replace_extension((args.ebwt?".ebwt":".bcr_bwt"));
 
     std::string input_collection = args.input_file;
     str_collection str_coll;
@@ -137,11 +124,8 @@ int main(int argc, char** argv) {
         str_coll = collection_stats<uint8_t>(input_collection);
     }*/
 
-    if(args.alph_bytes>1){
-        std::cout<<"Alphabet type:    integer"<<std::endl;
-    }else{
-        std::cout<<"Alphabet type:    byte"<<std::endl;
-    }
+    std::cout<<"Alphabet type:    "<<(args.alph_bytes>1?"integer":"byte")<<std::endl;
+    std::cout<<"BWT type:         "<<(args.ebwt?"dollar eBWT":"BCR BWT")<<std::endl;
 
     if(args.alph_bytes==1){
         run_int<uint8_t>(input_collection, args);
