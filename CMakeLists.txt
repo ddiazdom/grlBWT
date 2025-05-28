@@ -8,7 +8,6 @@ add_subdirectory(src)
 add_executable(grlbwt-cli main.cpp)
 target_link_libraries(grlbwt-cli grlbwt)
 
-#target_include_directories(grlbwt-cli PUBLIC scripts/bioparsers/include)
 #
 add_executable(reverse_bwt scripts/reverse_bwt.cpp)
 target_link_libraries(reverse_bwt grlbwt)

@@ -188,7 +188,6 @@ str_collection collection_stats(std::string& input_file){
     return str_coll;
 }
 
-
 template str_collection collection_stats<uint8_t>(std::string& input_file);
 template str_collection collection_stats<uint16_t>(std::string& input_file);
 template str_collection collection_stats<uint32_t>(std::string& input_file);

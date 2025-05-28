@@ -2,23 +2,35 @@ project(grlBWT)
 
 set(CMAKE_CXX_STANDARD 17)
 
+option(MALLOC_COUNT "Compiling grlBWT with malloc count (only for debugging purposes)" OFF)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 
 find_package(LibSDSL REQUIRED)
 add_subdirectory(external/cdt)
 
-add_library(grlbwt
+set(GRLBWT_LIB_FILES
         lib/ind_phase.cpp
         lib/par_phase.cpp
         external/malloc_count-master/malloc_count.c
 )
+
+if(MALLOC_COUNT)
+    list(APPEND GRLBWT_LIB_FILES external/malloc_count-master/malloc_count.c)
+endif()
+
+add_library(grlbwt ${GRLBWT_LIB_FILES})
+
+if(MALLOC_COUNT)
+    target_compile_definitions(grlbwt PRIVATE USE_MALLOC_COUNT)
+endif()
 
 target_compile_options(grlbwt
         PRIVATE
         -Wall -Wextra -Wno-ignored-qualifiers -pedantic
         -O3 -funroll-loops -fomit-frame-pointer -ffast-math
         INTERFACE
-        -Wshadow)
+        -Wshadow
+)
 
 #compiler-dependent flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -29,11 +41,8 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(grlbwt PUBLIC -march=native)
 endif()
 
-# there seems to be problem with the msse4.2 compiler flag and the new Apple chips
 if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
     target_compile_options(grlbwt PUBLIC -msse4.2)
-else()
-    message(STATUS "Disabling SSE4.2 instructions due to conflict with host system processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
 
 #for the file_system functionality on Linux
@@ -41,7 +50,13 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC pthread cdt dl)
+if(MALLOC_COUNT)
+    message(STATUS "Adding malloc count")
+    target_link_libraries(grlbwt LINK_PUBLIC dl)
+    target_include_directories(grlbwt SYSTEM PUBLIC external/malloc_count-master)
+endif()
+
+target_link_libraries(grlbwt LINK_PUBLIC pthread cdt)
 
 target_include_directories(grlbwt
         PUBLIC

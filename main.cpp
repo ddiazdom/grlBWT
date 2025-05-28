@@ -54,7 +54,6 @@ static void parse_app(CLI::App& app, struct arguments& args){
     app.add_option("-b,--run-len-bytes", args.b_f_r, "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->check(CLI::Range(0,5))->default_val(1);
     app.add_option("-T,--tmp", args.tmp_dir, "Temporary folder (def. /tmp/grl.bwt.xxxx)")-> check(CLI::ExistingDirectory)->default_val("/tmp");
     app.add_flag("-v,--version", args.ver, "Print the software version and exit");
-    app.footer("Report bugs to <diego.diaz@helsinki.fi>");
 }
 
 template<class sym_type, uint8_t bytes_per_run>

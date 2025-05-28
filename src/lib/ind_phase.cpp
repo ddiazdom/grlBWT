@@ -7,7 +7,10 @@
 #ifdef __linux__
 #include <malloc.h>
 #endif
+
+#ifdef USE_MALLOC_COUNT
 #include "malloc_count.h"
+#endif
 
 //extract freq symbols from bwt[j] onwards and put them in new_bwt
 inline void extract_rl_syms(bwt_buff_writer &bwt_buff, bwt_buff_writer &new_bwt_buff, size_t &j, size_t freq) {
@@ -713,8 +716,10 @@ void ind_phase(tmp_workspace &ws, size_t p_round, logger &log, bool ebwt) {
         std::string e_time = time2str(start, end);
         log.info("Elap. time: "+e_time);
         //report_time(start, end, 4);
+#ifdef USE_MALLOC_COUNT
         malloc_count_print_status();
         malloc_count_reset_peak();
+#endif
     }
 
     log.dec_pad();

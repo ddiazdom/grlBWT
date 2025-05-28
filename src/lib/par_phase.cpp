@@ -5,7 +5,10 @@
 #include "par_phase.hpp"
 #include "LMS_sorting.h"
 #include "bwt_io.h"
+
+#ifdef USE_MALLOC_COUNT
 #include "malloc_count.h"
+#endif
 
 template<class sa_type>
 void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases_ht, bv_t& phr_marks, parsing_info& p_info, tmp_workspace& ws) {
@@ -328,8 +331,10 @@ size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logge
     //report_time(start, end, 4);
     log.info("Elap. time: "+e_time);
 
+#ifdef USE_MALLOC_COUNT
     malloc_count_print_status();
     malloc_count_reset_peak();
+#endif
 
     while (n_syms > 0) {
         start = std::chrono::steady_clock::now();
@@ -355,8 +360,10 @@ size_t par_phase(std::string &i_file, size_t n_threads, tmp_workspace &ws, logge
 
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
+#ifdef USE_MALLOC_COUNT
         malloc_count_print_status();
         malloc_count_reset_peak();
+#endif
     }
 
     sdsl::util::clear(symbol_desc);
