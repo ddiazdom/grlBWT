@@ -2,8 +2,8 @@
 // Created by Diaz, Diego on 27.10.2021.
 //
 
-#ifndef LHTIGS_UTILS_H
-#define LHTIGS_UTILS_H
+#ifndef GRLBWT_UTILS_H
+#define GRLBWT_UTILS_H
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -12,12 +12,11 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
+#include <functional>
 
 #ifdef __APPLE__
 #include <unistd.h>
 #endif
-
-
 
 struct str_collection {
     std::vector<long> str_ptrs;
@@ -160,6 +159,17 @@ std::string time2str(time_t start, time_t end){
     return ss.str();
 }
 
+//from https://stackoverflow.com/questions/16605967/set-precision-of-stdto-string-when-converting-floating-point-values
+template <typename T>
+std::string to_string_with_precision(const T a_value, const int n = 6) {
+    std::ostringstream out;
+    out.precision(n);
+    out << std::fixed << a_value;
+    return std::move(out).str();
+}
+
+std::string report_space(off_t bytes);
+
 // Define log levels
 enum LogLevel {
     LOG_NONE = 0,
@@ -248,4 +258,4 @@ private:
 };
 
 void report_mem_peak();
-#endif //LHTIGS_UTILS_H
+#endif //GRLBWT_UTILS_H

@@ -295,9 +295,10 @@ size_t par_phase(std::string &i_file, size_t n_threads, float ht_frac, tmp_works
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * ht_frac)));
 
     log.info("Parsing the text:");
+    log.inc_pad();
     if(n_threads>1){
         log.info("Running with up to "+std::to_string(n_threads)+" working threads ");
-        log.info("Using "+std::to_string(float(hbuff_size)/1000000)+" megabytes for the thread hash tables ("+std::to_string((float(hbuff_size)/1000000)/float(n_threads))+" megabytes each)");
+        log.info("Using "+report_space(off_t(hbuff_size))+" for the thread hash tables ("+report_space(off_t(hbuff_size/n_threads))+" each)");
     }
 
     std::string output_file = ws.get_file("tmp_output");
@@ -320,7 +321,6 @@ size_t par_phase(std::string &i_file, size_t n_threads, float ht_frac, tmp_works
     size_t n_syms;
     using f_parser_t = lms_parsing<i_file_stream<sym_type>, string_t, true>;
 
-    log.inc_pad();
     log.info("Parsing round "+std::to_string(iter++));
     auto start = std::chrono::steady_clock::now();
     n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws, log);
