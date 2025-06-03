@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstdint>
 
 uint8_t sym_width(unsigned long val);
 
