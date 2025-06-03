@@ -56,16 +56,6 @@ if(MALLOC_COUNT)
     target_include_directories(grlbwt SYSTEM PUBLIC malloc_count-master)
 endif()
 
-target_link_libraries(grlbwt LINK_PUBLIC pthread ${LIBSDSL_LIBRARIES} z)
-
-target_include_directories(grlbwt
-        PUBLIC
-        ${LIBSDSL_INCLUDE_DIRS}
-        include
-)
-
-target_include_directories(grlbwt
-        SYSTEM PUBLIC
-        ${LIBSDSL_INCLUDE_DIRS}
-        malloc_count-master
-)
+target_link_libraries(grlbwt LINK_PUBLIC pthread z ${LIBSDSL_LIBRARIES})
+target_include_directories(grlbwt PUBLIC include)
+target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS})

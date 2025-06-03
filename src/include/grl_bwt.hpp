@@ -13,7 +13,7 @@
  *
  * @param i_file : input text file
  * @param n_threads : number of working threads
- * @param hbuff_size : buffer size for the hashing step
+ * @param ht_frac : buffer size for the hashing step
  */
 template<class sym_type, uint8_t bytes_per_run>
 void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, float ht_frac, bool ebwt, LogLevel verbose_level, const std::string& tmp_dir=""){
@@ -32,6 +32,6 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, fl
     ind_phase<bytes_per_run>(tmp_ws, p_rounds, log, ebwt);
 
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
-    log.info("The resulting BCR BWT was stored in "+o_file);
+    log.info("The resulting BWT was stored in "+o_file);
 }
 #endif //GRLBWT_HPP
