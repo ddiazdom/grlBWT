@@ -233,7 +233,9 @@ private:
 
         max_bck_dist=0;
         size_t data_offset=0;
-        void * tmp_key = malloc(INT_CEIL(max_key_bits, stream_t::word_bits)*sizeof(buffer_t));
+        const size_t tmp_key_words = INT_CEIL(max_key_bits, stream_t::word_bits);
+        void * tmp_key = malloc((tmp_key_words == 0 ? 1 : tmp_key_words) * sizeof(buffer_t));
+        assert(tmp_key != nullptr);
 
         size_t dist, bck_dist, bck_offset, tmp_offset, idx, hash;
 
@@ -242,12 +244,13 @@ private:
             size_t key_bits = data.read(data_offset, data_offset+d_bits-1);
             size_t key_bytes = INT_CEIL(key_bits, 8);
 
-            //this clean the tail of the buffer
-            char * tmp = reinterpret_cast<char*>(tmp_key);
-            tmp[key_bytes-1] = 0;
-            //
-
-            data.read_chunk(tmp_key, data_offset + d_bits, data_offset + d_bits + key_bits - 1);
+            // Clear the tail byte before reading the key bits to avoid carrying
+            // stale high bits across iterations when key_bits is not byte-aligned.
+            if (key_bytes > 0) {
+                char * tmp = reinterpret_cast<char*>(tmp_key);
+                tmp[key_bytes - 1] = 0;
+                data.read_chunk(tmp_key, data_offset + d_bits, data_offset + d_bits + key_bits - 1);
+            }
 
             //hash = XXH3_64bits(tmp_key, key_bytes);
             hash = HASH(tmp_key, key_bytes);
