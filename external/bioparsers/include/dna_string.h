@@ -10,6 +10,7 @@
 #include <vector>
 #include <iostream>
 #include <algorithm>
+#include <cstdint>
 
 class dna_string : public std::basic_string<uint8_t> {
 private:
