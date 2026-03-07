@@ -1,102 +1,32 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
 
 project(grlBWT)
 set(CMAKE_CXX_STANDARD 17)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
-
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
 find_package(LibSDSL REQUIRED)
-add_subdirectory(external/cdt)
-add_subdirectory(external/bioparsers)
 
-# Declare MALLOC_COUNT as an option
+# CMake options
 option(MALLOC_COUNT "Compile grlBWT with malloc count (only for debugging purposes)" OFF)
+option(BUILD_SCRIPTS "Compile some helper scripts" ON)
+option(MARCH_NATIVE "Enable -march=native when supported by the compiler" ON)
+#
 
-set(GRLBWT_LIB_FILES
-        lib/exact_algo/exact_ind_phase.cpp
-        lib/exact_algo/exact_par_phase.cpp
-        lib/opt_algo/opt_ind_phase.cpp
-        lib/opt_algo/opt_par_phase.cpp
-)
-
-#using malloc_count for monitoring memory usage during debug mode
-if(MALLOC_COUNT)
-    message(STATUS "Compiling with malloc count (only for debugging purposes)")
-    list(APPEND GRLBWT_LIB_FILES external/malloc_count-master/malloc_count.c)
-endif()
-
-add_library(grlbwt ${GRLBWT_LIB_FILES})
-
-if(MALLOC_COUNT)
-    target_compile_definitions(grlbwt PRIVATE USE_MALLOC_COUNT)
-endif()
-
-target_compile_options(grlbwt
-        PRIVATE
-        -Wall -Wextra -Wno-ignored-qualifiers -pedantic
-        -O3 -funroll-loops -fomit-frame-pointer -ffast-math
-        INTERFACE
-        -Wshadow
-)
-
-#compiler-dependent flags
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    #message(STATUS "Disabling vla-extension due to ${CMAKE_CXX_COMPILER_ID}")
-    target_compile_options(grlbwt PUBLIC -Wno-vla-extension -Wno-undefined-var-template)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    message(STATUS "Adding -march=native compiler flag due to ${CMAKE_CXX_COMPILER_ID}")
-    target_compile_options(grlbwt PUBLIC -march=native)
-endif()
-
-#SSE instructions
-if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
-    target_compile_options(grlbwt PUBLIC -msse4.2)
-endif()
-
-#for the file_system functionality on Linux
-if(UNIX AND NOT APPLE)
-    target_link_libraries(grlbwt LINK_PUBLIC stdc++fs)
-endif()
-
-target_link_libraries(grlbwt LINK_PUBLIC z pthread cdt)
-
-target_include_directories(grlbwt
-        PUBLIC
-        ${LIBSDSL_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/exact_algo
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/opt_algo
-        ${CMAKE_CURRENT_SOURCE_DIR}/external
-        )
-
-target_include_directories(grlbwt SYSTEM PUBLIC ${LIBSDSL_INCLUDE_DIRS})
-
-#for malloc_count in debug mode
-if(MALLOC_COUNT)
-    target_link_libraries(grlbwt LINK_PUBLIC dl)
-    target_include_directories(grlbwt SYSTEM PUBLIC external/malloc_count-master)
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake)
 
 add_executable(grlbwt-cli main.cpp)
-target_link_libraries(grlbwt-cli grlbwt biopar)
-target_include_directories(grlbwt-cli PUBLIC external/bioparsers/include)
+target_include_directories(grlbwt-cli PRIVATE include external)
+configure_target(grlbwt-cli TRUE TRUE)
 
-add_executable(reverse_bwt scripts/reverse_bwt.cpp)
-target_link_libraries(reverse_bwt grlbwt biopar)
-target_include_directories(reverse_bwt PUBLIC scripts/)
-
-add_executable(bwt_stats scripts/bwt_stats.cpp)
-target_link_libraries(bwt_stats grlbwt biopar)
-target_include_directories(bwt_stats PUBLIC scripts/)
-
-add_executable(split_runs scripts/split_runs.cpp)
-target_link_libraries(split_runs grlbwt biopar)
-target_include_directories(split_runs PUBLIC scripts/)
-
-add_executable(grlbwt2rle scripts/grlbwt2rle.cpp)
-target_link_libraries(grlbwt2rle grlbwt biopar)
-target_include_directories(grlbwt2rle PUBLIC scripts/)
-
-add_executable(grl2plain scripts/grl2plain.cpp)
-target_link_libraries(grl2plain grlbwt biopar)
-target_include_directories(grl2plain PUBLIC scripts/)
+if (BUILD_SCRIPTS)
+    function(create_script target_name source)
+        add_executable(${target_name} ${source})
+        target_include_directories(${target_name} PRIVATE scripts include)
+        configure_target(${target_name} TRUE TRUE)
+    endfunction()
+    create_script(reverse_bwt scripts/reverse_bwt.cpp)
+    create_script(bwt_stats scripts/bwt_stats.cpp)
+    create_script(split_runs scripts/split_runs.cpp)
+    create_script(grl2rle scripts/grl2rle.cpp)
+    create_script(grl2plain scripts/grl2plain.cpp)
+endif ()

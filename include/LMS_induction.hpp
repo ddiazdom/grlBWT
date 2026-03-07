@@ -4,13 +4,11 @@
 
 #ifndef LPG_COMPRESSOR_LMS_INDUCTION_H
 #define LPG_COMPRESSOR_LMS_INDUCTION_H
-#include "common.h"
+#include "grlbwt_common.h"
 #include "bwt_io.h"
 
-namespace exact_algo {
-
-template <class vector_type, class sa_type>
-void induce_L_type(sa_type& sa, const dictionary &dict, vector_type& buckets, bv_t& solved_sym){
+template <class vector_type, class sa_type, class dict_type>
+void induce_L_type(sa_type& sa, const dict_type &dict, vector_type& buckets, bv_t& solved_sym){
 
     size_t pos, l_sym, bck;
     vector_type ind_bck(dict.alphabet+1, 0);
@@ -46,8 +44,8 @@ void induce_L_type(sa_type& sa, const dictionary &dict, vector_type& buckets, bv
     }
 }
 
-template <class vector_type, class sa_type>
-void induce_S_type(sa_type& sa, dictionary& dict, vector_type& buckets, bv_t& solved_sym){
+template <class vector_type, class sa_type, class dict_type>
+void induce_S_type(sa_type& sa, dict_type& dict, vector_type& buckets, bv_t& solved_sym){
 
     size_t pos, bck, l_sym, ind_pos;
     vector_type ind_bck(dict.alphabet+1, 0);
@@ -91,8 +89,8 @@ void induce_S_type(sa_type& sa, dictionary& dict, vector_type& buckets, bv_t& so
     }
 }
 
-template <class vector_type, class sa_type>
-void suffix_induction(dictionary &dict, sa_type& sa){
+template <class dict_type, class sa_type, class vector_type>
+void suffix_induction(dict_type &dict, sa_type& sa){
 
     vector_type buckets(dict.alphabet+1, 0);
 
@@ -155,7 +153,5 @@ void suffix_induction(dictionary &dict, sa_type& sa){
 #ifdef __linux__
     malloc_trim(0);
 #endif
-}
-
 }
 #endif //LPG_COMPRESSOR_LMS_INDUCTION_H

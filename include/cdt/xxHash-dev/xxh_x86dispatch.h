@@ -35,7 +35,7 @@
 #ifndef XXH_X86DISPATCH_H_13563687684
 #define XXH_X86DISPATCH_H_13563687684
 
-#include "xxhash.h"  /* XXH64_hash_t, XXH3_state_t */
+#include "xxhash.h"
 
 #if defined (__cplusplus)
 extern "C" {

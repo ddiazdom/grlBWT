@@ -3,7 +3,7 @@
 //
 #include<iostream>
 #include<bwt_io.h>
-#include<file_streams.hpp>
+#include "cdt/file_streams.hpp"
 
 int main(int argc, char** argv) {
 

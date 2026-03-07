@@ -24,7 +24,7 @@
  */
 
 #include "xsum_sanity_check.h"
-#include "xsum_output.h"  /* XSUM_log */
+#include "xsum_output.h"
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY
 #endif

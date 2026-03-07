@@ -23,7 +23,7 @@
  *   - xxHash source repository: https://github.com/Cyan4973/xxHash
  */
 
-#include "xsum_os_specific.h"  /* XSUM_API */
+#include "xsum_os_specific.h"
 #include <sys/stat.h>   /* stat() / _stat64() */
 
 /*

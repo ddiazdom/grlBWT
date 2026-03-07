@@ -7,7 +7,7 @@
 
 cmake_minimum_required (VERSION 2.8.12 FATAL_ERROR)
 
-set(XXHASH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+set(XXHASH_DIR "..")
 
 file(STRINGS "${XXHASH_DIR}/xxhash.h" XXHASH_VERSION_MAJOR REGEX "^#define XXH_VERSION_MAJOR +([0-9]+) *$")
 string(REGEX REPLACE "^#define XXH_VERSION_MAJOR +([0-9]+) *$" "\\1" XXHASH_VERSION_MAJOR "${XXHASH_VERSION_MAJOR}")
@@ -55,7 +55,7 @@ option(XXHASH_BUILD_XXHSUM "Build the xxhsum binary" ON)
 # we'll use the XXHASH_BUNDLED_MODE variable to let them do that; just
 # set it to OFF in your project before you add_subdirectory(xxhash/cmake_unofficial).
 if(NOT DEFINED XXHASH_BUNDLED_MODE)
-  if("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  if("../../../.." STREQUAL "${CMAKE_SOURCE_DIR}")
     set(XXHASH_BUNDLED_MODE OFF)
   else()
     set(XXHASH_BUNDLED_MODE ON)

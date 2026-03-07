@@ -6,7 +6,7 @@
 #define GRLBWT_PARSING_STRATEGIES_H
 
 #include <thread>
-#include "common.h"
+#include "grlbwt_common.h"
 
 struct parsing_info{
     size_t lms_phrases=0; //number of LMS phrases in the current parsing round
@@ -79,10 +79,10 @@ struct lms_parsing{
         }
     }
 
-    inline void operator()(stream_t& ifs,
-                           size_t f_string, size_t l_string, size_t max_symbol,
-                           std::function<void(string_t&)>&& process_phrase,
-                           std::function<std::pair<long, long>(size_t)>&& init_str) const {
+    void operator()(stream_t& ifs,
+                    size_t f_string, size_t l_string, size_t max_symbol,
+                    std::function<void(string_t&)>&& process_phrase,
+                    std::function<std::pair<long, long>(size_t)>&& init_str) const {
 
         sym_type curr_sym, prev_sym;
         string_t phrase(2, sym_width(max_symbol));
@@ -179,7 +179,7 @@ struct mt_parse_strat_t {//multi thread strategy
                                                   rb(str_ptr[end_str+1]-1){};
         thread_worker_data_t()=default;
 
-        inline std::pair<long, long> str2range(size_t str) const {
+        std::pair<long, long> str2range(size_t str) const {
             assert(start_str<=str && str<=end_str);
             size_t bg = str_ptr[str];
             size_t end = str ==end_str ? rb : str_ptr[str+1]-1;

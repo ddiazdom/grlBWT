@@ -2,19 +2,24 @@
 // Created by diego on 05-03-20.
 //
 
-#ifndef LMS_COMPRESSOR_SE_HASH_TABLE_H
-#define LMS_COMPRESSOR_SE_HASH_TABLE_H
+#ifndef CDT_HASH_TABLE_H
+#define CDT_HASH_TABLE_H
+
 #include <iostream>
 #include <cstring>
 #include <cassert>
 #include <fstream>
 #include <utility>
+
+#ifndef CDT_XXHASH_HASH_WRAPPER
+#define CDT_XXHASH_HASH_WRAPPER
+#define XXH_INLINE_ALL
 #include "xxHash-dev/xxhash.h"
+#endif
+
 #include "bitstream.h"
-#include "mxm3.h"
 #include <algorithm>
 #include <type_traits>
-#include <utility>
 #ifdef __linux__
 #include <malloc.h>
 #endif
@@ -1210,7 +1215,7 @@ public:
     }
 
     //swap method
-    void swap(buffered_hash_table& other){
+    void swap(buffered_hash_table& other) noexcept {
         move(std::forward<buffered_hash_table>(other));
     }
 
@@ -1810,4 +1815,4 @@ public:
 #endif
     }
 };
-#endif //LMS_COMPRESSOR_SE_HASH_TABLE_H
+#endif //CDT_HASH_TABLE_H

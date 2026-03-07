@@ -23,10 +23,10 @@
  *   - xxHash source repository: https://github.com/Cyan4973/xxHash
  */
 
-#include "xsum_output.h"  /* XSUM_logLevel */
+#include "xsum_output.h"
 #include "xsum_bench.h"
-#include "xsum_sanity_check.h" /* XSUM_fillTestBuffer */
-#include "xsum_os_specific.h"  /* XSUM_getFileSize */
+#include "xsum_sanity_check.h"
+#include "xsum_os_specific.h"
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY
 #endif

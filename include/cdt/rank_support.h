@@ -5,7 +5,6 @@
 #ifndef CDT_RANK_SUPPORT_H
 #define CDT_RANK_SUPPORT_H
 #include <vector>
-#include <iostream>
 #include "int_array.h"
 
 constexpr size_t W = std::numeric_limits<size_t>::digits;
@@ -13,7 +12,6 @@ constexpr size_t W = std::numeric_limits<size_t>::digits;
 //TODO k>W is supported just if k is a power of two (we can support Rank for any K but I have to modify rank operation)
 template<size_t k=W, size_t s=k*4>
 class rank_support {
-private:
     static_assert(k >= W && k%W==0 && k<s && s%k==0);
     constexpr static uint8_t shift = __builtin_ctz(W);
     const bit_array *m_bv = nullptr;
@@ -21,7 +19,6 @@ private:
     std::vector<size_t> R;
     int_array<size_t> r;
 
-private:
     void populate_rank_samples(){
         size_t  R_acc=0, r_acc=0, pop_count, bits=0;
 

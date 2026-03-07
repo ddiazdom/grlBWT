@@ -3,6 +3,7 @@
 //
 
 #include "fastx_handler.h"
+#include "file_streams.hpp"
 
 str_collection fastx2plain_format(const std::string& input_file, std::string const& output_file, bool rc, uint8_t sep){
 

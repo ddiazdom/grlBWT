@@ -23,43 +23,38 @@
  *   - xxHash source repository: https://github.com/Cyan4973/xxHash
  */
 
-#include "xsum_os_specific.h"  /* XSUM_API */
+#ifndef XSUM_SANITY_CHECK_H
+#define XSUM_SANITY_CHECK_H
 
-int XSUM_logLevel = 2;
+#include "xsum_config.h"
 
-XSUM_ATTRIBUTE((__format__(__printf__, 1, 2)))
-XSUM_API int XSUM_log(const char* format, ...)
-{
-    int ret;
-    va_list ap;
-    va_start(ap, format);
-    ret = XSUM_vfprintf(stderr, format, ap);
-    va_end(ap);
-    return ret;
+#include <stddef.h>   /* size_t */
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ * Runs a series of self-tests.
+ *
+ * Exits if any of these tests fail, printing a message to stderr.
+ *
+ * If XSUM_NO_TESTS is defined to non-zero,
+ * this will instead print a warning if this is called (e.g. via xxhsum -b).
+ */
+XSUM_API void XSUM_sanityCheck(void);
+
+/*
+ * Fills a test buffer with pseudorandom data.
+ *
+ * This is used in the sanity check and the benchmarks.
+ * Its values must not be changed.
+ */
+XSUM_API void XSUM_fillTestBuffer(XSUM_U8* buffer, size_t len);
+
+#ifdef __cplusplus
 }
+#endif
 
-
-XSUM_ATTRIBUTE((__format__(__printf__, 1, 2)))
-XSUM_API int XSUM_output(const char* format, ...)
-{
-    int ret;
-    va_list ap;
-    va_start(ap, format);
-    ret = XSUM_vfprintf(stdout, format, ap);
-    va_end(ap);
-    return ret;
-}
-
-XSUM_ATTRIBUTE((__format__(__printf__, 2, 3)))
-XSUM_API int XSUM_logVerbose(int minLevel, const char* format, ...)
-{
-    if (XSUM_logLevel >= minLevel) {
-        int ret;
-        va_list ap;
-        va_start(ap, format);
-        ret = XSUM_vfprintf(stderr, format, ap);
-        va_end(ap);
-        return ret;
-    }
-    return 0;
-}
+#endif /* XSUM_SANITY_CHECK_H */

@@ -1,6 +1,6 @@
 #include <iostream>
 #include "fm_index.h"
-#include "file_streams.hpp"
+#include "cdt/file_streams.hpp"
 
 int main(int argc, char** argv){
 

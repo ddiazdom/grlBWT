@@ -10,12 +10,11 @@
 #include <zlib.h>
 #include <thread>
 #include "dna_string.h"
-#include "file_streams.hpp"
+//#include "file_streams.hpp"
 #include "utils.h"
 extern"C"{
 #include "kseq.h"
 }
-#include <unistd.h>
 
 KSEQ_INIT(gzFile, gzread)
 

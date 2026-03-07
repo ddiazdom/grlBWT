@@ -6,20 +6,20 @@
 #define GRLBWT_COMMON_H
 
 #include <sdsl/bit_vectors.hpp>
-#include "hash_table.hpp"
-#include "int_array.h"
-#include "rank_support.h"
-#include "file_streams.hpp"
+#include "cdt/hash_table.hpp"
+#include "cdt/int_array.h"
+#include "cdt/rank_support.h"
+#include "cdt/file_streams.hpp"
 
 #define BUFFER_SIZE 8388608 //8MB of buffer
 
-typedef sdsl::bit_vector                        bv_t;
-typedef sdsl::bit_vector::rank_1_type           bv_rs_t;
-typedef int_array<size_t>                       vector_t;
-typedef int_array<size_t>                       string_t;
-typedef hash_table<size_t, 44>                  phrase_map_t;
-typedef buffered_hash_table<size_t, 44>         buffered_map_t;
-typedef typename phrase_map_t::buff_t           ht_buff_t;
+typedef sdsl::bit_vector                   bv_t;
+typedef sdsl::bit_vector::rank_1_type      bv_rs_t;
+typedef int_array<size_t>                  vector_t;
+typedef int_array<size_t>                  string_t;
+typedef hash_table<size_t, 44>             phrase_map_t;
+typedef buffered_hash_table<size_t, 44>    buffered_map_t;
+typedef phrase_map_t::buff_t               ht_buff_t;
 
 // the phrases are stored in a bit-compressed hash table:
 // this wrapper reinterprets the bits back as phrases
