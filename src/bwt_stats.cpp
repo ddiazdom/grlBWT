@@ -3,7 +3,7 @@
 //
 #include <iostream>
 #include <vector>
-#include "bwt_io.h"
+#include "../include/grlbwt/bwt_io.h"
 #include <cmath>
 
 int main(int argc, char** argv){

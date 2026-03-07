@@ -9,9 +9,9 @@
 #include "malloc_count.h"
 #endif
 
+#include <cdt/utils.h>
 #include "LMS_induction.hpp"
 #include "grlbwt_common.h"
-#include "cdt/utils.h"
 #include "par_strategies.h"
 
 template<typename parse_data_t, typename parser_t>
@@ -594,17 +594,13 @@ size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_i
                      size_t hbuff_size, size_t n_threads, bv_t& symbol_desc, tmp_workspace& ws){
     size_t alph_size;
     if (n_threads > 1) {
-        {
-            using par_strat_t = mt_parse_strat_t<par_type, hash_functor, parse_functor>;
-            par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
-            alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
-        }
+        using par_strat_t = mt_parse_strat_t<par_type, hash_functor, parse_functor>;
+        par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
+        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
     } else {
-        {
-            using par_strat_t = st_parse_strat_t<par_type, hash_functor, parse_functor>;
-            par_strat_t p_strat(i_file, o_file, p_info);
-            alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
-        }
+        using par_strat_t = st_parse_strat_t<par_type, hash_functor, parse_functor>;
+        par_strat_t p_strat(i_file, o_file, p_info);
+        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
     }
     return alph_size;
 }
@@ -619,9 +615,6 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
     std::cout<<"  Greatest symbol               : "<<str_coll.max_sym<<std::endl;
     std::cout<<"  Number of symbols in the file : "<<str_coll.n_syms<<std::endl;
     std::cout<<"  Number of strings             : "<<str_coll.n_strings<<std::endl;
-    //if constexpr (std::is_same<uint8_t, sym_type>::value){
-    //    std::cout<<"  Max sym freq.                 : "<<str_coll.max_sym_freq<<std::endl;
-    //}
 
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
 
@@ -689,12 +682,10 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
         malloc_count_print_status();
         malloc_count_reset_peak();
 #endif
-
     }
 
     sdsl::util::clear(symbol_desc);
     ws.remove_file("suffix_file");
-
     return iter - 2;
 }
 #endif //GRLBWT_PAR_PHASE_H

@@ -1,6 +1,5 @@
-#include <thread>
 #include "CLI11.hpp"
-#include "grl_bwt.hpp"
+#include <grlbwt/grlbwt.hpp>
 
 struct arguments{
     std::string input_file;

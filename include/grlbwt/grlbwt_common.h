@@ -6,10 +6,10 @@
 #define GRLBWT_COMMON_H
 
 #include <sdsl/bit_vectors.hpp>
-#include "cdt/hash_table.hpp"
-#include "cdt/int_array.h"
-#include "cdt/rank_support.h"
-#include "cdt/file_streams.hpp"
+#include <cdt/hash_table.hpp>
+#include <cdt/int_array.h>
+#include <cdt/rank_support.h>
+#include <cdt/file_streams.hpp>
 
 #define BUFFER_SIZE 8388608 //8MB of buffer
 

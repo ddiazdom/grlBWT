@@ -5,7 +5,7 @@
 #ifndef TEST_RL_BCR_BWT_FM_INDEX_H
 #define TEST_RL_BCR_BWT_FM_INDEX_H
 
-#include "bwt_io.h"
+#include "../include/grlbwt/bwt_io.h"
 #include "sdsl/wavelet_trees.hpp"
 
 struct fm_index{

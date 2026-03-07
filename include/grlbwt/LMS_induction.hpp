@@ -5,7 +5,6 @@
 #ifndef LPG_COMPRESSOR_LMS_INDUCTION_H
 #define LPG_COMPRESSOR_LMS_INDUCTION_H
 #include "grlbwt_common.h"
-#include "bwt_io.h"
 
 template <class vector_type, class sa_type, class dict_type>
 void induce_L_type(sa_type& sa, const dict_type &dict, vector_type& buckets, bv_t& solved_sym){

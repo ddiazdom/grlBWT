@@ -2,7 +2,7 @@
 // Created by Diaz, Diego on 17.10.2022.
 //
 #include<iostream>
-#include<bwt_io.h>
+#include <../include/grlbwt/bwt_io.h>
 #include "cdt/file_streams.hpp"
 
 int main(int argc, char** argv) {

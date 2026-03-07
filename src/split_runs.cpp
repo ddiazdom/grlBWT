@@ -3,7 +3,7 @@
 //
 #include<iostream>
 #include <vector>
-#include "bwt_io.h"
+#include "../include/grlbwt/bwt_io.h"
 
 #define INT_CEIL(a,b) (a>0? 1+(a-1)/b : 0)
 

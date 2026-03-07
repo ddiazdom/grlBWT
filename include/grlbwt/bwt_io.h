@@ -8,9 +8,7 @@
 #include <fstream>
 #include <unistd.h>
 #include <functional>
-#include <cstring>
 #include <cassert>
-#include <cstdint>
 
 class bwt_buff_reader {
 

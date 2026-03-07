@@ -11,8 +11,10 @@
 /***
  *
  * @param i_file : input text file
+ * @param o_file : output file where the BCR will be stored
  * @param n_threads : number of working threads
- * @param hbuff_size : buffer size for the hashing step
+ * @param hbuff_frac : memory used during the parsing
+ * @param b_p_r : bytes per run length (used during the induction phase)
  */
 template<class sym_type>
 void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace & tmp_ws,
