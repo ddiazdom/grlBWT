@@ -400,7 +400,7 @@ public:
         close();
     };
 
-    inline void read_run(size_t i, size_t& sym, size_t& freq) {
+    void read_run(size_t i, size_t& sym, size_t& freq) {
 
         assert(i<tot_runs);
         sym = 0;

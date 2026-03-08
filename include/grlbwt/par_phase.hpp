@@ -4,6 +4,7 @@
 
 #ifndef GRLBWT_PAR_PHASE_H
 #define GRLBWT_PAR_PHASE_H
+#include "cdt/logger.h"
 
 #ifdef USE_MALLOC_COUNT
 #include "malloc_count.h"
@@ -228,11 +229,6 @@ void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases
     size_t pos, new_size=0, l_sym, r_sym;
     vector_t new_dict((s_sa.size()+1)*2, 0, sym_width(meta_sym_dummy));
 
-    //TODO testing
-    //std::cout<<"\ndist stats"<<std::endl;
-    //new_phrases_ht.ht_stats(10);
-    //
-
     for(size_t u=0;u<s_sa.size();u++) {
 
         pos = s_sa[u];
@@ -251,26 +247,11 @@ void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases
 
             if(phr_marks[pos]){
 
-                //TODO
-                /*if(p_info.p_round==11){
-                    std::cout<<"\n"<<pos<<std::endl;
-                }*/
-                //
-
                 phrase.clear();
                 do{
                     phrase.push_back(dict.dict[pos]);
                 }while(!dict.d_lim[pos++]);
                 phrase.mask_tail();
-
-                //TODO
-                /*if(p_info.p_round==11){
-                    for(size_t i=0;i<phrase.size();i++){
-                        std::cout<<phrase[i]<<" ";
-                    }
-                    std::cout<<""<<std::endl;
-                }*/
-                //
 
                 auto res = new_phrases_ht.find(phrase.data(), phrase.n_bits());
                 assert(res.second);
@@ -417,24 +398,18 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
         memset(sa.data(), 0, sa.size()*sizeof(typename sa_type::value_type));
     }
 
-    std::cout <<"    Sorting the dictionary and constructing the preliminary BWT" << std::flush;
-    auto start = std::chrono::steady_clock::now();
+    LOG_DEBUG("Sorting the dictionary and constructing the preliminary BWT");
     suffix_induction<dictionary, sa_type, vector_type>(dict, sa);
 
     phrase_map_t new_phrases_ht;
     bv_t phr_marks(dict.dict.size(), false);
     size_t n_phrases = produce_pre_bwt<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
-    auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 2);
 
     //malloc_count_print_status();
     //malloc_count_reset_peak();
 
-    std::cout << "    Compressing the dictionary" << std::flush;
-    start = std::chrono::steady_clock::now();
+    LOG_DEBUG("Compressing the dictionary");
     produce_grammar<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 35);
 
 #ifdef __linux__
     malloc_trim(0);
@@ -470,13 +445,9 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
 #ifdef __linux__
     malloc_trim(0);
 #endif
-    std::cout << "    Computing the dictionary of LMS phrases" << std::flush;
-    auto start = std::chrono::steady_clock::now();
+
+    LOG_DEBUG("Computing the dictionary of LMS phrases");
     auto res = p_strategy.get_phrases();
-    auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 22);
-
-
     store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
 
@@ -500,13 +471,10 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     size_t tot_phrases;
     {
         //create a dictionary from where the ids will be computed
-        std::cout << "    Compacting the dictionary" << std::flush;
-        start = std::chrono::steady_clock::now();
+        LOG_DEBUG("Compacting the dictionary");
         dictionary dict(map, dict_sym, max_freq, phrase_desc,
                         p_strategy.text_size, p_info.prev_alph, p_info.max_sym_freq);
-        end = std::chrono::steady_clock::now();
         map.destroy_data();
-        report_time(start, end, 36);
 
         //process the dictionary
         tot_phrases = process_dictionary(dict, p_info, ws);
@@ -518,8 +486,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     ws.remove_file("ht_data");
 
     {
-        std::cout << "    Assigning metasymbols to the LMS phrases" << std::flush;
-        start = std::chrono::steady_clock::now();
+        LOG_DEBUG("Assigning metasymbols to the LMS phrases");
         bv_t new_phrase_desc(tot_phrases, false);
         key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
 
@@ -538,12 +505,9 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
         ws.remove_file("phr_ranks");
         std::string suffix_file = ws.get_file("suffix_file");
         sdsl::store_to_file(new_phrase_desc, suffix_file);
-        end = std::chrono::steady_clock::now();
-        report_time(start, end, 21);
     }
 
-    std::cout << "    Creating the parse of the text" << std::flush;
-    start = std::chrono::steady_clock::now();
+    LOG_DEBUG("Creating the parse of the text");
     load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
 
     size_t bps = sym_width(tot_phrases)+1;
@@ -558,9 +522,6 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     }
     assert(psize>=map.size());//the parse can't be smaller than the number of phrases
 
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 31);
-
     {
         //keep track of the phrases that have to be rephrased
         std::string suffix_file = ws.get_file("suffix_file");
@@ -574,11 +535,11 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     p_info.tot_phrases = tot_phrases;
     p_info.p_round++;
 
-    std::cout << "    Stats:" << std::endl;
-    std::cout << "      Parsing phrases:                  " << p_info.lms_phrases << std::endl;
-    std::cout << "      Number of symbols in the phrases: " << dict_sym << std::endl;
-    std::cout << "      Number of unsolved BWT blocks:    " << p_info.tot_phrases << std::endl;
-    std::cout << "      Parse size:                       " << psize << std::endl;
+    LOG_DEBUG("Stats:");
+    LOG_DEBUG("  Parsing phrases:                  "+std::to_string(p_info.lms_phrases));
+    LOG_DEBUG("  Number of symbols in the phrases: "+std::to_string(dict_sym));
+    LOG_DEBUG("  Number of unsolved BWT blocks:    "+std::to_string(p_info.tot_phrases));
+    LOG_DEBUG("  Parse size:                       "+std::to_string(psize));
 
     map.destroy_data();
     map.destroy_table();
@@ -608,20 +569,21 @@ size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_i
 template<class sym_type>
 size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws) {
 
-    std::cout<<"Reading the file"<<std::endl;
+    LOG_INFO("Reading the file");
     str_collection str_coll = collection_stats<sym_type>(i_file);
-    std::cout<<"Stats: "<<std::endl;
-    std::cout<<"  Smallest symbol               : "<<str_coll.min_sym<<std::endl;
-    std::cout<<"  Greatest symbol               : "<<str_coll.max_sym<<std::endl;
-    std::cout<<"  Number of symbols in the file : "<<str_coll.n_syms<<std::endl;
-    std::cout<<"  Number of strings             : "<<str_coll.n_strings<<std::endl;
+    LOG_DEBUG("Stats:");
+    LOG_DEBUG("  Smallest symbol               : "+std::to_string(str_coll.min_sym));
+    LOG_DEBUG("  Greatest symbol               : "+std::to_string(str_coll.max_sym));
+    LOG_DEBUG("  Number of symbols in the file : "+std::to_string(str_coll.n_syms));
+    LOG_DEBUG("  Number of strings             : "+std::to_string(str_coll.n_strings));
 
     auto hbuff_size = std::max<size_t>(64 * n_threads, size_t(ceil(float(str_coll.n_syms) * hbuff_frac)));
 
-    std::cout << "Parsing the text:    " << std::endl;
+    LOG_INFO("Text parsing and partial BWT construction:");
+    SCOPE_INFO();
     if(n_threads>1){
-        std::cout<<"  Running with up to "<<n_threads<<" working threads "<<std::endl;
-        std::cout<<"  Using "<<report_space((off_t)hbuff_size)<<" for the thread hash tables ("<< report_space(off_t(hbuff_size/n_threads))<<" each)"<<std::endl;
+        LOG_DEBUG("Running with up to "+std::to_string(n_threads)+" working threads");
+        LOG_DEBUG("Using "+report_space((off_t)hbuff_size)+" for the thread hash tables ("+report_space(off_t(hbuff_size/n_threads))+" each)");
     }
 
     std::string output_file = ws.get_file("tmp_output");
@@ -644,20 +606,19 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
     size_t n_syms;
     using f_parser_t = lms_parsing<i_file_stream<sym_type>, string_t, true>;
 
-    std::cout << "  Parsing round " << iter++ << std::endl;
-    auto start = std::chrono::steady_clock::now();
-    n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws);
-    auto end = std::chrono::steady_clock::now();
-
-    report_time(start, end, 4);
+    {
+        LOG_INFO("Level "+std::to_string(iter++));
+        SCOPE_INFO();
+        n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws);
 #ifdef USE_MALLOC_COUNT
-    malloc_count_print_status();
-    malloc_count_reset_peak();
+        malloc_count_print_status();
+        malloc_count_reset_peak();
 #endif
+    }
 
     while (n_syms > 0) {
-        start = std::chrono::steady_clock::now();
-        std::cout << "  Parsing round " << iter++ << std::endl;
+        LOG_INFO("Level "+std::to_string(iter++));
+        SCOPE_INFO();
         size_t bps = sym_width(n_syms)+1;
         if(bps<=8){
             n_syms = par_phase_int<uint8t_parser_t>(tmp_i_file, output_file, p_info,
@@ -672,9 +633,6 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
             n_syms = par_phase_int<uint64t_parser_t>(tmp_i_file, output_file, p_info,
                                                      hbuff_size, n_threads, symbol_desc, ws);
         }
-        end = std::chrono::steady_clock::now();
-        report_time(start, end, 4);
-
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
 

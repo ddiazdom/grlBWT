@@ -1,5 +1,6 @@
 #include "CLI11.hpp"
 #include <grlbwt/grlbwt.hpp>
+#include <cdt/logger.h>
 
 struct arguments{
     std::string input_file;
@@ -12,6 +13,7 @@ struct arguments{
     bool ver=false;
     bool rev_comp=false;
     uint8_t alph_bytes=1;
+    log_level log_level=log_level::INFO;
     std::string version= "v1.0.1 alpha";
 };
 
@@ -35,7 +37,7 @@ public:
     std::string make_option_opts(const CLI::Option *) const override { return ""; }
 };
 
-static void parse_app(CLI::App& app, struct arguments& args){
+static void parse_app(CLI::App& app, arguments& args){
     
 	auto fmt = std::make_shared<MyFormatter>();
 
@@ -67,16 +69,18 @@ static void parse_app(CLI::App& app, struct arguments& args){
             check(CLI::ExistingDirectory)->default_val("/tmp");
     app.add_flag("-v,--version",
                  args.ver, "Print the software version and exit");
-    //app.add_flag("-R,--rev-comp", args.rev_comp, "Also consider the DNA reverse complements of the strings in TEXT");
-    //app.add_flag("-m,--min-bwt", args.opt_bwt, "Produce the optimal BCR BWT instead of the regular one");
+    app.add_option("-l,--log-level",args.log_level, "Verbosity level (WARN=1, INFO=2, DEBUG=3,def. 2)")->check(CLI::Range(0, 4));
 }
 
 template<class sym_type>
 void build_bwt_int(std::string input_collection, arguments& args){
+
     tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
-    std::cout<<"Temporary folder: "<<tmp_ws.folder()<<std::endl;
-    std::cout<<"BWT type:         BCR exact"<<std::endl;
+    LOG_INFO("Alphabet type:    "+std::to_string(args.alph_bytes));
+    LOG_INFO("Temporary folder: "+tmp_ws.folder());
+    LOG_INFO("BWT type:         BCR");
     grl_bwt_algo<sym_type>(input_collection, args.output_file, tmp_ws, args.n_threads, args.hbuff_frac, args.b_f_r);
+    LOG_INFO("The resulting BCR BWT was stored in "+args.output_file);
 }
 
 int main(int argc, char** argv) {
@@ -91,8 +95,9 @@ int main(int argc, char** argv) {
         std::cout<<args.version<<std::endl;
         exit(0);
     }
+    Logger::level = args.log_level;
 
-    std::cout << "Input file:       "<<args.input_file<<std::endl;
+    LOG_INFO("Input file:       "+args.input_file);
     if(args.output_file.empty()) args.output_file = std::filesystem::path(args.input_file).filename();
     args.output_file = std::filesystem::path(args.output_file).replace_extension(".rl_bwt");
 
@@ -119,11 +124,6 @@ int main(int argc, char** argv) {
         str_coll = collection_stats<uint8_t>(input_collection);
     }*/
 
-    if(args.alph_bytes>1){
-        std::cout<<"Alphabet type:    integer"<<std::endl;
-    }else{
-        std::cout<<"Alphabet type:    byte"<<std::endl;
-    }
 
     if(args.alph_bytes==1){
         build_bwt_int<uint8_t>(input_collection, args);

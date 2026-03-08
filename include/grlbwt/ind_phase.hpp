@@ -7,6 +7,7 @@
 
 #include "bwt_io.h"
 #include "par_phase.hpp"
+#include <cdt/logger.h>
 
 #ifdef __linux__
 #include <malloc.h>
@@ -42,6 +43,7 @@ inline void extract_rl_syms(bwt_buff_writer &bwt_buff, bwt_buff_writer &new_bwt_
 
 inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buckets, size_t p_round, tmp_workspace &ws) {
 
+    LOG_DEBUG("Computing the number of induced symbols");
     std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_reader bwt_buff(prev_bwt_f);
 
@@ -119,11 +121,10 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1, max_run_len = (1UL << (b_f_r * 8)) - 1;
 
-    std::cout << "    Computing the number of induced symbols" << std::flush;
-    auto start = std::chrono::steady_clock::now();
     vector_t hocc_buckets;
     size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
 
+    LOG_DEBUG("Inducing from the previous BWT");
     size_t al_b = INT_CEIL(sym_width(dict.alphabet), 8);
     size_t fr_b = b_f_r;
     size_t bps = al_b + fr_b;
@@ -136,11 +137,7 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
     std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
-    auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 9);
 
-    std::cout << "    Performing the induction from the previous BWT" << std::flush;
-    start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < bwt_buff.size(); i++) {
 
         bwt_buff.read_run(i, sym, freq);
@@ -182,9 +179,6 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
                 size_t new_freq = freq;
                 if (new_freq > max_run_len) {
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
-                    //TODO fixing bug
-                    //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
-                    //
                     auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                     assert(res.second);
                     new_freq = 0;
@@ -222,9 +216,6 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
                     new_freq += freq;
                     if (new_freq > max_run_len) /*[[unlikely]]*/ {
                         auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr - bps);
-                        //TODO fixing bug
-                        //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
-                        //
                         auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                         if (!res.second) {
                             size_t tmp = 0;
@@ -241,9 +232,6 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
                 size_t new_freq = freq;
                 if (new_freq > max_run_len) /*[[unlikely]]*/ {
                     auto ptr_addr = reinterpret_cast<uintptr_t>(hocc_ptr);
-                    //TODO fixing bug
-                    //ofs <<ptr_addr<<" "<<new_freq <<std::endl;
-                    //
                     auto res = ht.insert(&ptr_addr, sizeof(ptr_addr) * 8, new_freq);
                     assert(res.second);
                     new_freq = 0;
@@ -264,11 +252,8 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 #ifdef __linux__
         malloc_trim(0);
 #endif
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 2);
 
-    std::cout << "    Assembling the new BWT" << std::flush;
-    start = std::chrono::steady_clock::now();
+    LOG_DEBUG("Assembling the new BWT");
     std::string new_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round));
 
     uint8_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
@@ -364,23 +349,21 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     bwt_buff.close(true);
     new_bwt_buff.close();
     if (remove(dict_file.c_str())) {
-        std::cout << "Error trying to remove file " << dict_file << std::endl;
+        LOG_ERROR("Error trying to remove file ");
     }
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 26);
 
-    std::cout << "    Stats:       " << std::endl;
-    std::cout << "      BWT size (n):                        " << new_bwt_size << std::endl;
-    std::cout << "      Number of runs (r):                  " << new_bwt_buff.size() << std::endl;
-    std::cout << "      n/r:                                 " << double(new_bwt_size) / double(new_bwt_buff.size())<< std::endl;
-    std::cout << "      Bytes per run symbol:                " << (int) new_al_b << std::endl;
-    std::cout << "      Bytes per run length:                " << (int) new_fr_b << std::endl;
-    std::cout << "      Bytes per induced run length:        " <<fr_b<<" (fixed by CLI)"<<std::endl;
+    LOG_DEBUG("Stats:");
+    LOG_DEBUG("  BWT size (n):                        "+std::to_string(new_bwt_size));
+    LOG_DEBUG("  Number of runs (r):                  "+std::to_string(new_bwt_buff.size()));
+    LOG_DEBUG("  n/r:                                 "+std::to_string(double(new_bwt_size) / double(new_bwt_buff.size())));
+    LOG_DEBUG("  Bytes per run symbol:                "+std::to_string(new_al_b));
+    LOG_DEBUG("  Bytes per run length:                "+std::to_string(new_fr_b));
+    LOG_DEBUG("  Bytes per induced run length:        "+std::to_string(fr_b)+" (fixed by CLI)");
     if (ht.size() > 0) {
-        std::cout << "        Induced runs with length overflow: " << ht.size() << " ("
-                  << (double(ht.size()) / double(n_runs)) * 100 << "%)" << std::endl;
+        double percent = (double(ht.size()) / double(n_runs)) * 100;
+        LOG_DEBUG("  Induced runs with length overflow:   "+std::to_string(ht.size())+" ("+std::to_string(percent)+"%)");
     } else {
-        std::cout << "        Induced runs with length overflow: 0" << std::endl;
+        LOG_DEBUG("  Induced runs with length overflow:   0");
     }
     free(hocc);
 }
@@ -423,8 +406,6 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1;
 
-    std::cout << "    Computing the number of induced symbols" << std::flush;
-    auto start = std::chrono::steady_clock::now();
     vector_t hocc_buckets;
     size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
 
@@ -438,15 +419,10 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
     std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
-    auto end = std::chrono::steady_clock::now();
-    report_time(start, end, 9);
 
-    std::cout << "    Performing the induction from the previous BWT" << std::flush;
-    start = std::chrono::steady_clock::now();
+    LOG_DEBUG("Inducing from the previous BWT");
     for (size_t i = 0; i < bwt_buff.size(); i++) {
-
         bwt_buff.read_run(i, sym, freq);
-
         if (dict.phrases_has_hocc[sym]) {
             rank = hocc_rs(sym);
             hocc_ptr = hocc + hocc_buckets.read(rank) * bps;
@@ -499,16 +475,11 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
         malloc_trim(0);
 #endif
 
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 2);
-
-    std::cout << "    Assembling the new BWT" << std::flush;
-    start = std::chrono::steady_clock::now();
+    LOG_DEBUG("Assembling the new BWT");
     std::string new_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round));
 
     size_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
     bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, fr_b);
-
     std::string p_bwt_file = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
     bwt_buff_reader p_bwt(p_bwt_file);
 
@@ -584,25 +555,23 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     bwt_buff.close(true);
     new_bwt_buff.close();
     if (remove(dict_file.c_str())) {
-        std::cout << "Error trying to remove file " << dict_file << std::endl;
+        LOG_ERROR("Error trying to remove file "+dict_file);
     }
-    end = std::chrono::steady_clock::now();
-    report_time(start, end, 26);
 
-    std::cout << "    Stats:       " << std::endl;
-    std::cout << "      BWT size (n):                 " << new_bwt_size << std::endl;
-    std::cout << "      Number of runs (r):           " << new_bwt_buff.size() << std::endl;
-    std::cout << "      n/r:                          " << double(new_bwt_size) / double(new_bwt_buff.size()) << std::endl;
-    //std::cout << "      Bytes per run:      " << bps << std::endl;
-    std::cout << "      Bytes per run symbol:         " << new_al_b << std::endl;
-    std::cout << "      Bytes per run len:            " << fr_b << std::endl;
-    std::cout << "      Bytes per induced run length: " <<fr_b<<std::endl;
+    LOG_DEBUG("Stats:");
+    LOG_DEBUG("  BWT size (n):                 "+std::to_string(new_bwt_size));
+    LOG_DEBUG("  Number of runs (r):           "+std::to_string(new_bwt_buff.size()));
+    LOG_DEBUG("  n/r:                          "+std::to_string(double(new_bwt_size) / double(new_bwt_buff.size())));
+    LOG_DEBUG("  Bytes per run symbol:         "+std::to_string(new_al_b));
+    LOG_DEBUG("  Bytes per run len:            "+std::to_string(fr_b));
+    LOG_DEBUG("  Bytes per induced run length: "+std::to_string(fr_b));
     free(hocc);
 }
 
 template<class sym_type>
 void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round) {
 
+    LOG_INFO("Computing the deepest recursive BWT");
     std::string parse_file = ws.get_file("tmp_input");
     std::ifstream c_vec(parse_file, std::ifstream::binary);
     c_vec.seekg(0, std::ifstream::end);
@@ -638,21 +607,20 @@ void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round) {
     bwt_buff.close();
 
     if (remove(parse_file.c_str())) {
-        std::cout << "Error trying to delete file " << parse_file << std::endl;
+        LOG_ERROR("Error trying to delete file ");
     }
 
-    std::cout << "  Stats:       " << std::endl;
-    std::cout << "    BWT size (n):         " << len << std::endl;
-    std::cout << "    Number of runs (r):   " << bwt_buff.size() << std::endl;
-    std::cout << "    n/r:                  " << double(len) / double(bwt_buff.size()) << std::endl;
-    //std::cout << "    Run stats:          " << (sb + fb) << std::endl;
-    std::cout << "    Bytes per run symbol: " << sb << std::endl;
-    std::cout << "    Bytes per run length: " << fb << std::endl;
+    LOG_DEBUG("Stats:");
+    LOG_DEBUG("  BWT size (n):         "+std::to_string(len));
+    LOG_DEBUG("  Number of runs (r):   "+std::to_string(bwt_buff.size()));
+    LOG_DEBUG("  n/r:                  "+std::to_string(double(len) / double(bwt_buff.size())));
+    LOG_DEBUG("  Bytes per run symbol: "+std::to_string(sb));
+    LOG_DEBUG("  Bytes per run length: "+std::to_string(fb));
 }
 
 inline void parse2bwt(tmp_workspace &ws, size_t& p_round) {
 
-    std::cout<<"  Computing the deepest recursive BWT"<<std::endl;
+    TRACE_SCOPE();
     std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
     dictionary dict;
     sdsl::load_from_file(dict, dict_file);
@@ -675,20 +643,19 @@ template<uint8_t b_f_r> //b_f_r = number of bytes to encode the length of a BWT 
 void ind_phase(tmp_workspace &ws, size_t p_round) {
 
     static_assert(b_f_r <= 5);
+    LOG_INFO("Completing the BWT");
 
-    std::cout << "Inferring the BWT" << std::endl;
+    SCOPE_INFO();
     parse2bwt(ws, p_round);
 
     while (p_round-- > 0) {
-        std::cout << "  Inducing the BWT for parse " << (p_round + 1) << std::endl;
-        auto start = std::chrono::steady_clock::now();
+        LOG_INFO("Level "+std::to_string(p_round + 1));
+        SCOPE_INFO();
         if constexpr (b_f_r == 0) {
             infer_lvl_bwt(ws, p_round);
         } else {
             infer_lvl_bwt<b_f_r>(ws, p_round);
         }
-        auto end = std::chrono::steady_clock::now();
-        report_time(start, end, 4);
 #if USE_MALLOC_COUNT
         malloc_count_print_status();
         malloc_count_reset_peak();

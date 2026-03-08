@@ -7,6 +7,7 @@
 
 #include "ind_phase.hpp"
 #include "par_phase.hpp"
+#include "cdt/logger.h"
 
 /***
  *
@@ -40,8 +41,6 @@ void grl_bwt_algo(std::string &i_file, std::string& o_file, tmp_workspace & tmp_
         default:
             ind_phase<5>(tmp_ws, p_rounds);
     };
-
     std::filesystem::rename(tmp_ws.get_file("bwt_lev_0"), o_file);
-    std::cout<<"The resulting BCR BWT was stored in "<<o_file<<std::endl;
 }
 #endif //GRLBWT_HPP

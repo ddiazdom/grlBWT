@@ -76,9 +76,12 @@ function(configure_target target_name enable_sdsl opt_flags)
 
     #optimization flags
     if(opt_flags)
+        message(STATUS "Optimization flags enabled for ${target_name}")
         target_compile_options(${target_name}
                 PRIVATE
                 -O3 -funroll-loops -fomit-frame-pointer)
+    else()
+        message(STATUS "Optimization flags disabled for ${target_name}")
     endif()
 
     enable_march_native_if_supported(${target_name})
