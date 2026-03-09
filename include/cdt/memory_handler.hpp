@@ -2,16 +2,21 @@
 // Created by Diego Diaz on 2/10/20.
 //
 
-#ifndef LMS_COMPRESSOR_MEMORY_HANDLER_HPP
-#define LMS_COMPRESSOR_MEMORY_HANDLER_HPP
+#ifndef CDT_MEMORY_HANDLER_HPP
+#define CDT_MEMORY_HANDLER_HPP
 
-#endif //LMS_COMPRESSOR_MEMORY_HANDLER_HPP
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
-class allocator{
+/*class allocator{
 public:
     template<class value_t>
-    inline static value_t *allocate(size_t n_vals, bool init = true, value_t def_val = 0) {
-        auto all_mem = (value_t *)malloc(sizeof(value_t) * n_vals);
+    static value_t *allocate(size_t n_vals, bool init = false, value_t def_val = 0) {
+        auto all_mem = static_cast<value_t *>(malloc(sizeof(value_t) * n_vals));
+        if(all_mem == nullptr) {
+            throw std::runtime_error("error allocating memory");
+        }
         if(init){
             for(size_t i=0; i < n_vals;i++) all_mem[i] = def_val;
         }
@@ -19,9 +24,12 @@ public:
     }
 
     template<class value_t>
-    static value_t *
-    reallocate(value_t *pointer, size_t old_size, size_t new_size, bool init = true, value_t def_val = 0) {
-        auto re_all_mem = (value_t*)realloc(pointer, sizeof(value_t)*new_size);
+    static value_t * reallocate(value_t *pointer, size_t old_size, size_t new_size,
+                                bool init = false, value_t def_val = 0) {
+        auto re_all_mem = static_cast<value_t *>(realloc(pointer, sizeof(value_t) * new_size));
+        if(re_all_mem == nullptr) {
+            throw std::runtime_error("error reallocating memory");
+        }
         if(new_size>old_size && init){
             for(size_t i=old_size;i<new_size;i++){
                 re_all_mem[i] = def_val;
@@ -34,6 +42,45 @@ public:
     static void deallocate(value_t * pointer){
         if(pointer!= nullptr){
             free(pointer);
+#ifdef __linux__
+            malloc_trim(0);
+#endif
+        }
+    }
+};*/
+
+struct mem {
+
+    template<class T>
+    static T * allocate(const size_t n) {
+        if (n == 0) {return nullptr;}
+        if (n > static_cast<size_t>(-1) / sizeof(T)) {
+            throw std::bad_array_new_length();
+        }
+        void * const pv = malloc(n * sizeof(T));
+        if (!pv) { throw std::bad_alloc(); }
+        return static_cast<T *>(pv);
+    }
+
+    template<class T>
+    static T * reallocate(T* old_ptr, const size_t n) {
+        if (n == 0) {return nullptr;}
+        if (n > static_cast<size_t>(-1) / sizeof(T)) {
+            throw std::bad_array_new_length();
+        }
+        void * const pv = realloc(old_ptr, n * sizeof(T));
+        if (!pv) { throw std::bad_alloc(); }
+        return static_cast<T *>(pv);
+    }
+
+    template<class T>
+    static void deallocate(T *& p) {
+        if (p!= nullptr) {
+            free(p);
+#ifdef __linux__
+            malloc_trim(0);
+#endif
+            p=nullptr;
         }
     }
 };
@@ -58,7 +105,7 @@ template <class T> struct mallocator {
         return false;
     }
 
-    T * allocate(const size_t n) const {
+    static T * allocate(const size_t n) {
         if (n == 0) {return nullptr;}
         if (n > static_cast<size_t>(-1) / sizeof(T)) {
             throw std::bad_array_new_length();
@@ -68,7 +115,21 @@ template <class T> struct mallocator {
         return static_cast<T *>(pv);
     }
 
+    static T * reallocate(T* old_ptr, const size_t n) {
+        if (n == 0) {return nullptr;}
+        if (n > static_cast<size_t>(-1) / sizeof(T)) {
+            throw std::bad_array_new_length();
+        }
+        void * const pv = realloc(old_ptr, n * sizeof(T));
+        if (!pv) { throw std::bad_alloc(); }
+        return static_cast<T *>(pv);
+    }
+
     void deallocate(T * const p, size_t) const noexcept {
         free(p);
+#ifdef __linux__
+        malloc_trim(0);
+#endif
     }
 };
+#endif

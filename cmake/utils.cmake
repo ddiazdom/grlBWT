@@ -1,6 +1,30 @@
 include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 
+function(get_git_commit OUTPUT_VAR)
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        execute_process(
+                COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE GIT_COMMIT
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        # Check if repo is dirty
+        execute_process(
+                COMMAND ${GIT_EXECUTABLE} diff --quiet
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                RESULT_VARIABLE GIT_DIRTY
+        )
+        if(NOT GIT_DIRTY EQUAL 0)
+            set(GIT_COMMIT "${GIT_COMMIT}-dirty")
+        endif()
+    else()
+        set(GIT_COMMIT "unknown")
+    endif()
+    set(${OUTPUT_VAR} "${GIT_COMMIT}" PARENT_SCOPE)
+endfunction()
+
 function(enable_march_native_if_supported target_name)
     if(MARCH_NATIVE)
         check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)

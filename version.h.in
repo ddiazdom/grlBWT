@@ -1,0 +1,10 @@
+#pragma once
+
+#define PROJECT_NAME "@PROJECT_NAME@"
+#define PROJECT_VERSION "@PROJECT_VERSION@"
+
+#define GIT_COMMIT "@GIT_COMMIT@"
+#define BUILD_TYPE "@CMAKE_BUILD_TYPE@"
+
+#define BUILD_DATE __DATE__
+#define BUILD_TIME __TIME__

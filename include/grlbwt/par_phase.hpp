@@ -4,13 +4,9 @@
 
 #ifndef GRLBWT_PAR_PHASE_H
 #define GRLBWT_PAR_PHASE_H
-#include "cdt/logger.h"
-
-#ifdef USE_MALLOC_COUNT
-#include "malloc_count.h"
-#endif
-
+#include <cdt/logger.h>
 #include <cdt/utils.h>
+#include <cdt/workspace.h>
 #include "LMS_induction.hpp"
 #include "grlbwt_common.h"
 #include "par_strategies.h"
@@ -216,7 +212,7 @@ struct dictionary {
 };
 
 template<class sa_type>
-void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases_ht, bv_t& phr_marks, parsing_info& p_info, tmp_workspace& ws) {
+void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases_ht, bv_t& phr_marks, parsing_info& p_info) {
 
     string_t phrase(2, sym_width(dict.alphabet));
 
@@ -274,13 +270,13 @@ void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases
     dict.n_phrases = s_sa.size();
 
     sdsl::util::clear(dict.d_lim);
-    std::string dict_file = ws.get_file("dict_lev_"+std::to_string(p_info.p_round));
+    std::string dict_file = TMP_FILE_NAME("dict_lev_"+std::to_string(p_info.p_round));
     sdsl::store_to_file(dict, dict_file);
 }
 
 template<class sa_type>
 size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_ht,
-                       bv_t &phr_marks, parsing_info &p_info, tmp_workspace &ws) {
+                       bv_t &phr_marks, parsing_info &p_info) {
 
     string_t phrase(2, sym_width(dict.alphabet));
 
@@ -290,7 +286,7 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
-    std::string pre_bwt_file = ws.get_file("pre_bwt_lev_"+std::to_string(p_info.p_round));
+    std::string pre_bwt_file = TMP_FILE_NAME("pre_bwt_lev_"+std::to_string(p_info.p_round));
     size_t sb = INT_CEIL(sym_width(dict.hocc_dummy), 8);
     size_t fb = INT_CEIL(sym_width(dict.t_size),8);
     bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
@@ -374,7 +370,7 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
 
     sdsl::util::clear(d_lim_rs);
     dict.freqs.erase();
-    store_to_file(ws.get_file("phr_ranks"), ranks);
+    store_to_file(TMP_FILE_NAME("phr_ranks"), ranks);
     ranks.erase();
     //new_phrases_ht.shrink_databuff();
 
@@ -385,7 +381,7 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
 }
 
 template<class vector_type, class sa_type>
-size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+size_t process_dictionary_int(dictionary &dict, parsing_info &p_info) {
 
     sa_type sa;
     if constexpr (std::is_same<sa_type, vector_t>::value) {
@@ -403,13 +399,10 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
 
     phrase_map_t new_phrases_ht;
     bv_t phr_marks(dict.dict.size(), false);
-    size_t n_phrases = produce_pre_bwt<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
-
-    //malloc_count_print_status();
-    //malloc_count_reset_peak();
+    size_t n_phrases = produce_pre_bwt<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info);
 
     LOG_DEBUG("Compressing the dictionary");
-    produce_grammar<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info, ws);
+    produce_grammar<sa_type>(dict, sa, new_phrases_ht, phr_marks, p_info);
 
 #ifdef __linux__
     malloc_trim(0);
@@ -417,30 +410,30 @@ size_t process_dictionary_int(dictionary &dict, parsing_info &p_info, tmp_worksp
     return n_phrases;
 }
 
-inline size_t process_dictionary(dictionary &dict, parsing_info &p_info, tmp_workspace &ws) {
+inline size_t process_dictionary(dictionary &dict, parsing_info &p_info) {
 
     uint8_t width = sym_width(dict.dict.size()) + 1;
     size_t n_phrases;
 
     if (width <= 8) {
         using uint8_vector_t = std::vector<uint8_t, mallocator<uint8_t>>;
-        n_phrases = process_dictionary_int<uint8_vector_t, uint8_vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint8_vector_t, uint8_vector_t>(dict, p_info);
     } else if (width <= 16) {
         using uint16_vector_t = std::vector<uint16_t, mallocator<uint16_t>>;
-        n_phrases = process_dictionary_int<uint16_vector_t, uint16_vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint16_vector_t, uint16_vector_t>(dict, p_info);
     } else if (width <= 32) {
         using uint32_vector_t = std::vector<uint32_t, mallocator<uint32_t>>;
-        n_phrases = process_dictionary_int<uint32_vector_t, uint32_vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint32_vector_t, uint32_vector_t>(dict, p_info);
     } else {
         using uint64_vector_t = std::vector<uint64_t, mallocator<uint64_t>>;
-        n_phrases = process_dictionary_int<uint64_vector_t, vector_t>(dict, p_info, ws);
+        n_phrases = process_dictionary_int<uint64_vector_t, vector_t>(dict, p_info);
     }
     return n_phrases;
 }
 
 
 template<class parse_strategy_t>
-size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phrase_desc, tmp_workspace &ws) {
+size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phrase_desc) {
 
 #ifdef __linux__
     malloc_trim(0);
@@ -448,7 +441,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
 
     LOG_DEBUG("Computing the dictionary of LMS phrases");
     auto res = p_strategy.get_phrases();
-    store_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
+    store_pl_vector(TMP_FILE_NAME("str_ptr"), p_info.str_ptrs);
     std::vector<long>().swap(p_info.str_ptrs);
 
 #ifdef __linux__
@@ -463,7 +456,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
     size_t max_freq = res.second;
 
     //save a copy of the hash table into a file
-    std::string ht_file = ws.get_file("ht_data");
+    std::string ht_file = TMP_FILE_NAME("ht_data");
     map.store_data_to_file(ht_file);
 
     //temporal unload of the hash table (not the data)
@@ -477,13 +470,13 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
         map.destroy_data();
 
         //process the dictionary
-        tot_phrases = process_dictionary(dict, p_info, ws);
+        tot_phrases = process_dictionary(dict, p_info);
         p_info.prev_alph = dict.alphabet;
     }
 
     //reload the hash table
     map.load_data_from_file(ht_file);
-    ws.remove_file("ht_data");
+    TMP_REMOVE_FILE("ht_data");
 
     {
         LOG_DEBUG("Assigning metasymbols to the LMS phrases");
@@ -492,7 +485,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
 
         size_t j = 0;
         vector_t ranks;
-        std::string ranks_file = ws.get_file("phr_ranks");
+        std::string ranks_file = TMP_FILE_NAME("phr_ranks");
         load_from_file(ranks_file, ranks);
         for (auto const &ptr: map) {
             size_t val = ranks[j++];
@@ -502,13 +495,13 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
             // We need to shift it to get the real id
             new_phrase_desc[(val >> 1UL)] = phrase_desc[key_w.read(ptr, 0)];
         }
-        ws.remove_file("phr_ranks");
-        std::string suffix_file = ws.get_file("suffix_file");
+        TMP_REMOVE_FILE("phr_ranks");
+        std::string suffix_file = TMP_FILE_NAME("suffix_file");
         sdsl::store_to_file(new_phrase_desc, suffix_file);
     }
 
     LOG_DEBUG("Creating the parse of the text");
-    load_pl_vector(ws.get_file("str_ptr"), p_info.str_ptrs);
+    load_pl_vector(TMP_FILE_NAME("str_ptr"), p_info.str_ptrs);
 
     size_t bps = sym_width(tot_phrases)+1;
     if(bps<=8){
@@ -524,7 +517,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
 
     {
         //keep track of the phrases that have to be rephrased
-        std::string suffix_file = ws.get_file("suffix_file");
+        std::string suffix_file = TMP_FILE_NAME("suffix_file");
         bv_t new_phrase_desc;
         sdsl::load_from_file(new_phrase_desc, suffix_file);
         phrase_desc.swap(new_phrase_desc);
@@ -552,22 +545,22 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
 
 template<class par_type>
 size_t par_phase_int(std::string& i_file, std::string& o_file, parsing_info& p_info,
-                     size_t hbuff_size, size_t n_threads, bv_t& symbol_desc, tmp_workspace& ws){
+                     size_t hbuff_size, size_t n_threads, bv_t& symbol_desc){
     size_t alph_size;
     if (n_threads > 1) {
         using par_strat_t = mt_parse_strat_t<par_type, hash_functor, parse_functor>;
         par_strat_t p_strat(i_file, o_file, p_info, hbuff_size, n_threads);
-        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
+        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc);
     } else {
         using par_strat_t = st_parse_strat_t<par_type, hash_functor, parse_functor>;
         par_strat_t p_strat(i_file, o_file, p_info);
-        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc, ws);
+        alph_size = par_round<par_strat_t>(p_strat, p_info, symbol_desc);
     }
     return alph_size;
 }
 
 template<class sym_type>
-size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_workspace &ws) {
+size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac) {
 
     LOG_INFO("Reading the file");
     str_collection str_coll = collection_stats<sym_type>(i_file);
@@ -586,8 +579,8 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
         LOG_DEBUG("Using "+report_space((off_t)hbuff_size)+" for the thread hash tables ("+report_space(off_t(hbuff_size/n_threads))+" each)");
     }
 
-    std::string output_file = ws.get_file("tmp_output");
-    std::string tmp_i_file = ws.get_file("tmp_input");
+    std::string output_file = TMP_FILE_NAME("tmp_output");
+    std::string tmp_i_file = TMP_FILE_NAME("tmp_input");
 
     // mark which symbols represent string boundaries
     bv_t symbol_desc(str_coll.max_sym + 1, false);
@@ -607,43 +600,32 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac, tmp_wo
     using f_parser_t = lms_parsing<i_file_stream<sym_type>, string_t, true>;
 
     {
+        TRACE_SCOPE();
         LOG_INFO("Level "+std::to_string(iter++));
         SCOPE_INFO();
-        n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc, ws);
-#ifdef USE_MALLOC_COUNT
-        malloc_count_print_status();
-        malloc_count_reset_peak();
-#endif
+        n_syms = par_phase_int<f_parser_t>(i_file, tmp_i_file, p_info, hbuff_size, n_threads, symbol_desc);
     }
 
     while (n_syms > 0) {
         LOG_INFO("Level "+std::to_string(iter++));
         SCOPE_INFO();
+        TRACE_SCOPE();
         size_t bps = sym_width(n_syms)+1;
         if(bps<=8){
-            n_syms = par_phase_int<uint8t_parser_t>(tmp_i_file, output_file, p_info,
-                                                    hbuff_size, n_threads, symbol_desc, ws);
+            n_syms = par_phase_int<uint8t_parser_t>(tmp_i_file, output_file, p_info, hbuff_size, n_threads, symbol_desc);
         }else if(bps<=16){
-            n_syms = par_phase_int<uint16t_parser_t>(tmp_i_file, output_file, p_info,
-                                                     hbuff_size, n_threads, symbol_desc, ws);
+            n_syms = par_phase_int<uint16t_parser_t>(tmp_i_file, output_file, p_info, hbuff_size, n_threads, symbol_desc);
         } else if(bps<=32){
-            n_syms = par_phase_int<uint32t_parser_t>(tmp_i_file, output_file, p_info,
-                                                     hbuff_size, n_threads, symbol_desc, ws);
+            n_syms = par_phase_int<uint32t_parser_t>(tmp_i_file, output_file, p_info, hbuff_size, n_threads, symbol_desc);
         } else{
-            n_syms = par_phase_int<uint64t_parser_t>(tmp_i_file, output_file, p_info,
-                                                     hbuff_size, n_threads, symbol_desc, ws);
+            n_syms = par_phase_int<uint64t_parser_t>(tmp_i_file, output_file, p_info, hbuff_size, n_threads, symbol_desc);
         }
         remove(tmp_i_file.c_str());
         rename(output_file.c_str(), tmp_i_file.c_str());
-
-#ifdef USE_MALLOC_COUNT
-        malloc_count_print_status();
-        malloc_count_reset_peak();
-#endif
     }
 
     sdsl::util::clear(symbol_desc);
-    ws.remove_file("suffix_file");
+    TMP_REMOVE_FILE("suffix_file");
     return iter - 2;
 }
 #endif //GRLBWT_PAR_PHASE_H

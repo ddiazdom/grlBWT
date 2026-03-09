@@ -1,6 +1,16 @@
 #include "CLI11.hpp"
 #include <grlbwt/grlbwt.hpp>
 #include <cdt/logger.h>
+#include "version.h"//do not delete it (built dynamically to print the program version)
+
+std::string version_string() {
+    std::ostringstream out;
+    out << PROJECT_NAME << " " << PROJECT_VERSION << "\n";
+    out << "commit: " << GIT_COMMIT << "\n";
+    out << "built: " << BUILD_DATE << " " << BUILD_TIME << "\n";
+    out << "build: " << BUILD_TYPE << "\n";
+    return out.str();
+}
 
 struct arguments{
     std::string input_file;
@@ -14,7 +24,6 @@ struct arguments{
     bool rev_comp=false;
     uint8_t alph_bytes=1;
     log_level log_level=log_level::INFO;
-    std::string version= "v1.0.1 alpha";
 };
 
 struct CellWidthValidator : CLI::Validator {
@@ -41,7 +50,7 @@ static void parse_app(CLI::App& app, arguments& args){
     
 	auto fmt = std::make_shared<MyFormatter>();
 
-    fmt->column_width(23);
+    fmt->column_width(25);
     app.formatter(fmt);
 
     app.add_option("TEXT",
@@ -66,20 +75,21 @@ static void parse_app(CLI::App& app, arguments& args){
     app.add_option("-T,--tmp",
                       args.tmp_dir,
                       "Temporary folder (def. /tmp/grl.bwt.xxxx)")->
-            check(CLI::ExistingDirectory)->default_val("/tmp");
-    app.add_flag("-v,--version",
-                 args.ver, "Print the software version and exit");
-    app.add_option("-l,--log-level",args.log_level, "Verbosity level (WARN=1, INFO=2, DEBUG=3,def. 2)")->check(CLI::Range(0, 4));
+            check(CLI::ExistingDirectory)->default_val(std::filesystem::temp_directory_path());
+    app.add_option("-l,--log-level",
+        args.log_level,
+        "Verbosity level (WARN=1, INFO=2, DEBUG=3,def. 2)")->check(CLI::Range(0, 4));
+    app.set_version_flag("-v,--version",
+        version_string(),
+        "Print the software version and exit");
 }
 
 template<class sym_type>
 void build_bwt_int(std::string input_collection, arguments& args){
-
-    tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
+    //tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
     LOG_INFO("Alphabet type:    "+std::to_string(args.alph_bytes));
-    LOG_INFO("Temporary folder: "+tmp_ws.folder());
     LOG_INFO("BWT type:         BCR");
-    grl_bwt_algo<sym_type>(input_collection, args.output_file, tmp_ws, args.n_threads, args.hbuff_frac, args.b_f_r);
+    grl_bwt_algo<sym_type>(input_collection, args.output_file, args.tmp_dir, args.n_threads, args.hbuff_frac, args.b_f_r);
     LOG_INFO("The resulting BCR BWT was stored in "+args.output_file);
 }
 
@@ -89,12 +99,7 @@ int main(int argc, char** argv) {
 
     CLI::App app("Repetition-aware BWT construction");
     parse_app(app, args);
-
     CLI11_PARSE(app, argc, argv);
-    if(args.ver){
-        std::cout<<args.version<<std::endl;
-        exit(0);
-    }
     Logger::level = args.log_level;
 
     LOG_INFO("Input file:       "+args.input_file);
@@ -103,27 +108,6 @@ int main(int argc, char** argv) {
 
     std::string input_collection = args.input_file;
     str_collection str_coll;
-
-    //TODO I turned FASTA/Q support off for the moment
-    /*if(is_fastx(args.input_file)){
-        //input_collection = tmp_ws.get_file("plain_input");
-        //std::cout<<"The input is in FASTA/Q format"<<std::endl;
-        //std::cout<<"Creating a temporary file in plain format: "<<input_collection<<std::endl;
-        //str_coll = fastx2plain_format(args.input_file, input_collection, args.rev_comp, '\n');
-        std::cout<<"this option is not implemented yet"<<std::endl;
-        exit(0);
-    }else if(args.rev_comp) {
-        //input_collection = tmp_ws.get_file("plain_input");
-        //std::cout<<"The input is in plain format, but the BCR BWT computation requires the DNA reverse complements"<<std::endl;
-        //std::cout<<"Creating a temporary file in plain format: "<<input_collection<<std::endl;
-        //std::filesystem::copy(args.input_file, input_collection);
-        //TODO get reverse complement in plain format
-        std::cout<<"this option is not implemented yet"<<std::endl;
-        exit(0);
-    }else {
-        str_coll = collection_stats<uint8_t>(input_collection);
-    }*/
-
 
     if(args.alph_bytes==1){
         build_bwt_int<uint8_t>(input_collection, args);

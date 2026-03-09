@@ -126,7 +126,7 @@ struct tmp_workspace{
                            std::string const& prefix="tmp") : remove_all(rem_all) {
 
         std::string tmp_path = std::filesystem::canonical(std::filesystem::path(base_folder)) / std::string(prefix+".XXXXXX");
-        char temp[200] = {0};
+        char temp[200] = {};
         tmp_path.copy(temp, tmp_path.size() + 1);
         temp[tmp_path.size() + 1] = '\0';
         auto res = mkdtemp(temp);
@@ -176,7 +176,7 @@ str_collection collection_stats(std::string& input_file){
     // This should be the last character in the file
     str_collection str_coll;
 
-    size_t sym_frq[256] = {0};
+    size_t sym_frq[256] = {};
 
     std::ifstream ifs(input_file, std::ios::binary);
 

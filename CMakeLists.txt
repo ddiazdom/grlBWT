@@ -1,18 +1,37 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(grlBWT)
 set(CMAKE_CXX_STANDARD 17)
+project(grlBWT VERSION 1.0.1)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
 find_package(LibSDSL REQUIRED)
 
 # CMake options
-option(MALLOC_COUNT "Compile grlBWT with malloc count (only for debugging purposes)" OFF)
+option(MALLOC_COUNT "Compile grlBWT with malloc count (only for debugging purposes)" ON)
 option(BUILD_SCRIPTS "Compile some helper scripts" ON)
 option(MARCH_NATIVE "Enable -march=native when supported by the compiler" ON)
 #
 
+# load useful helper scripts
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake)
+#
+
+#get git info
+get_git_commit(GIT_COMMIT)
+#
+
+#create header with program metadata
+configure_file(
+    ${CMAKE_SOURCE_DIR}/version.h.in
+    ${CMAKE_BINARY_DIR}/generated/version.h
+)
+#
+
+#make metadata header visible
+include_directories(myprogram PRIVATE
+    ${CMAKE_BINARY_DIR}/generated
+)
+#
 
 add_executable(grlbwt-cli src/grlbwt-cli.cpp)
 target_include_directories(grlbwt-cli PRIVATE include external)

@@ -8,13 +8,11 @@
 #include "bwt_io.h"
 #include "par_phase.hpp"
 #include <cdt/logger.h>
+#include <cdt/workspace.h>
+#include <cdt/memory_handler.hpp>
 
 #ifdef __linux__
 #include <malloc.h>
-#endif
-
-#ifdef USE_MALLOC_COUNT
-#include "malloc_count.h"
 #endif
 
 //extract freq symbols from bwt[j] onwards and put them in new_bwt
@@ -41,10 +39,10 @@ inline void extract_rl_syms(bwt_buff_writer &bwt_buff, bwt_buff_writer &new_bwt_
     }
 }
 
-inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buckets, size_t p_round, tmp_workspace &ws) {
+inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &hocc_buckets, size_t p_round) {
 
     LOG_DEBUG("Computing the number of induced symbols");
-    std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
+    std::string prev_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_reader bwt_buff(prev_bwt_f);
 
     size_t sym, pos, dummy_sym = dict.bwt_dummy + 1, left_sym, freq = 0, al_b, fr_b, bps, n_runs = 0;
@@ -54,7 +52,8 @@ inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &ho
 
     bps = al_b + fr_b;
     size_t tot_bytes = bps * hocc_rs(dict.phrases_has_hocc.size());
-    auto *hocc_counts = (char *) malloc(tot_bytes);
+    //auto *hocc_counts = (char *) malloc(tot_bytes);
+    auto *hocc_counts = mem::allocate<char>(tot_bytes);
     memset(hocc_counts, 0, tot_bytes);
 
     char *ptr;
@@ -107,22 +106,26 @@ inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &ho
     }
     assert(acc == n_runs);
     hocc_buckets.write(hocc_buckets.size() - 1, acc);
-    free(hocc_counts);
+    //free(hocc_counts);
+    mem::deallocate(hocc_counts);
+
     return acc;
 }
 
 template<uint8_t b_f_r>
-void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
+void infer_lvl_bwt(size_t p_round) {
+
+    TRACE_SCOPE();
 
     dictionary dict;
-    std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
-    sdsl::load_from_file(dict, dict_file);
+    std::string dict_file = "dict_lev_" + std::to_string(p_round);
+    sdsl::load_from_file(dict, TMP_FILE_NAME(dict_file));
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1, max_run_len = (1UL << (b_f_r * 8)) - 1;
 
     vector_t hocc_buckets;
-    size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
+    size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round);
 
     LOG_DEBUG("Inducing from the previous BWT");
     size_t al_b = INT_CEIL(sym_width(dict.alphabet), 8);
@@ -131,11 +134,12 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
     hash_table<uintptr_t, sizeof(uintptr_t)*8, 8> ht;
 
-    auto *hocc = (char *) malloc(n_runs * bps);
+    //auto *hocc = (char *) malloc(n_runs * bps);
+    auto *hocc = mem::allocate<char>(n_runs * bps);
     memset(hocc, 0, n_runs * bps);
     char *hocc_ptr;
 
-    std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
+    std::string prev_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
 
     for (size_t i = 0; i < bwt_buff.size(); i++) {
@@ -254,13 +258,13 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 #endif
 
     LOG_DEBUG("Assembling the new BWT");
-    std::string new_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round));
+    std::string new_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round));
 
     uint8_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
     uint8_t new_fr_b = INT_CEIL(sym_width(dict.max_sym_freq), 8);
     bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, new_fr_b);
 
-    std::string p_bwt_file = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
+    std::string p_bwt_file = TMP_FILE_NAME("pre_bwt_lev_" + std::to_string(p_round));
     bwt_buff_reader p_bwt(p_bwt_file);
 
     size_t i = 0, j = 0, pbwt_freq, new_bwt_size = 0, ht_addr = 0;
@@ -279,7 +283,7 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
 
                 //copy from hocc+bwt
                 while (pbwt_freq > 0) {
-                    freq = 0;//this clean the previous bits
+                    freq = 0;//this cleans the previous bits
                     memcpy(&sym, hocc_ptr, al_b);
                     memcpy(&freq, hocc_ptr + al_b, fr_b);
 
@@ -348,9 +352,7 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     p_bwt.close(true);
     bwt_buff.close(true);
     new_bwt_buff.close();
-    if (remove(dict_file.c_str())) {
-        LOG_ERROR("Error trying to remove file ");
-    }
+    TMP_REMOVE_FILE(dict_file);
 
     LOG_DEBUG("Stats:");
     LOG_DEBUG("  BWT size (n):                        "+std::to_string(new_bwt_size));
@@ -365,59 +367,34 @@ void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     } else {
         LOG_DEBUG("  Induced runs with length overflow:   0");
     }
-    free(hocc);
+    //free(hocc);
+    mem::deallocate(hocc);
 }
 
-inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
+inline void infer_lvl_bwt(size_t p_round) {
+
+    TRACE_SCOPE();
 
     dictionary dict;
-    std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
-    sdsl::load_from_file(dict, dict_file);
+    std::string dict_file = "dict_lev_" + std::to_string(p_round);
+    sdsl::load_from_file(dict, TMP_FILE_NAME(dict_file));
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
-
-    //TODO testing
-    /*{
-        std::string tmp1 = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
-        std::string tmp2 = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
-        bwt_buff_reader bwt1(tmp1);
-        bwt_buff_reader bwt2(tmp2);
-        for (size_t i = 0; i < bwt1.size(); i++) {
-            size_t a, b;
-            bwt1.read_run(i, a, b);
-            std::cout << a << " -> " << b << std::endl;
-        }
-        std::cout <<" "<< std::endl;
-        for (size_t i = 0; i < bwt2.size(); i++) {
-            size_t a, b;
-            bwt2.read_run(i, a, b);
-            if(a==dict.sym_dummy){
-                std::cout <<  "*  -> " << b << std::endl;
-            } else if(a==dict.sym_end_string)
-                std::cout <<  "$  -> " << b << std::endl;
-            else{
-                std::cout << a << " -> " << b << std::endl;
-            }
-        }
-        std::cout << " fin " << std::endl;
-        bwt1.close();
-        bwt2.close();
-    }*/
-    //
 
     size_t sym, left_sym, pos, freq, rank, dummy_sym = dict.bwt_dummy + 1;
 
     vector_t hocc_buckets;
-    size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round, ws);
+    size_t n_runs = compute_hocc_size(dict, hocc_rs, hocc_buckets, p_round);
 
     size_t al_b = INT_CEIL(sym_width(dict.alphabet), 8);
     size_t fr_b = INT_CEIL(sym_width(dict.max_sym_freq), 8);
     size_t bps = al_b + fr_b;
 
-    auto *hocc = (char *) malloc(n_runs * bps);
+    //auto *hocc = (char *) malloc(n_runs * bps);
+    auto *hocc = mem::allocate<char>(n_runs * bps);
     memset(hocc, 0, n_runs * bps);
     char *hocc_ptr;
 
-    std::string prev_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round + 1));
+    std::string prev_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round + 1));
     bwt_buff_writer bwt_buff(prev_bwt_f, std::ios::in);
 
     LOG_DEBUG("Inducing from the previous BWT");
@@ -472,15 +449,15 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     sdsl::util::clear(hocc_rs);
 
 #ifdef __linux__
-        malloc_trim(0);
+     malloc_trim(0);
 #endif
 
     LOG_DEBUG("Assembling the new BWT");
-    std::string new_bwt_f = ws.get_file("bwt_lev_" + std::to_string(p_round));
+    std::string new_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round));
 
     size_t new_al_b = INT_CEIL(sym_width(std::max(dict.alphabet, dict.prev_alphabet)), 8);
     bwt_buff_writer new_bwt_buff(new_bwt_f, std::ios::out, new_al_b, fr_b);
-    std::string p_bwt_file = ws.get_file("pre_bwt_lev_" + std::to_string(p_round));
+    std::string p_bwt_file = TMP_FILE_NAME("pre_bwt_lev_" + std::to_string(p_round));
     bwt_buff_reader p_bwt(p_bwt_file);
 
     size_t i = 0, j = 0, pbwt_freq, new_bwt_size = 0;
@@ -554,9 +531,7 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     p_bwt.close(true);
     bwt_buff.close(true);
     new_bwt_buff.close();
-    if (remove(dict_file.c_str())) {
-        LOG_ERROR("Error trying to remove file "+dict_file);
-    }
+    TMP_REMOVE_FILE(dict_file);
 
     LOG_DEBUG("Stats:");
     LOG_DEBUG("  BWT size (n):                 "+std::to_string(new_bwt_size));
@@ -565,26 +540,27 @@ inline void infer_lvl_bwt(tmp_workspace &ws, size_t p_round) {
     LOG_DEBUG("  Bytes per run symbol:         "+std::to_string(new_al_b));
     LOG_DEBUG("  Bytes per run len:            "+std::to_string(fr_b));
     LOG_DEBUG("  Bytes per induced run length: "+std::to_string(fr_b));
-    free(hocc);
+    //free(hocc);
+    mem::deallocate(hocc);
 }
 
 template<class sym_type>
-void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round) {
+void parse2bwt_int(dictionary& dict, size_t& p_round) {
 
-    LOG_INFO("Computing the deepest recursive BWT");
-    std::string parse_file = ws.get_file("tmp_input");
+    std::string parse_file = TMP_FILE_NAME("tmp_input");
     std::ifstream c_vec(parse_file, std::ifstream::binary);
     c_vec.seekg(0, std::ifstream::end);
     size_t tot_bytes = c_vec.tellg();
     c_vec.seekg(0, std::ifstream::beg);
-    auto *buffer = reinterpret_cast<sym_type *>(malloc(BUFFER_SIZE));
+    //auto *buffer = reinterpret_cast<sym_type *>(malloc(BUFFER_SIZE));
+    auto *buffer = mem::allocate<sym_type>(BUFFER_SIZE/sizeof(sym_type));
     size_t read_bytes = 0;
     size_t len = tot_bytes / sizeof(sym_type);
 
     size_t sb = INT_CEIL(sym_width(std::max(dict.prev_alphabet, dict.alphabet)) + 1, 8);
     size_t fb = INT_CEIL(sym_width(len) + 1, 8);
 
-    std::string bwt_lev_file = ws.get_file("bwt_lev_" + std::to_string(p_round+1));
+    std::string bwt_lev_file = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round+1));
     bwt_buff_writer bwt_buff(bwt_lev_file, std::ios::out, sb, fb);
 
     while (read_bytes < tot_bytes) {
@@ -603,12 +579,11 @@ void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round) {
         }
     }
     c_vec.close();
-    free(buffer);
+    //free(buffer);
+    mem::deallocate(buffer);
     bwt_buff.close();
 
-    if (remove(parse_file.c_str())) {
-        LOG_ERROR("Error trying to delete file ");
-    }
+    TMP_REMOVE_FILE("tmp_input");
 
     LOG_DEBUG("Stats:");
     LOG_DEBUG("  BWT size (n):         "+std::to_string(len));
@@ -618,48 +593,46 @@ void parse2bwt_int(tmp_workspace &ws, dictionary& dict, size_t& p_round) {
     LOG_DEBUG("  Bytes per run length: "+std::to_string(fb));
 }
 
-inline void parse2bwt(tmp_workspace &ws, size_t& p_round) {
+inline void parse2bwt(size_t& p_round) {
 
+    LOG_INFO("Computing the deepest recursive BWT");
+
+    SCOPE_INFO();
     TRACE_SCOPE();
-    std::string dict_file = ws.get_file("dict_lev_" + std::to_string(p_round));
+    std::string dict_file = "dict_lev_" + std::to_string(p_round);
     dictionary dict;
-    sdsl::load_from_file(dict, dict_file);
+    sdsl::load_from_file(dict, TMP_FILE_NAME(dict_file));
     size_t bps = sym_width(dict.n_phrases)+1;
 
     if(bps<=8){
-        parse2bwt_int<uint8_t>(ws, dict, p_round);
+        parse2bwt_int<uint8_t>(dict, p_round);
     }else if(bps<=16){
-        parse2bwt_int<uint16_t>(ws, dict, p_round);
+        parse2bwt_int<uint16_t>(dict, p_round);
     } else if(bps<=32){
-        parse2bwt_int<uint32_t>(ws, dict, p_round);
+        parse2bwt_int<uint32_t>(dict, p_round);
     } else{
-        parse2bwt_int<uint64_t>(ws, dict, p_round);
+        parse2bwt_int<uint64_t>(dict, p_round);
     }
-
     p_round++;
 }
 
 template<uint8_t b_f_r> //b_f_r = number of bytes to encode the length of a BWT run
-void ind_phase(tmp_workspace &ws, size_t p_round) {
+void ind_phase(size_t p_round) {
 
     static_assert(b_f_r <= 5);
     LOG_INFO("Completing the BWT");
-
     SCOPE_INFO();
-    parse2bwt(ws, p_round);
+
+    parse2bwt(p_round);
 
     while (p_round-- > 0) {
         LOG_INFO("Level "+std::to_string(p_round + 1));
         SCOPE_INFO();
         if constexpr (b_f_r == 0) {
-            infer_lvl_bwt(ws, p_round);
+            infer_lvl_bwt(p_round);
         } else {
-            infer_lvl_bwt<b_f_r>(ws, p_round);
+            infer_lvl_bwt<b_f_r>(p_round);
         }
-#if USE_MALLOC_COUNT
-        malloc_count_print_status();
-        malloc_count_reset_peak();
-#endif
     }
 }
 

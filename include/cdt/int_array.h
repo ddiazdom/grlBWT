@@ -2,8 +2,8 @@
 // Created by diego on 27-08-20.
 //
 
-#ifndef LPG_COMPRESSOR_INT_ARRAY_H
-#define LPG_COMPRESSOR_INT_ARRAY_H
+#ifndef CDT_INT_ARRAY_H
+#define CDT_INT_ARRAY_H
 
 #include <iostream>
 #include <limits>
@@ -28,7 +28,7 @@ struct int_array{
     stream_t bits;
 
     class proxy {
-    private:
+
         int_array & m_arr;
         size_t m_idx;
 
@@ -47,7 +47,7 @@ struct int_array{
         }
 
         proxy& operator=(const proxy& other) {
-            m_arr.write(m_idx, (value_type)other);
+            m_arr.write(m_idx, static_cast<value_type>(other));
             return *this;
         }
 
@@ -58,37 +58,37 @@ struct int_array{
         }
 
         proxy& operator++() {
-            auto val = (value_type)*this;
+            auto val = static_cast<value_type>(*this);
             m_arr.write(m_idx, val+1);
             return *this;
         }
 
         value_type operator++(int) {
-            auto val = (value_type)*this;
+            auto val = static_cast<value_type>(*this);
             ++(*this);
             return val;
         }
 
         proxy& operator--() {
-            auto val = (value_type)*this;
+            auto val = static_cast<value_type>(*this);
             m_arr.write(m_idx, val-1);
             return *this;
         }
 
         value_type operator--(int) {
-            auto val = (value_type)*this;
+            auto val = static_cast<value_type>(*this);
             --(*this);
             return val;
         }
 
         proxy& operator+=(const value_type x) {
-            auto val = (value_type)*this;
+            auto val = static_cast<value_type>(*this);
             m_arr.write(m_idx, val+x);
             return *this;
         }
 
         proxy& operator-=(const value_type x) {
-            auto val = (value_type)*this;
+            auto val = static_cast<value_type>(*this);
             m_arr.write(m_idx, val-x);
             return *this;
         }
@@ -106,7 +106,8 @@ struct int_array{
     int_array(size_t cap_, uint8_t width_) : m_cap(cap_), m_width(width_){
         assert(m_width <= w_bits);
         bits.stream_size = INT_CEIL(m_cap * width_, stream_t::word_bits);
-        bits.stream = allocator::allocate<word_t>(bits.stream_size, true, 0);
+        bits.stream = mem::allocate<word_t>(bits.stream_size);
+        initialize(0, m_cap);
     }
 
     //initialize from allocated memory
@@ -116,16 +117,16 @@ struct int_array{
         bits.stream = ptr;
     }
 
-    //initialize with default value and size
+    //initialize with the default value and size
     int_array(size_t size_, value_type def_val, uint8_t width_) : m_cap(size_), m_size(size_), m_width(width_){
         assert(m_width <= w_bits);
         bits.stream_size = INT_CEIL(m_size * width_, stream_t::word_bits);
-        bits.stream = allocator::allocate<word_t>(bits.stream_size, true, 0);
+        bits.stream = mem::allocate<word_t>(bits.stream_size);
         initialize(def_val, m_size);
     }
 
     //initializer-list constructor
-    int_array(std::initializer_list<size_t> list) {
+    int_array(const std::initializer_list<size_t> list) {
         assert(list.size()>0);
         size_t max=0;
         for(auto const& sym : list) if(sym>max) max=sym;
@@ -136,7 +137,7 @@ struct int_array{
         m_cap = m_size;
 
         bits.stream_size = n_words();
-        bits.stream = allocator::allocate<word_t>(bits.stream_size, false, 0);
+        bits.stream = mem::allocate<word_t>(bits.stream_size);
         size_t i=0;
         for(auto const& val : list){
             write(i++,val);
@@ -145,7 +146,7 @@ struct int_array{
     }
 
     ~int_array() {
-        allocator::deallocate<word_t>(bits.stream);
+        mem::deallocate(bits.stream);
     }
 
     //default constructor
@@ -168,34 +169,28 @@ struct int_array{
         m_cap = std::exchange(other.m_cap, 0);
         m_width = std::exchange(other.m_width, 0);
         bits.stream_size = std::exchange(other.bits.stream_size, 0);
-        if(bits.stream!= nullptr){
-            allocator::deallocate(bits.stream);
-        }
+        mem::deallocate(bits.stream);
         bits.stream = std::exchange(other.bits.stream, nullptr);
     }
 
-    inline void copy(const int_array<word_t> &other) {
+    void copy(const int_array<word_t> &other) {
         m_size = other.m_size;
         m_cap = other.cap;
         m_width = other.m_width;
         bits.stream_size = n_words();
-
-        if(bits.stream!= nullptr){
-            allocator::deallocate(bits.stream);
-        }
-
-        bits.stream = allocator::allocate<word_t>(bits.stream_size, false, 0);
-        memcpy(bits.stream, other.stream, bits.stream * sizeof(word_t));
+        mem::deallocate(bits.stream);
+        bits.stream = mem::allocate<word_t>(bits.stream_size);
+        memcpy(bits.stream, other.stream, n_bytes());
     }
 
-    inline void clear() {
+    void clear() {
         m_size=0;
     }
 
-    inline void erase() {
+    void erase() {
         m_size=0;
         m_cap = 0;
-        allocator::deallocate(bits.stream);
+        mem::deallocate(bits.stream);
         bits.stream = nullptr;
         bits.stream_size = 0;
     }
@@ -216,42 +211,42 @@ struct int_array{
         return *this;
     }
 
-    inline bool operator==(const int_array<word_t> &other) const {
+    bool operator==(const int_array<word_t> &other) const {
         if(m_size!=other.m_size) return false;
         size_t tot_bits = m_size * m_width;
         return bits.compare_chunk(other.bits.stream, 0, tot_bits);
     }
 
-    [[nodiscard]] inline void* data() const{
+    [[nodiscard]] void* data() const{
         return bits.stream;
     }
 
-    [[nodiscard]] inline word_t* stream() const{
+    [[nodiscard]] word_t* stream() const{
         return bits.stream;
     }
 
-    inline void set_data(const word_t* new_data, size_t size) {
+    void set_data(const word_t* new_data, size_t size) {
         bits.stream = new_data;
         bits.stream_size = size;
     }
 
-    [[nodiscard]] inline size_t width() const{
+    [[nodiscard]] size_t width() const{
         return m_width;
     }
 
-    [[nodiscard]] inline size_t n_words() const{
+    [[nodiscard]] size_t n_words() const{
         return m_size==0? 0: INT_CEIL(n_bits(), stream_t::word_bits);
     }
 
-    [[nodiscard]] inline size_t n_bytes() const{//number of bytes used by the data (ceil)
+    [[nodiscard]] size_t n_bytes() const{//number of bytes used by the data (ceil)
         return INT_CEIL(n_bits(), 8);
     }
 
-    [[nodiscard]] inline size_t n_bits() const{//number of bits used by the data (exact)
+    [[nodiscard]] size_t n_bits() const{//number of bits used by the data (exact)
         return m_size * m_width;
     }
 
-    inline void mask_tail() {
+    void mask_tail() {
         size_t tot_bits = m_size * m_width;
         size_t n_cells = tot_bits / stream_t::word_bits;//floor
 
@@ -260,7 +255,7 @@ struct int_array{
         }
     }
 
-    inline void push_back(value_type value) {
+    void push_back(value_type value) {
         if((m_size+1)>m_cap){
             m_cap = m_cap==0? 2: m_cap*2;
             reserve(m_cap);
@@ -271,20 +266,20 @@ struct int_array{
         m_size++;
     }
 
-    inline void pop_back() {
+    void pop_back() {
         if(m_size>=1) m_size--;
     }
 
     void reserve(size_t new_cap) {
         //reserve memory for new_size number of elements
-        size_t new_buffer_size = 0;
+        size_t new_stream_size = 0;
         if(new_cap>0){
-            new_buffer_size = INT_CEIL(new_cap * m_width, stream_t::word_bits);
+            new_stream_size = INT_CEIL(new_cap * m_width, stream_t::word_bits);
         }
 
-        if(new_buffer_size>bits.stream_size){
-            bits.stream = allocator::reallocate<word_t>(bits.stream, bits.stream_size, new_buffer_size, false, 0);
-            bits.stream_size = new_buffer_size;
+        if(new_stream_size>bits.stream_size){
+            bits.stream = mem::reallocate<word_t>(bits.stream, new_stream_size);
+            bits.stream_size = new_stream_size;
         }
         m_cap = new_cap;
     }
@@ -292,46 +287,46 @@ struct int_array{
     void resize(size_t new_size) {
         //reserve memory for new_size number of elements
         size_t new_buffer_size = INT_CEIL(new_size * m_width, stream_t::word_bits);
-        bits.stream = allocator::reallocate<word_t>(bits.stream, bits.stream_size, new_buffer_size, false, 0);
+        bits.stream = mem::reallocate<word_t>(bits.stream, new_buffer_size);
         bits.stream_size = new_buffer_size;
         m_size = new_size;
         m_cap = m_size;
     }
 
-    [[nodiscard]] inline size_t size() const{
+    [[nodiscard]] size_t size() const{
         return m_size;
     }
 
-    [[nodiscard]] inline size_t capacity() const{
+    [[nodiscard]] size_t capacity() const{
         return m_cap;
     }
 
-    [[nodiscard]] inline bool empty() const{
+    [[nodiscard]] bool empty() const{
         return m_size==0;
     }
 
-    inline value_type back() const{
+    value_type back() const{
         assert(m_size>0);
         return bits.read((m_size-1)*m_width, m_size*m_width-1);
     }
 
-    inline void write(size_t idx, value_type value){
+    void write(size_t idx, value_type value){
         assert(idx<m_cap);
         if(idx>=m_size) m_size = idx+1;
         bits.write(idx * m_width, (idx + 1) * m_width - 1, value);
     }
 
-    inline value_type read(const size_t idx) const {
+    value_type read(const size_t idx) const {
         assert(idx<m_size);
         return bits.read(idx * m_width, (idx + 1) * m_width - 1);
     }
 
-    inline value_type operator[](const size_t idx) const {
+    value_type operator[](const size_t idx) const {
         assert(idx<m_size);
         return bits.read(idx * m_width, (idx + 1) * m_width - 1);
     }
 
-    inline proxy operator[](const size_t idx) {
+    proxy operator[](const size_t idx) {
         return proxy(*this, idx);
     }
 
@@ -372,5 +367,4 @@ struct int_array{
 };
 
 typedef int_array<size_t, 1> bit_array;
-
-#endif //LPG_COMPRESSOR_INT_ARRAY_H
+#endif //CDT_INT_ARRAY_H

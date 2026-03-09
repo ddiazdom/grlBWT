@@ -6,10 +6,16 @@
 #include <iostream>
 #include <string>
 
-//code generated with ChatGPT
+#include "utils.h"
+#include "malloc_count-master/malloc_count.h"
 
+//code generated with ChatGPT
 #define CONCAT_IMPL(x,y) x##y
 #define CONCAT(x,y) CONCAT_IMPL(x,y)
+
+#ifdef USE_MALLOC_COUNT
+#include "malloc_count.h"
+#endif
 
 // -----------------------------
 // Log levels
@@ -106,25 +112,26 @@ public:
         : name(name),
           level(lvl),
           active(Logger::enabled(lvl)),
-          start(std::chrono::steady_clock::now())
-    {
+          start(std::chrono::steady_clock::now()) {
         if (active) {
             Logger::log(level, "→ " + name);
+#if USE_MALLOC_COUNT
+            malloc_count_reset_peak();
+#endif
         }
     }
 
-    ~ScopeLog()
-    {
-        if (!active)
-            return;
-
+    ~ScopeLog() {
+        if (!active) return;
         auto end = std::chrono::steady_clock::now();
 
-        double elapsed =
-            std::chrono::duration<double>(end - start).count();
-
-        Logger::log(level,
-            "← " + name + " (" + format_delta(elapsed) + ")");
+        double elapsed = std::chrono::duration<double>(end - start).count();
+        std::string msg = "← " + name + " (" + format_delta(elapsed);
+#if USE_MALLOC_COUNT
+        msg += ", " + report_space((off_t)malloc_count_peak());
+#endif
+        msg += ")";
+        Logger::log(level, msg);
     }
 
 private:
@@ -133,6 +140,7 @@ private:
     bool active;
     std::chrono::steady_clock::time_point start;
 };
+
 // -----------------------------
 // Logging macros
 // -----------------------------
