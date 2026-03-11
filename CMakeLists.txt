@@ -48,4 +48,7 @@ if (BUILD_SCRIPTS)
     create_script(split_runs src/split_runs.cpp)
     create_script(grl2rle src/grl2rle.cpp)
     create_script(grl2plain src/grl2plain.cpp)
+
+    #testing
+    create_script(test_new_rlbwt test_rlbwt.cpp)
 endif ()

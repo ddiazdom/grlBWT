@@ -3,19 +3,17 @@
 //
 #ifndef CDT_LOGGER_H
 #define CDT_LOGGER_H
+
 #include <iostream>
 #include <string>
-
 #include "utils.h"
-#include "malloc_count-master/malloc_count.h"
+#ifdef USE_MALLOC_COUNT
+#include "malloc_count.h"
+#endif
 
 //code generated with ChatGPT
 #define CONCAT_IMPL(x,y) x##y
 #define CONCAT(x,y) CONCAT_IMPL(x,y)
-
-#ifdef USE_MALLOC_COUNT
-#include "malloc_count.h"
-#endif
 
 // -----------------------------
 // Log levels

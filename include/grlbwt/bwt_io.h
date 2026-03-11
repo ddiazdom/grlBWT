@@ -26,9 +26,9 @@ class bwt_buff_reader {
     std::string file;
 
     void read_block(){
-        ifs.seekg((std::streamoff)(offset+block_bg));
-        ifs.read((char*) buffer, (std::streamsize)buffer_size);
-        if(ifs.gcount()<(std::streamsize)buffer_size){
+        ifs.seekg(static_cast<std::streamoff>(offset + block_bg));
+        ifs.read((char*) buffer, static_cast<std::streamsize>(buffer_size));
+        if(ifs.gcount()<static_cast<std::streamsize>(buffer_size)){
             ifs.clear();
         }
         assert(ifs.good());
@@ -57,7 +57,7 @@ public:
         read_block();
     }
 
-    inline size_t read_sym(size_t i) {
+    size_t read_sym(size_t i) {
         assert(i<tot_runs);
         size_t sym = 0;
         size_t start = (i*bpr);
@@ -92,7 +92,7 @@ public:
         return sym;
     }
 
-    inline void read_run(size_t i, size_t& sym, size_t& freq) {
+    void read_run(size_t i, size_t& sym, size_t& freq) {
 
         assert(i<tot_runs);
         sym = 0;
@@ -133,15 +133,15 @@ public:
         memcpy(&freq, buffer+buff_start+sb, fb);
     }
 
-    inline size_t bytes_per_rsym() const {
+    size_t bytes_per_rsym() const {
         return sb;
     }
 
-    inline size_t bytes_per_rlen() const {
+    size_t bytes_per_rlen() const {
         return fb;
     }
 
-    inline size_t size() const {
+    size_t size() const {
        return tot_runs;
     }
 
@@ -192,8 +192,7 @@ class bwt_buff_writer {
     std::function<size_t(size_t, size_t)> add = [](size_t a, size_t b){ return a+b;};
 
 private:
-
-    inline void mod_freq(size_t idx, size_t new_freq, std::function<size_t(size_t, size_t)>& op) {
+    void mod_freq(size_t idx, size_t new_freq, std::function<size_t(size_t, size_t)>& op) {
 
         size_t start = (idx*bpr)+sb;
         size_t end = start + fb-1;
@@ -251,7 +250,7 @@ private:
         modified = true;
     }
 
-    inline void write(size_t idx, uint8_t off1, uint8_t off2, size_t new_val) {
+    void write(size_t idx, uint8_t off1, uint8_t off2, size_t new_val) {
 
         size_t start = (idx*bpr)+off1;
         size_t end = start + off2-1;
@@ -294,7 +293,7 @@ private:
     }
 
 
-    inline size_t read(size_t idx, uint8_t off1, uint8_t off2) {
+    size_t read(size_t idx, uint8_t off1, uint8_t off2) {
 
         size_t start = (idx*bpr)+off1;
         size_t end = start + off2-1;
@@ -443,7 +442,7 @@ public:
         memcpy(&freq, buffer+buff_start+sb, fb);
     }
 
-    inline void push_back(size_t sym, size_t freq) {
+    void push_back(size_t sym, size_t freq) {
 
         assert(sym<=max_sym && freq<=max_freq);
 
@@ -487,52 +486,52 @@ public:
         modified=true;
     }
 
-    inline void inc_freq(size_t idx, size_t val){
+    void inc_freq(size_t idx, size_t val){
         mod_freq(idx, val, add);
     }
 
-    inline void inc_freq_last(size_t val){
+    void inc_freq_last(size_t val){
         mod_freq(tot_runs-1, val, add);
     }
 
-    inline void dec_freq(size_t idx, size_t val){
+    void dec_freq(size_t idx, size_t val){
         mod_freq(idx, val, sub);
     }
 
-    inline size_t read_sym(size_t idx) {
+    size_t read_sym(size_t idx) {
         assert(idx<tot_runs);
         l_acc_sym = read(idx, 0, sb);
         return l_acc_sym;
     }
 
-    inline size_t read_freq(size_t idx) {
+    size_t read_freq(size_t idx) {
         assert(idx<tot_runs);
         return read(idx, sb, fb);
     }
 
-    inline void write_sym(size_t idx, size_t new_sym) {
+    void write_sym(size_t idx, size_t new_sym) {
         assert(idx<tot_runs && new_sym<=max_sym);
         write(idx, 0, sb, new_sym);
     }
 
-    inline void write_freq(size_t idx, size_t new_freq) {
+    void write_freq(size_t idx, size_t new_freq) {
         assert(idx<tot_runs && new_freq<=max_freq);
         write(idx, sb, fb, new_freq);
     }
 
-    inline size_t size() const {
+    size_t size() const {
         return tot_runs;
     }
 
-    inline size_t last_sym() const {
+    size_t last_sym() const {
         return l_sym;
     }
 
-    inline size_t last_acc_sym() const {
+    size_t last_acc_sym() const {
         return l_acc_sym;
     }
 
-    inline size_t last_freq() {
+    size_t last_freq() {
         return read_freq(tot_runs-1);
     }
 

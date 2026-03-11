@@ -13,7 +13,6 @@
 #include <fstream>
 #include <cassert>
 #include <sstream>
-#include "utils.h"
 #include <random>
 #include <sys/resource.h>
 
