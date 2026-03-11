@@ -56,7 +56,8 @@ public:
         ifs.open(input_file, std::ios::in | std::ios::binary);
         assert(ifs.good());
         buff_cap = std::max<size_t>(16, std::min(buff_bytes, file_size));
-        buffer = mem::allocate<uint8_t>(buff_cap);
+        buffer = mem::allocate<uint8_t>(buff_cap+8);//the +8 is to decode vbyte fast
+        memset(buffer + buff_cap, 0x80, 8);//fill the tail with termination (0x80) vbyte symbols
         ifs.read(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_cap));
         buff_len = static_cast<size_t>(ifs.gcount());
         update_last_vbyte_pos();
@@ -178,7 +179,9 @@ public:
         assert(fs.good());
 
         buff_cap = std::max<size_t>(16, std::min(buff_bytes, file_size))+buff_offset;
-        buffer = mem::allocate<uint8_t>(buff_cap);
+        buffer = mem::allocate<uint8_t>(buff_cap+8);//we add+8 bytes to decode vbytes fast
+        memset(buffer + buff_cap, 0x80, 8);//fill the tail with termination vbyte symbols
+
         assert(buffer!=nullptr);
         refill_buffer(0);
     }
@@ -241,6 +244,7 @@ class rle_vbyte_buff_writer {
     size_t buff_pos=0;
     size_t seq_size=0;
     uint8_t *buffer=nullptr;
+    bool closed=false;
     std::ofstream ofs;
 
     void compress_previous() {
@@ -317,17 +321,20 @@ public:
 
     rle_vbyte_buff_reader& operator=(const rle_vbyte_buff_reader&) = delete;
 
-    void flush() {
-        compress_previous();
-        if(buff_pos>0) {
-            ofs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_pos));
-            buff_pos=0;
-            ofs.flush();
+    void close() {
+        if (!closed) {
+            compress_previous();
+            if(buff_pos>0) {
+                ofs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_pos));
+                buff_pos=0;
+                ofs.flush();
+            }
+            closed = true;
         }
     }
 
     ~rle_vbyte_buff_writer() noexcept {
-        flush();
+        close();
         buff_len = 0;
         ofs.close();
         mem::deallocate(buffer);

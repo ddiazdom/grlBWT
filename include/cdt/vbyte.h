@@ -151,76 +151,147 @@ struct vbyte {
     }
 
 
-    static size_t read(const uint8_t * ptr, uint64_t& x){
-        uint64_t i=0;
+    static size_t read(const uint8_t * ptr, uint64_t& x) {
+        /*uint64_t i=0;
         x=ptr[0];
-        while(i<6 && ptr[i]<128){
-            x |= ptr[++i]<<shift[i];
+        std::cout<<x<<std::endl;
+        while(i<7 && ptr[i]<128){
+            uint64_t tmp = ptr[++i];
+            x |= tmp<<shift[i];
+            std::cout<<x<<std::endl;
         }
-        x &= mask[i];
-        return i+1;
+        x &= mask[i];*/
+        //return i+1;
 
-        /*while(i<8 && ptr[i]<128) i++;
-        off_t len = i+1;
-        assert(ptr[i]>=128);
-        switch (len) {
+        /*const uint64_t block = *reinterpret_cast<const uint64_t *>(ptr);
+        const unsigned i = (__builtin_ctzll(block & 0x8080808080808080ULL)) >> 3;
+
+        x = ((block & 0x7F)      ) |
+            ((block & 0x7F00)    ) >> 1 |
+            ((block & 0x7F0000)  ) >> 2 |
+            ((block & 0x7F000000)) >> 3 |
+            ((block & 0x7F00000000ULL)) >> 4 |
+            ((block & 0x7F0000000000ULL)) >> 5 |
+            ((block & 0x7F000000000000ULL)) >> 6 |
+            ((block & 0x7F00000000000000ULL)) >> 7;
+        x &= mask[i];
+        return i + 1;*/
+
+        /*const uint64_t block = *reinterpret_cast<const uint64_t *>(ptr);
+        const unsigned i = (__builtin_ctzll(block & 0x8080808080808080ULL)) >> 3;
+        switch (i) {
+            case 0:
+                x = (block & 0x7F);
+                break;
             case 1:
-                x = ptr[i]-128;
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1;
                 break;
             case 2:
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i];
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1 |
+                    ((block & 0x7F0000)  ) >> 2;
                 break;
             case 3:
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i];
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1 |
+                    ((block & 0x7F0000)  ) >> 2 |
+                    ((block & 0x7F000000)) >> 3;
                 break;
             case 4:
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i];
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1 |
+                    ((block & 0x7F0000)  ) >> 2 |
+                    ((block & 0x7F000000)) >> 3 |
+                    ((block & 0x7F00000000ULL)) >> 4;
                 break;
             case 5:
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i];
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1 |
+                    ((block & 0x7F0000)  ) >> 2 |
+                    ((block & 0x7F000000)) >> 3 |
+                    ((block & 0x7F00000000ULL)) >> 4 |
+                    ((block & 0x7F0000000000ULL)) >> 5;
                 break;
             case 6:
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i];
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1 |
+                    ((block & 0x7F0000)  ) >> 2 |
+                    ((block & 0x7F000000)) >> 3 |
+                    ((block & 0x7F00000000ULL)) >> 4 |
+                    ((block & 0x7F0000000000ULL)) >> 5 |
+                    ((block & 0x7F000000000000ULL)) >> 6;
                 break;
             case 7:
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i];
-                break;
-            case 8 :
-                x = ptr[i--]-128;
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i--];
-                x = (x<<7) + ptr[i];
+                x = ((block & 0x7F)      ) |
+                    ((block & 0x7F00)    ) >> 1 |
+                    ((block & 0x7F0000)  ) >> 2 |
+                    ((block & 0x7F000000)) >> 3 |
+                    ((block & 0x7F00000000ULL)) >> 4 |
+                    ((block & 0x7F0000000000ULL)) >> 5 |
+                    ((block & 0x7F000000000000ULL)) >> 6 |
+                    ((block & 0x7F00000000000000ULL)) >> 7;
                 break;
             default:
-                std::cerr<<"\nIncorrect vbyte length "<<len<<std::endl;
-                exit(1);
+                throw std::runtime_error("Invalid vbyte");
         }
-        return len;*/
+        x &= mask[i];
+        return i + 1;*/
+
+        //manually unrolled
+        uint64_t b = ptr[0];
+        uint64_t tmp = b & 0x7f;
+        if (b >= 128) {
+            x = tmp;
+            return 1;
+        }
+
+        b = ptr[1];
+        tmp |= (b & 0x7f) << 7;
+        if (b >= 128) {
+            x = tmp;
+            return 2;
+        }
+
+        b = ptr[2];
+        tmp |= (b & 0x7f) << 14;
+        if (b >= 128) {
+            x = tmp;
+            return 3;
+        }
+
+        b = ptr[3];
+        tmp |= (b & 0x7f) << 21;
+        if (b >= 128) {
+            x = tmp;
+            return 4;
+        }
+
+        b = ptr[4];
+        tmp |= (b & 0x7f) << 28;
+        if (b >= 128) {
+            x = tmp;
+            return 5;
+        }
+
+        b = ptr[5];
+        tmp |= (b & 0x7f) << 35;
+        if (b >= 128) {
+            x = tmp;
+            return 6;
+        }
+
+        b = ptr[6];
+        tmp |= (b & 0x7f) << 42;
+        if (b >= 128) {
+            x = tmp;
+            return 7;
+        }
+
+        b = ptr[7];
+        tmp |= (b & 0x7f)  << 49;
+        x = tmp;
+        return 8;
     }
 
     //this assumes ptr points to the rightmost byte of a symbol in the stream

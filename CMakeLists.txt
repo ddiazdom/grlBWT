@@ -10,6 +10,7 @@ find_package(LibSDSL REQUIRED)
 option(MALLOC_COUNT "Compile grlBWT with malloc count (only for debugging purposes)" ON)
 option(BUILD_SCRIPTS "Compile some helper scripts" ON)
 option(MARCH_NATIVE "Enable -march=native when supported by the compiler" ON)
+option(BMI2 "Enable -mbmi2 when supported by the compiler" ON)
 #
 
 # load useful helper scripts
