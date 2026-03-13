@@ -53,103 +53,156 @@ struct vbyte {
         return tmp-ptr;
     }*/
 
-    static void write(uint8_t * stream, uint64_t x, size_t vb_len){
+    //static void write(uint8_t * stream, uint64_t x, size_t vb_len){
+    //    switch (vb_len) {
+    //        case 1:
+    //            stream[0] = x + 128;
+    //            break;
+    //        case 2:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = x + 128;
+    //            break;
+    //        case 3:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = (x & 127);
+    //            x>>=7;
+    //            stream[2] = x + 128;
+    //            break;
+    //        case 4:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = (x & 127);
+    //            x>>=7;
+    //            stream[2] = (x & 127);
+    //            x>>=7;
+    //            stream[3] = x + 128;
+    //            break;
+    //        case 5:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = (x & 127);
+    //            x>>=7;
+    //            stream[2] = (x & 127);
+    //            x>>=7;
+    //            stream[3] = (x & 127);
+    //            x>>=7;
+    //            stream[4] = x + 128;
+    //            break;
+    //        case 6:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = (x & 127);
+    //            x>>=7;
+    //            stream[2] = (x & 127);
+    //            x>>=7;
+    //            stream[3] = (x & 127);
+    //            x>>=7;
+    //            stream[4] = (x & 127);
+    //            x>>=7;
+    //            stream[5] = x + 128;
+    //            break;
+    //        case 7:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = (x & 127);
+    //            x>>=7;
+    //            stream[2] = (x & 127);
+    //            x>>=7;
+    //            stream[3] = (x & 127);
+    //            x>>=7;
+    //            stream[4] = (x & 127);
+    //            x>>=7;
+    //            stream[5] = (x & 127);
+    //            x>>=7;
+    //            stream[6] = x + 128;
+    //            break;
+    //        default:
+    //            stream[0] = x & 127;
+    //            x>>=7;
+    //            stream[1] = (x & 127);
+    //            x>>=7;
+    //            stream[2] = (x & 127);
+    //            x>>=7;
+    //            stream[3] = (x & 127);
+    //            x>>=7;
+    //            stream[4] = (x & 127);
+    //            x>>=7;
+    //            stream[5] = (x & 127);
+    //            x>>=7;
+    //            stream[6] = (x & 127);
+    //            x>>=7;
+    //            stream[7] = x + 128;
+    //            break;
+    //    }
+    //    //size_t len;
+    //    //size_t comp_x;
+    //    //size_t c=0, b=0;
+    //    //while(x>=128){
+    //    //    c += (x & 127)<<b;
+    //    //    b+=8;
+    //    //    x>>=7;
+    //    //}
+    //    //comp_x = c+((x+128)<<b);
+    //    //len = (b+8)>>3UL;//in bytes
+    //    //memcpy(stream, &c, vb_len);
+    //}
 
-        switch (vb_len) {
-            case 1:
-                stream[0] = x + 128;
-                break;
-            case 2:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = x + 128;
-                break;
-            case 3:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = (x & 127);
-                x>>=7;
-                stream[2] = x + 128;
-                break;
-            case 4:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = (x & 127);
-                x>>=7;
-                stream[2] = (x & 127);
-                x>>=7;
-                stream[3] = x + 128;
-                break;
-            case 5:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = (x & 127);
-                x>>=7;
-                stream[2] = (x & 127);
-                x>>=7;
-                stream[3] = (x & 127);
-                x>>=7;
-                stream[4] = x + 128;
-                break;
-            case 6:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = (x & 127);
-                x>>=7;
-                stream[2] = (x & 127);
-                x>>=7;
-                stream[3] = (x & 127);
-                x>>=7;
-                stream[4] = (x & 127);
-                x>>=7;
-                stream[5] = x + 128;
-                break;
-            case 7:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = (x & 127);
-                x>>=7;
-                stream[2] = (x & 127);
-                x>>=7;
-                stream[3] = (x & 127);
-                x>>=7;
-                stream[4] = (x & 127);
-                x>>=7;
-                stream[5] = (x & 127);
-                x>>=7;
-                stream[6] = x + 128;
-                break;
-            default:
-                stream[0] = x & 127;
-                x>>=7;
-                stream[1] = (x & 127);
-                x>>=7;
-                stream[2] = (x & 127);
-                x>>=7;
-                stream[3] = (x & 127);
-                x>>=7;
-                stream[4] = (x & 127);
-                x>>=7;
-                stream[5] = (x & 127);
-                x>>=7;
-                stream[6] = (x & 127);
-                x>>=7;
-                stream[7] = x + 128;
-                break;
+    static size_t write(uint8_t *stream, uint64_t x) {
+
+        stream[0] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[0] |= 0x80;
+            return 1;
         }
-        /*size_t len;
-        size_t comp_x;
-        size_t c=0, b=0;
-        while(x>=128){
-            c += (x & 127)<<b;
-            b+=8;
-            x>>=7;
+
+        stream[1] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[1] |= 0x80;
+            return 2;
         }
-        comp_x = c+((x+128)<<b);
-        len = (b+8)>>3UL;//in bytes*/
-        //memcpy(stream, &c, vb_len);
+
+        stream[2] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[2] |= 0x80;
+            return 3;
+        }
+
+        stream[3] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[3] |= 0x80;
+            return 4;
+        }
+
+        stream[4] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[4] |= 0x80;
+            return 5;
+        }
+
+        stream[5] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[5] |= 0x80;
+            return 6;
+        }
+
+        stream[6] = x & 0x7F;
+        x >>= 7;
+        if (x == 0) {
+            stream[6] |= 0x80;
+            return 7;
+        }
+
+        stream[7] = x | 0x80;
+        return 8;
     }
-
 
     static size_t read(const uint8_t * ptr, uint64_t& x) {
         /*uint64_t i=0;
@@ -160,8 +213,8 @@ struct vbyte {
             x |= tmp<<shift[i];
             std::cout<<x<<std::endl;
         }
-        x &= mask[i];*/
-        //return i+1;
+        x &= mask[i];
+        return i+1;*/
 
         /*const uint64_t block = *reinterpret_cast<const uint64_t *>(ptr);
         const unsigned i = (__builtin_ctzll(block & 0x8080808080808080ULL)) >> 3;

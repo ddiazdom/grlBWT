@@ -131,13 +131,8 @@ class rle_vbyte_buff_updater {
 
     void compress_previous() {
         if (read_runs==0) return;
-        const size_t vlen_sym = vbyte_len(last_sym);
-        const size_t vlen_len = vbyte_len(last_len);
-        assert(vlen_sym + vlen_len <= buff_cap);
-        vbyte::write(buffer+buff_o_pos, last_sym, vlen_sym);
-        buff_o_pos+=vlen_sym;
-        vbyte::write(buffer+buff_o_pos, last_len, vlen_len);
-        buff_o_pos+=vlen_len;
+        buff_o_pos+=vbyte::write(buffer+buff_o_pos, last_sym);
+        buff_o_pos+=vbyte::write(buffer+buff_o_pos, last_len);
         assert(buff_o_pos<=buff_i_pos);
     }
 
@@ -261,11 +256,9 @@ class rle_vbyte_buff_writer {
             buff_pos = 0;
         }
 
-        //write vbytes and move the offset
-        vbyte::write(buffer+buff_pos, last_sym, vlen_sym);
-        buff_pos+=vlen_sym;
-        vbyte::write(buffer+buff_pos, last_len, vlen_len);
-        buff_pos+=vlen_len;
+        //write the vbytes and move the offset
+        buff_pos+=vbyte::write(buffer+buff_pos, last_sym);
+        buff_pos+=vbyte::write(buffer+buff_pos, last_len);
     }
 
 public:

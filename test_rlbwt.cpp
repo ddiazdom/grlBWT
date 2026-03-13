@@ -4,7 +4,7 @@
 
 #include<iostream>
 #include <grlbwt/bwt_io.h>
-#include <grlbwt/rlbwt_io.h>
+#include <cdt/rle_vbyte_streams.h>
 #include <cdt/file_streams.hpp>
 #include <cdt/logger.h>
 
