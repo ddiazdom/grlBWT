@@ -10,17 +10,19 @@
 
 struct workspace{
 
+    static std::filesystem::path system_tmp();
     std::string get_file_name(std::string const& prefix) const;
     void remove_file(std::string const& prefix) const;
 
     std::string workspace_folder() const;
 
-    static void init(std::string const& base_path= default_tmp(),
+    static void init(std::string const& base_path= system_tmp(),
                      std::string const& prefix="tmp",
                      bool rem_all=true);
 
     static workspace& get_instance();
     ~workspace();
+
 
 private:
     std::filesystem::path workspace_path;
@@ -29,10 +31,6 @@ private:
     static std::unique_ptr<workspace> singleton;
 
     static std::string random_string(size_t len);
-
-    static std::filesystem::path default_tmp() {
-        return std::filesystem::temp_directory_path();
-    }
 
     void create_folder(std::string const& base_path, std::string const& prefix) {
         //iterate until finding a temporary folder that does not exist
@@ -46,7 +44,7 @@ private:
         throw std::runtime_error("Failed to create temporary workspace");
     }
 
-    explicit workspace(std::string const& base_path= default_tmp(),
+    explicit workspace(std::string const& base_path= system_tmp(),
                        std::string const& prefix="tmp",
                        const bool rem_all=true) : remove_all(rem_all) {
 
@@ -60,6 +58,10 @@ private:
 };
 
 std::unique_ptr<workspace> workspace::singleton = nullptr;
+
+inline std::filesystem::path workspace::system_tmp() {
+    return std::filesystem::temp_directory_path();
+}
 
 inline workspace::~workspace(){
     if(remove_all){
@@ -112,6 +114,7 @@ inline std::string workspace::workspace_folder() const {
     return workspace_path.string();
 }
 
+#define SYSTEM_TMP workspace::system_tmp()
 #define INIT_TMP_FOLDER(base, prefix, rem_all) workspace::init(base, prefix, rem_all)
 #define TMP_WORKSPACE workspace::get_instance().workspace_folder()
 #define TMP_FILE_NAME(prefix) workspace::get_instance().get_file_name(prefix)

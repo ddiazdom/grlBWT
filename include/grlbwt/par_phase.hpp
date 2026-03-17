@@ -7,6 +7,7 @@
 #include <cdt/logger.h>
 #include <cdt/utils.h>
 #include <cdt/workspace.h>
+#include <cdt/rle_vbyte_streams.h>
 #include "LMS_induction.hpp"
 #include "grlbwt_common.h"
 #include "par_strategies.h"
@@ -286,10 +287,8 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
 
     bv_rs_t d_lim_rs(&dict.d_lim);
 
-    std::string pre_bwt_file = TMP_FILE_NAME("pre_bwt_lev_"+std::to_string(p_info.p_round));
-    size_t sb = INT_CEIL(sym_width(dict.hocc_dummy), 8);
-    size_t fb = INT_CEIL(sym_width(dict.t_size),8);
-    bwt_buff_writer pre_bwt(pre_bwt_file, std::ios::out, sb, fb);
+    std::string prelim_bwt_f = TMP_FILE_NAME("pre_bwt_lev_"+std::to_string(p_info.p_round));
+    rle_vbyte_buff_writer prelim_bwt(prelim_bwt_f);
 
     vector_t ranks(dict.n_phrases, 0, sym_width(dict.dict.size())+1);
     dict.phrases_has_hocc.resize(dict.dict.size());
@@ -348,11 +347,7 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
                 rank++;
             }
 
-            if (pre_bwt.size() > 1 && pre_bwt.last_sym() == l_sym) {
-                pre_bwt.inc_freq_last(acc_freq);
-            } else {
-                pre_bwt.push_back(l_sym, acc_freq);
-            }
+            prelim_bwt.push_back(l_sym, acc_freq);
 
             bg_range = u+1;
             l_sym = null_sym;
@@ -364,7 +359,7 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
         u++;
     }
 
-    pre_bwt.close();
+    prelim_bwt.close();
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
 

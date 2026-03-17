@@ -1,7 +1,7 @@
 #include "CLI11.hpp"
 #include <grlbwt/grlbwt.hpp>
 #include <cdt/logger.h>
-#include "version.h"//do not delete it (built dynamically to print the program version)
+#include <version.h>//do not delete it (built dynamically to print the program version)
 
 std::string version_string() {
     std::ostringstream out;
@@ -23,7 +23,7 @@ struct arguments{
     bool ver=false;
     bool rev_comp=false;
     uint8_t alph_bytes=1;
-    log_level log_level=log_level::INFO;
+    log_level log_lvl=log_level::INFO;
 };
 
 struct CellWidthValidator : CLI::Validator {
@@ -31,10 +31,10 @@ struct CellWidthValidator : CLI::Validator {
         name_ = "ValidCellWidth";
         func_ = [](const std::string &str) {
             bool valid = (str=="1") || (str=="2") || (str=="4") || (str=="8");
-            if(!valid)
+            if(!valid) {
                 return std::string(str+" is not a valid number of bytes for a native integer type");
-            else
-                return std::string();
+            }
+            return std::string();
         };
     }
 };
@@ -47,8 +47,8 @@ public:
 };
 
 static void parse_app(CLI::App& app, arguments& args){
-    
-	auto fmt = std::make_shared<MyFormatter>();
+
+	const auto fmt = std::make_shared<MyFormatter>();
 
     fmt->column_width(25);
     app.formatter(fmt);
@@ -68,16 +68,12 @@ static void parse_app(CLI::App& app, arguments& args){
     app.add_option("-f,--hbuff",
                       args.hbuff_frac,
                       "Hashing step will use at most INPUT_SIZE*f bytes. O means no limit (def. 0.5)")->check(CLI::Range(0.0,1.0))->default_val(0.15);
-    app.add_option("-b,--run-len-bytes",
-                   args.b_f_r,
-                   "Max. number of bytes to encode the run lengths in the recursive BWTs (def. 1)")->
-            check(CLI::Range(0,5))->default_val(1);
     app.add_option("-T,--tmp",
                       args.tmp_dir,
                       "Temporary folder (def. /tmp/grl.bwt.xxxx)")->
             check(CLI::ExistingDirectory)->default_val(std::filesystem::temp_directory_path());
     app.add_option("-l,--log-level",
-        args.log_level,
+        args.log_lvl,
         "Verbosity level (WARN=1, INFO=2, DEBUG=3,def. 2)")->check(CLI::Range(0, 4));
     app.set_version_flag("-v,--version",
         version_string(),
@@ -85,11 +81,11 @@ static void parse_app(CLI::App& app, arguments& args){
 }
 
 template<class sym_type>
-void build_bwt_int(std::string input_collection, arguments& args){
-    //tmp_workspace tmp_ws(args.tmp_dir, true, "grl.bwt");
+void build_bwt_int(arguments& args){
     LOG_INFO("Alphabet type:    "+std::to_string(args.alph_bytes));
     LOG_INFO("BWT type:         BCR");
-    grl_bwt_algo<sym_type>(input_collection, args.output_file, args.tmp_dir, args.n_threads, args.hbuff_frac, args.b_f_r);
+    grl_bwt_algo<sym_type>(args.input_file, args.output_file, args.n_threads,
+                           args.hbuff_frac, args.tmp_dir, args.log_lvl);
     LOG_INFO("The resulting BCR BWT was stored in "+args.output_file);
 }
 
@@ -100,23 +96,19 @@ int main(int argc, char** argv) {
     CLI::App app("Repetition-aware BWT construction");
     parse_app(app, args);
     CLI11_PARSE(app, argc, argv);
-    Logger::level = args.log_level;
 
     LOG_INFO("Input file:       "+args.input_file);
     if(args.output_file.empty()) args.output_file = std::filesystem::path(args.input_file).filename();
     args.output_file = std::filesystem::path(args.output_file).replace_extension(".rl_bwt");
 
-    std::string input_collection = args.input_file;
-    str_collection str_coll;
-
     if(args.alph_bytes==1){
-        build_bwt_int<uint8_t>(input_collection, args);
+        build_bwt_int<uint8_t>(args);
     }else if(args.alph_bytes==2){
-        build_bwt_int<uint16_t>(input_collection, args);
+        build_bwt_int<uint16_t>(args);
     }else if(args.alph_bytes==4){
-        build_bwt_int<uint32_t>(input_collection, args);
+        build_bwt_int<uint32_t>(args);
     } else if(args.alph_bytes==8){
-        build_bwt_int<uint64_t>(input_collection, args);
+        build_bwt_int<uint64_t>(args);
     }
     return 0;
 }

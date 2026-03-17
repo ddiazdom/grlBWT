@@ -21,7 +21,10 @@ class rle_vbyte_buff_reader {
     size_t tot_read_bytes=0;
     size_t last_vbyte_pos=0;
     size_t read_runs=0;
+    uint64_t last_sym=0;
+    uint64_t last_len=0;
     uint8_t *buffer=nullptr;
+    bool closed=false;
     std::ifstream ifs;
 
     void update_last_vbyte_pos() {
@@ -64,9 +67,27 @@ public:
     }
 
     void next_run(uint64_t& sym, uint64_t&len) {
-        decode_elm(sym);
-        decode_elm(len);
+        decode_elm(last_sym);
+        decode_elm(last_len);
         read_runs++;
+        sym = last_sym;
+        len = last_len;
+    }
+
+    void next_run() {
+        decode_elm(last_sym);
+        decode_elm(last_len);
+        read_runs++;
+    }
+
+    void decrease_len(const uint64_t len) {
+        assert(len<last_len);
+        last_len -= len;
+    }
+
+    void read_run(uint64_t& sym, uint64_t&len) const {
+        sym = last_sym;
+        len = last_len;
     }
 
     bool has_next() const {
@@ -80,9 +101,16 @@ public:
     rle_vbyte_buff_reader(const rle_vbyte_buff_reader&) = delete;
     rle_vbyte_buff_reader& operator=(const rle_vbyte_buff_reader&) = delete;
 
-    ~rle_vbyte_buff_reader() noexcept {
+    void close() {
         ifs.close();
         mem::deallocate(buffer);
+        closed = true;
+    }
+
+    ~rle_vbyte_buff_reader() noexcept {
+        if (!closed) {
+            close();
+        }
     }
 };
 
@@ -100,8 +128,8 @@ class rle_vbyte_buff_updater {
     size_t f_write_pos=0;//bytes written in the file prefix (always less than f_read_pos)
     size_t tot_dec_vbytes=0;//total vbytes decoded
     size_t last_vbyte_pos=0;//the last byte of the last fully valid vbyte in the buffer
-    size_t last_sym=0;//last decoded run symbol
-    size_t last_len=0;//last decoded run length
+    size_t last_sym=std::numeric_limits<size_t>::max();//last decoded run symbol
+    size_t last_len=std::numeric_limits<size_t>::max();//last decoded run length
     size_t read_runs=0;//number of reads decoded
     uint8_t *buffer=nullptr;//buffer
     std::string input_file;//original file
@@ -263,12 +291,19 @@ class rle_vbyte_buff_writer {
 
 public:
 
-    void push_back(size_t sym_, size_t len_) {
+    void push_back(const size_t sym_, const size_t len_) {
+
+        if (sym_ == last_sym) {//only update the length if the symbol is the same
+            last_len += len_;
+            seq_size += len_;
+            return;
+        }
+
         compress_previous();
         last_sym = sym_;
         last_len = len_;
-        n_runs++;
         seq_size+=len_;
+        n_runs++;
     }
 
     size_t sym() const {
@@ -285,6 +320,10 @@ public:
 
     size_t tot_runs() const {
         return n_runs;
+    }
+
+    double avg_len() const {
+        return seq_size/static_cast<double>(n_runs);
     }
 
     void update_sym(size_t sym_) {
