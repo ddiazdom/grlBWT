@@ -36,7 +36,7 @@ include_directories(myprogram PRIVATE
 
 add_executable(grlbwt-cli src/grlbwt-cli.cpp)
 target_include_directories(grlbwt-cli PRIVATE include external)
-configure_target(grlbwt-cli TRUE TRUE)
+configure_target(grlbwt-cli TRUE FALSE)
 
 if (BUILD_SCRIPTS)
     function(create_script target_name source)
