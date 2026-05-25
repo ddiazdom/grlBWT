@@ -119,6 +119,14 @@ public:
 //invariant: it can update the last accessed run, but the new values
 //have always to be equal or smaller than the previous
 class rle_vbyte_buff_updater {
+
+    //a gap between the read buffer and the updated values
+    //static constexpr size_t MIN_GAP  = 16;
+    static constexpr size_t GAP_STEP = 64;
+    //static constexpr size_t GAP_MAX  = 8 * GAP_STEP;
+    size_t max_gap = GAP_STEP;
+    //
+
     size_t buff_cap=0;//buffer capacity
     size_t buff_len=0;//valid bytes load in the buffer
     size_t buff_i_pos=0;//byte position of the read operation
@@ -134,14 +142,10 @@ class rle_vbyte_buff_updater {
     uint8_t *buffer=nullptr;//buffer
     std::string input_file;//original file
     bool closed=false;
-    static constexpr size_t buff_offset=16;//minimum difference between buffers. We need this offset to avoid overlaps in edge cases
 
     std::fstream fs;
 
     void update_last_vbyte_pos() {
-        if(buff_len == 0){
-            throw std::runtime_error("Empty or malformed vbyte stream");
-        }
         assert(buffer!=nullptr);
         last_vbyte_pos = buff_len-1;
         while(last_vbyte_pos>0 && buffer[last_vbyte_pos]<128) last_vbyte_pos--;
@@ -159,51 +163,107 @@ class rle_vbyte_buff_updater {
 
     void compress_previous() {
         if (read_runs==0) return;
+
+        size_t gap = buff_i_pos - buff_o_pos;
+        if (gap<=max_gap) {
+            flush_modified_prefix();//flush and restore the gap
+        }
+
         buff_o_pos+=vbyte::write(buffer+buff_o_pos, last_sym);
         buff_o_pos+=vbyte::write(buffer+buff_o_pos, last_len);
         assert(buff_o_pos<=buff_i_pos);
     }
 
-    void flush_modified_prefix() {
+    void flush_modified_prefix() {//always restore the proper gap
         if (buff_o_pos==0) return;
         fs.clear();
-        fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
-        fs.write(reinterpret_cast<char *>(buffer),
-                 static_cast<std::streamsize>(buff_o_pos));
-        assert(fs.good());
 
-        f_write_pos+=buff_o_pos;
-        buff_o_pos=0;
+        if((f_write_pos+buff_o_pos)>=f_read_pos) {//we are crossing to the part we haven't read yet
+            size_t delta = f_write_pos+buff_o_pos-f_read_pos;
+
+            size_t gap = buff_i_pos - delta;
+
+            //the prefix we have to keep exceeds the gap.
+            //Increase the buffer by GAP_STEP bytes to
+            //add some room for new updated elements
+            if (gap<=max_gap) {
+                restore_gap(delta+GAP_STEP);
+            }
+
+            fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
+            fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos-delta));
+            f_write_pos+=buff_o_pos-delta;
+            memmove(buffer, buffer+buff_o_pos-delta, delta);
+            buff_o_pos=delta;
+        }else {
+            fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
+            fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos));
+            assert(fs.good());
+
+            f_write_pos+=buff_o_pos;
+            buff_o_pos=0;
+        }
     }
 
     void refill_buffer(const size_t rem_bytes) {
+
         flush_modified_prefix();
-        memmove(buffer+buff_offset, buffer+buff_i_pos, rem_bytes);
+
+        assert(buff_i_pos>=max_gap);
+        size_t base = buff_o_pos+max_gap;
+        memmove(buffer+base, buffer+buff_i_pos, rem_bytes);
 
         fs.clear();
         fs.seekg(static_cast<std::streamoff>(f_read_pos), std::ios::beg);
-        fs.read(reinterpret_cast<char *>(buffer+buff_offset+rem_bytes), static_cast<std::streamsize>(buff_cap-buff_offset-rem_bytes));
+        fs.read(reinterpret_cast<char *>(buffer+base+rem_bytes), static_cast<std::streamsize>(buff_cap-base-rem_bytes));
 
         auto read_bytes = static_cast<size_t>(fs.gcount());
         f_read_pos+=read_bytes;
 
-        buff_len = buff_offset+rem_bytes + read_bytes;
-        buff_i_pos=buff_offset;
-        update_last_vbyte_pos();
+        buff_len = base + rem_bytes + read_bytes;
+        buff_i_pos = base;
+
+        if (buff_len > max_gap) {
+            update_last_vbyte_pos();
+        }
+    }
+
+    void restore_gap(size_t prefix) {//prefix that can't be stored in the file yet
+
+        //flush_modified_prefix();
+        size_t unread = buff_len - buff_i_pos;
+        size_t required = prefix+max_gap+unread;
+
+        if (required > buff_cap) {
+            buffer = mem::reallocate<uint8_t>(buffer, required + 8);
+            buff_cap = required;
+            memset(buffer + buff_cap, 0x80, 8);
+        }
+
+        size_t new_i_pos = buff_cap - unread;
+        memmove(buffer + new_i_pos, buffer + buff_i_pos, unread);
+
+        buff_i_pos = new_i_pos;
+        buff_len   = buff_cap;
+
+        if (buff_len > max_gap) {
+            update_last_vbyte_pos();
+        }
     }
 
 public:
 
-    explicit rle_vbyte_buff_updater(const std::string& input_file_, size_t buff_bytes= 1024 * 1024) {
+    explicit rle_vbyte_buff_updater(const std::string& input_file_, size_t buff_bytes = 1024 * 1024) {
         input_file = input_file_;
         assert(std::filesystem::exists(input_file));
         file_size = std::filesystem::file_size(input_file);
         fs.open(input_file, std::ios::in | std::ios::out | std::ios::binary);
         assert(fs.good());
 
-        buff_cap = std::max<size_t>(16, std::min(buff_bytes, file_size))+buff_offset;
+        buff_cap = std::max<size_t>(16, std::min(buff_bytes, file_size)) + max_gap;//16+ in case the file is empty
         buffer = mem::allocate<uint8_t>(buff_cap+8);//we add+8 bytes to decode vbytes fast
         memset(buffer + buff_cap, 0x80, 8);//fill the tail with termination vbyte symbols
+        buff_i_pos = max_gap;
 
         assert(buffer!=nullptr);
         refill_buffer(0);
@@ -224,12 +284,10 @@ public:
     }
 
     void update_sym(const uint64_t sym) {
-        assert(sym<=last_sym && read_runs>0);
         last_sym = sym;
     }
 
     void update_len(const uint64_t len) {
-        assert(len<=last_len && read_runs>0);
         last_len = len;
     }
 
@@ -245,10 +303,16 @@ public:
         if(closed) return;
         compress_previous();
         flush_modified_prefix();
+        if(buff_o_pos>0){
+            fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos));
+            f_write_pos+=buff_o_pos;
+            buff_o_pos=0;
+        }
         fs.flush();
         fs.close();
-        assert(f_write_pos<=file_size);
-        std::filesystem::resize_file(input_file, f_write_pos);
+        if (f_write_pos < file_size) {
+            std::filesystem::resize_file(input_file, f_write_pos);
+        }
         closed=true;
     }
 

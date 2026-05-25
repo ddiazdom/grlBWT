@@ -5,7 +5,6 @@
 #include<iostream>
 #include <grlbwt/bwt_io.h>
 #include <cdt/rle_vbyte_streams.h>
-#include <cdt/file_streams.hpp>
 #include <cdt/logger.h>
 
 std::pair<size_t , size_t> speed_old(const std::string& old_rle_file) {
@@ -66,26 +65,29 @@ void check_correctness_updater(const std::string& input_file, const std::string&
     std::cout<<"Checking the updater works correctly"<<std::endl;
 
     {
+        uint64_t lower_bound = 1;
+        uint64_t upper_bound = 0xFFFFFFFFFFFFFF;
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution distr(lower_bound, upper_bound);
+
         bwt_buff_reader bwt_reader(input_file);
-        bwt_buff_writer bwt_writer(input_file+"_updated", std::ios::out, 5, 5);
+        bwt_buff_writer bwt_writer(input_file+"_updated", std::ios::out, 7, 7);
         rle_vbyte_buff_updater rlbwt_updater(output_file);
         size_t sym=0, len=0;
         uint64_t sym2, len2;
         for(size_t i=0;i<bwt_reader.size();i++) {
             bwt_reader.read_run(i, sym, len);
             rlbwt_updater.next_run(sym2, len2);
-            //std::cout<<i<<std::endl;
+
             assert(sym==sym2);
-            if(sym>1) {
-                sym=1;
-                rlbwt_updater.update_sym(sym);
-            }
+            sym = distr(gen);
+            rlbwt_updater.update_sym(sym);
 
             assert(len==len2);
-            if (len>1) {
-                len=1;
-                rlbwt_updater.update_len(1);
-            }
+            len = distr(gen);
+            rlbwt_updater.update_len(len);
+
             bwt_writer.push_back(sym, len);
         }
         bwt_reader.close();
@@ -112,6 +114,9 @@ void check_correctness_updater(const std::string& input_file, const std::string&
 }
 
 void check_correctness_updater_large_random_values(size_t n) {
+
+    std::cout<<"Checking the updater works correctly, with large values"<<std::endl;
+
     uint64_t lower_bound = 1;
     uint64_t upper_bound = 0xFFFFFFFFFFFFFF;
     std::random_device rd;
@@ -144,8 +149,8 @@ void check_correctness_updater_large_random_values(size_t n) {
         assert(sym==sym2);
         assert(len==len2);
 
-        sym = distr(gen) % sym;
-        len = distr(gen) % len;
+        sym = distr(gen);
+        len = distr(gen);
 
         rlbwt_updater.update_sym(sym);
         rlbwt_updater.update_len(len);
@@ -170,6 +175,7 @@ void check_correctness_updater_large_random_values(size_t n) {
         assert(len3==len4);
     }
     assert(!rlbwt_rd2.has_next());
+    std::cout<<"Everything looks correct!!"<<std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -184,8 +190,8 @@ int main(int argc, char** argv) {
     const auto input_file = std::string(argv[1]);
     const auto new_file = std::string(argv[2])+"_new.rlbwt";
 
-    //check_correctness_read_write(input_file, new_file);
-    //test_speed(input_file, new_file);
-    //check_correctness_updater(input_file, new_file);
-    check_correctness_updater_large_random_values(100000000);
+    check_correctness_read_write(input_file, new_file);
+    test_speed(input_file, new_file);
+    check_correctness_updater(input_file, new_file);
+    check_correctness_updater_large_random_values(1000000);
 }
