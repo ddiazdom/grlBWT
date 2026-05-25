@@ -12,6 +12,8 @@
 #include <cdt/vbyte.h>
 #include <cdt/memory_handler.hpp>
 #include <cstring>
+#include <sys/fcntl.h>
+#include <unistd.h>
 
 class rle_vbyte_buff_reader {
     size_t buff_cap=0;
@@ -143,7 +145,8 @@ class rle_vbyte_buff_updater {
     std::string input_file;//original file
     bool closed=false;
 
-    std::fstream fs;
+    //std::fstream fs;
+    int fd=-1;
 
     void update_last_vbyte_pos() {
         assert(buffer!=nullptr);
@@ -176,7 +179,7 @@ class rle_vbyte_buff_updater {
 
     void flush_modified_prefix() {//always restore the proper gap
         if (buff_o_pos==0) return;
-        fs.clear();
+        //fs.clear();
 
         if((f_write_pos+buff_o_pos)>=f_read_pos) {//we are crossing to the part we haven't read yet
             size_t delta = f_write_pos+buff_o_pos-f_read_pos;
@@ -190,15 +193,20 @@ class rle_vbyte_buff_updater {
                 restore_gap(delta+GAP_STEP);
             }
 
-            fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
-            fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos-delta));
+            //fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
+            //fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos-delta));
+            off_t written_bytes = pwrite(fd, buffer,buff_o_pos-delta, static_cast<off_t>(f_write_pos));
+            assert(written_bytes>=0 && static_cast<size_t>(written_bytes)==buff_o_pos-delta);
+
             f_write_pos+=buff_o_pos-delta;
             memmove(buffer, buffer+buff_o_pos-delta, delta);
             buff_o_pos=delta;
         }else {
-            fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
-            fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos));
-            assert(fs.good());
+            //fs.seekp(static_cast<std::streamoff>(f_write_pos), std::ios::beg);
+            //fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos));
+            //assert(fs.good());
+            off_t written_bytes = pwrite(fd, buffer, buff_o_pos, static_cast<off_t>(f_write_pos));
+            assert(written_bytes>=0 && static_cast<size_t>(written_bytes)==buff_o_pos);
 
             f_write_pos+=buff_o_pos;
             buff_o_pos=0;
@@ -213,12 +221,12 @@ class rle_vbyte_buff_updater {
         size_t base = buff_o_pos+max_gap;
         memmove(buffer+base, buffer+buff_i_pos, rem_bytes);
 
-        fs.clear();
-        fs.seekg(static_cast<std::streamoff>(f_read_pos), std::ios::beg);
-        fs.read(reinterpret_cast<char *>(buffer+base+rem_bytes), static_cast<std::streamsize>(buff_cap-base-rem_bytes));
-
-        auto read_bytes = static_cast<size_t>(fs.gcount());
-        f_read_pos+=read_bytes;
+        //fs.clear();
+        //fs.seekg(static_cast<std::streamoff>(f_read_pos), std::ios::beg);
+        //fs.read(reinterpret_cast<char *>(buffer+base+rem_bytes), static_cast<std::streamsize>(buff_cap-base-rem_bytes));
+        off_t read_bytes = pread(fd, buffer+base+rem_bytes, buff_cap-base-rem_bytes, static_cast<off_t>(f_read_pos));
+        //auto read_bytes = static_cast<size_t>(fs.gcount());
+        f_read_pos+=static_cast<size_t>(read_bytes);
 
         buff_len = base + rem_bytes + read_bytes;
         buff_i_pos = base;
@@ -253,12 +261,14 @@ class rle_vbyte_buff_updater {
 
 public:
 
-    explicit rle_vbyte_buff_updater(const std::string& input_file_, size_t buff_bytes = 1024 * 1024) {
+    explicit rle_vbyte_buff_updater(const std::string& input_file_, size_t buff_bytes = 8 * 1024 * 1024) {
         input_file = input_file_;
         assert(std::filesystem::exists(input_file));
         file_size = std::filesystem::file_size(input_file);
-        fs.open(input_file, std::ios::in | std::ios::out | std::ios::binary);
-        assert(fs.good());
+        fd = open(input_file_.c_str(), O_RDWR);
+        assert(fd>=0);
+        //fs.open(input_file, std::ios::in | std::ios::out | std::ios::binary);
+        //assert(fs.good());
 
         buff_cap = std::max<size_t>(16, std::min(buff_bytes, file_size)) + max_gap;//16+ in case the file is empty
         buffer = mem::allocate<uint8_t>(buff_cap+8);//we add+8 bytes to decode vbytes fast
@@ -291,11 +301,11 @@ public:
         last_len = len;
     }
 
-    bool has_next() const {
+    [[nodiscard]] bool has_next() const {
         return tot_dec_vbytes<file_size;
     }
 
-    size_t n_read_runs() const {
+    [[nodiscard]] size_t n_read_runs() const {
         return read_runs;
     }
 
@@ -304,15 +314,18 @@ public:
         compress_previous();
         flush_modified_prefix();
         if(buff_o_pos>0){
-            fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos));
+            //fs.write(reinterpret_cast<char *>(buffer), static_cast<std::streamsize>(buff_o_pos));
+            off_t written_bytes = pwrite(fd, buffer, buff_o_pos, static_cast<off_t>(f_write_pos));
+            assert(written_bytes>=0 && static_cast<size_t>(written_bytes)==buff_o_pos);
             f_write_pos+=buff_o_pos;
             buff_o_pos=0;
         }
-        fs.flush();
-        fs.close();
+        //fs.flush();
+        //fs.close();
         if (f_write_pos < file_size) {
             std::filesystem::resize_file(input_file, f_write_pos);
         }
+        ::close(fd);
         closed=true;
     }
 

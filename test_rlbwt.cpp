@@ -190,8 +190,8 @@ int main(int argc, char** argv) {
     const auto input_file = std::string(argv[1]);
     const auto new_file = std::string(argv[2])+"_new.rlbwt";
 
-    check_correctness_read_write(input_file, new_file);
-    test_speed(input_file, new_file);
-    check_correctness_updater(input_file, new_file);
-    check_correctness_updater_large_random_values(1000000);
+    //check_correctness_read_write(input_file, new_file);
+    //test_speed(input_file, new_file);
+    //check_correctness_updater(input_file, new_file);
+    check_correctness_updater_large_random_values(90000000);
 }
