@@ -2,8 +2,8 @@
 // Created by Diaz, Diego on 14.9.2022.
 //
 #include<iostream>
-#include <grlbwt/bwt_io.h>
-#include <cdt/file_streams.hpp>
+#include <../legacy_code/bwt_io.h>
+#include <cds/file_streams.hpp>
 
 int main(int argc, char** argv) {
 

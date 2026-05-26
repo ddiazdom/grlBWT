@@ -2,15 +2,15 @@
 // Created by diego on 17-02-20.
 //
 
-#ifndef LMS_COMPRESSOR_FILE_BUFFER_H
-#define LMS_COMPRESSOR_FILE_BUFFER_H
+#ifndef CDS_FILE_BUFFER_H
+#define CDS_FILE_BUFFER_H
 
 #include <fstream>
 #include <cassert>
 #include <iostream>
 #include <cstring>
 #include <limits>
-#include "bitstream.h"
+#include "bit_stream.h"
 
 template<class sym_t>
 struct i_file_stream{
@@ -20,7 +20,7 @@ struct i_file_stream{
     size_t tot_cells{};
     size_t block_bg{};
     size_t block_bits{};
-    bitstream<sym_t> buffer;
+    bit_stream<sym_t> buffer;
 
     std::string file;
     static constexpr size_t w_bytes = sizeof(sym_t);
@@ -142,7 +142,7 @@ struct i_file_stream{
             if(offset>0){
                 uint8_t tail = buffer.read(0, offset-1);
                 uint8_t left = bits_read % 8;
-                *dst &= ~(bitstream<uint8_t>::masks[offset]<<left);//clean the area
+                *dst &= ~(bit_stream<uint8_t>::masks[offset]<<left);//clean the area
                 *dst |= tail << left;//add new data in the area
                 bits_read+=offset;
             }
@@ -207,7 +207,7 @@ struct o_file_stream{
     size_type rm_pos=-1;
     size_type lm_pos=std::numeric_limits<size_type>::max();
     size_type last_pos=-1;
-    bitstream<sym_t> buffer;
+    bit_stream<sym_t> buffer;
     bool modified=false;
 
     o_file_stream()=default;
@@ -480,4 +480,4 @@ struct o_file_stream{
         close();
     }
 };
-#endif //LMS_COMPRESSOR_FILE_BUFFER_H
+#endif //CDS_FILE_BUFFER_H

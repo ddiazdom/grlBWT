@@ -36,7 +36,7 @@ void induce_L_type(sa_type& sa, const dict_type &dict, vector_type& buckets, bv_
                 lcs = false;
             }
 
-            flag = (ind_bck[l_sym]>=lb && lcs);
+            flag = ind_bck[l_sym]>=lb && lcs;
             sa[buckets[l_sym]++] = ((pos-1)<<1UL) | flag ;
             ind_bck[l_sym] = i+1;
         }
@@ -94,7 +94,7 @@ void suffix_induction(dict_type &dict, sa_type& sa){
     vector_type buckets(dict.alphabet+1, 0);
 
     for(size_t i=0;i<dict.dict.size();i++){
-        buckets[dict.dict[i]]++;
+        ++buckets[dict.dict[i]];
     }
 
     size_t acc=0, freq, max_freq=0;
@@ -106,7 +106,7 @@ void suffix_induction(dict_type &dict, sa_type& sa){
     }
     buckets[dict.alphabet] = acc;
 
-    vector_t freqs(dict.alphabet+1, 0, sdsl::bits::hi(max_freq)+1);
+    vector_t freqs(dict.alphabet+1, 0, sym_width(max_freq));
     bv_t solv_syms(dict.alphabet+1, false);
     size_t sym;
 

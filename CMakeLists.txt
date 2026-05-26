@@ -7,7 +7,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Mo
 find_package(LibSDSL REQUIRED)
 
 # CMake options
-option(MALLOC_COUNT "Compile grlBWT with malloc count (only for debugging purposes)" ON)
+option(MALLOC_COUNT "Compile with malloc_count (only for debugging purposes)" ON)
 option(BUILD_SCRIPTS "Compile some helper scripts" ON)
 option(MARCH_NATIVE "Enable -march=native when supported by the compiler" ON)
 option(BMI2 "Enable -mbmi2 when supported by the compiler" ON)
@@ -36,7 +36,12 @@ include_directories(myprogram PRIVATE
 
 add_executable(grlbwt-cli src/grlbwt-cli.cpp)
 target_include_directories(grlbwt-cli PRIVATE include external)
-configure_target(grlbwt-cli TRUE FALSE)
+configure_target(grlbwt-cli TRUE TRUE)
+
+option(BUILD_TESTS "Build CDS unit tests" ON)
+if(BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
 
 if (BUILD_SCRIPTS)
     function(create_script target_name source)
@@ -49,7 +54,4 @@ if (BUILD_SCRIPTS)
     create_script(split_runs src/split_runs.cpp)
     create_script(grl2rle src/grl2rle.cpp)
     create_script(grl2plain src/grl2plain.cpp)
-
-    #testing
-    create_script(test_new_rlbwt test_rlbwt.cpp)
 endif ()

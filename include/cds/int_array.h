@@ -2,25 +2,23 @@
 // Created by diego on 27-08-20.
 //
 
-#ifndef CDT_INT_ARRAY_H
-#define CDT_INT_ARRAY_H
+#ifndef CDS_INT_ARRAY_H
+#define CDS_INT_ARRAY_H
 
 #include <iostream>
 #include <limits>
 #include <cassert>
 #include <utility>
 #include "memory_handler.hpp"
-#include "bitstream.h"
+#include "bit_stream.h"
 
-template<class word_t,
-         uint8_t w_bits=std::numeric_limits<word_t>::digits>
+template<class word_t=uint64_t, uint8_t w_bits=std::numeric_limits<word_t>::digits>
 struct int_array{
 
     static_assert(w_bits<=std::numeric_limits<word_t>::digits);
     typedef size_t size_type;
     typedef word_t value_type;
-    //typedef typename std::conditional<w_bits==1, bool, typename std::conditional<w_bits<=8, uint8_t, typename std::conditional<w_bits<=16, uint16_t, typename std::conditional<w_bits<=32, uint32_t, uint64_t>::type>::type>::type>::type v_type;
-    typedef bitstream<word_t, w_bits> stream_t;
+    typedef bit_stream<word_t, w_bits> stream_t;
 
     size_t m_cap = 0;
     size_t m_size = 0;
@@ -102,12 +100,23 @@ struct int_array{
         }
     };
 
-    //simple constructor (cap is the capacity of the vector)
+    //simple constructor (cap is the capacity of the vector) — disabled for w_bits==1
+    template<uint8_t B = w_bits, std::enable_if_t<B != 1, int> = 0>
     int_array(size_t cap_, uint8_t width_) : m_cap(cap_), m_width(width_){
         assert(m_width <= w_bits);
         bits.stream_size = INT_CEIL(m_cap * width_, stream_t::word_bits);
         bits.stream = mem::allocate<word_t>(bits.stream_size);
-        initialize(0, m_cap);
+        memset(bits.stream, 0, bits.stream_size*sizeof(word_t));
+    }
+
+    //bit_array constructor: capacity + default bit value (only for w_bits==1)
+    template<uint8_t B = w_bits, std::enable_if_t<B == 1, int> = 0>
+    int_array(size_t cap_, value_type def_val) : m_cap(cap_), m_width(1){
+        assert(def_val <= 1);
+        bits.stream_size = INT_CEIL(m_cap, stream_t::word_bits);
+        bits.stream = mem::allocate<word_t>(bits.stream_size);
+        m_size = m_cap;
+        initialize(def_val, m_cap);
     }
 
     //initialize from allocated memory
@@ -131,7 +140,7 @@ struct int_array{
         size_t max=0;
         for(auto const& sym : list) if(sym>max) max=sym;
 
-        m_width = std::max(4UL, sizeof(unsigned int)*8 - __builtin_clz(max));
+        m_width = sym_width(max);
         assert(m_width<=w_bits);
         m_size = list.size();
         m_cap = m_size;
@@ -153,10 +162,10 @@ struct int_array{
     int_array()=default;
 
     //move constructor
-    explicit int_array(int_array<word_t>&& other) noexcept {
+    explicit int_array(int_array&& other) noexcept {
         bits.stream=nullptr;
         bits.stream_size=0;
-        move(std::forward<int_array<word_t>>(other));
+        move(std::forward<int_array>(other));
     };
 
     //copy constructor
@@ -164,7 +173,7 @@ struct int_array{
         copy(other);
     };
 
-    void move(int_array<word_t>&& other) noexcept {
+    void move(int_array&& other) noexcept {
         m_size = std::exchange(other.m_size, 0);
         m_cap = std::exchange(other.m_cap, 0);
         m_width = std::exchange(other.m_width, 0);
@@ -173,15 +182,16 @@ struct int_array{
         bits.stream = std::exchange(other.bits.stream, nullptr);
     }
 
-    void copy(const int_array<word_t> &other) {
+    void copy(const int_array &other) {
         m_size = other.m_size;
-        m_cap = other.cap;
+        m_cap = other.m_cap;
         m_width = other.m_width;
-        bits.stream_size = n_words();
+        bits.stream_size = cap_words();
         mem::deallocate(bits.stream);
         bits.stream = mem::allocate<word_t>(bits.stream_size);
-        memcpy(bits.stream, other.stream, n_bytes());
+        memcpy(bits.stream, other.bits.stream, n_bytes());
     }
+
 
     void clear() {
         m_size=0;
@@ -196,7 +206,7 @@ struct int_array{
     }
 
     //copy assignment operator
-    int_array& operator=(const int_array<word_t> & other){
+    int_array& operator=(const int_array & other){
         if(this!=&other){
             copy(other);
         }
@@ -204,15 +214,15 @@ struct int_array{
     }
 
     //move assignment operator
-    int_array& operator=(int_array<word_t> && other) noexcept{
+    int_array& operator=(int_array && other) noexcept{
         if(this!=&other){
-            move(std::forward<int_array<word_t>>(other));
+            move(std::forward<int_array>(other));
         }
         return *this;
     }
 
-    bool operator==(const int_array<word_t> &other) const {
-        if(m_size!=other.m_size) return false;
+    bool operator==(const int_array &other) const {
+        if(m_size!=other.m_size || m_width!=other.m_width) return false;
         size_t tot_bits = m_size * m_width;
         return bits.compare_chunk(other.bits.stream, 0, tot_bits);
     }
@@ -225,7 +235,7 @@ struct int_array{
         return bits.stream;
     }
 
-    void set_data(const word_t* new_data, size_t size) {
+    void set_data(word_t* new_data, size_t size) {
         bits.stream = new_data;
         bits.stream_size = size;
     }
@@ -238,12 +248,24 @@ struct int_array{
         return m_size==0? 0: INT_CEIL(n_bits(), stream_t::word_bits);
     }
 
+    [[nodiscard]] size_t cap_words() const{
+        return m_cap==0? 0: INT_CEIL(cap_bits(), stream_t::word_bits);
+    }
+
     [[nodiscard]] size_t n_bytes() const{//number of bytes used by the data (ceil)
         return INT_CEIL(n_bits(), 8);
     }
 
+    [[nodiscard]] size_t cap_bytes() const{//number of bits used by the data (exact)
+        return INT_CEIL(cap_bits(), 8);
+    }
+
     [[nodiscard]] size_t n_bits() const{//number of bits used by the data (exact)
         return m_size * m_width;
+    }
+
+    [[nodiscard]] size_t cap_bits() const{//number of bits used by the data (exact)
+        return m_cap * m_width;
     }
 
     void mask_tail() {
@@ -271,7 +293,7 @@ struct int_array{
     }
 
     void reserve(size_t new_cap) {
-        //reserve memory for new_size number of elements
+        //reserve memory for new_cap number of elements
         size_t new_stream_size = 0;
         if(new_cap>0){
             new_stream_size = INT_CEIL(new_cap * m_width, stream_t::word_bits);
@@ -346,25 +368,68 @@ struct int_array{
     }
 
     void initialize(value_type val, size_t n_elems){
-        if(val==0){
-            size_t n_cells = INT_CEIL(n_elems*m_width, stream_t::word_bits);
-            assert(n_cells<=bits.stream_size);
-            memset(bits.stream, 0, n_cells*sizeof(word_t));
-        }else{
-            std::cout<<"not implemented yet"<<std::endl;
-            exit(1);
+        assert(n_elems<=m_cap);
+        size_t n_cells = INT_CEIL(n_elems * m_width, stream_t::word_bits);
+        assert(n_cells <= bits.stream_size);
+
+        if(val == 0){
+            memset(bits.stream, 0, n_cells * sizeof(word_t));
+            if (n_elems>m_size) m_size = n_elems;
+            return;
         }
+
+        // find GCD(m_width, word_bits) to compute the smallest repeating pattern
+        size_t a = m_width, b = stream_t::word_bits;
+        while(b){ a %= b; std::swap(a, b); }
+        size_t pat_words = m_width / a;   // words in one pattern = LCM/word_bits
+        size_t pat_elems = stream_t::word_bits / a;  // elements in one pattern = LCM/m_width
+
+        // build pattern into a stack buffer (pat_words <= m_width <= w_bits)
+        word_t pat_buf[w_bits] = {};
+        stream_t tmp;
+        tmp.stream = pat_buf;
+        tmp.stream_size = pat_words;
+        for(size_t i = 0; i < pat_elems; i++){
+            tmp.write(i * m_width, (i + 1) * m_width - 1, val);
+        }
+
+        // fill stream by exponentially expanding the pattern
+        size_t pat_bytes = pat_words * sizeof(word_t);
+        size_t total_bytes = n_cells * sizeof(word_t);
+        memcpy(reinterpret_cast<char*>(bits.stream), pat_buf, pat_bytes);
+        size_t filled = pat_bytes;
+        while(filled + filled <= total_bytes){
+            memcpy(reinterpret_cast<char*>(bits.stream) + filled, bits.stream, filled);
+            filled += filled;
+        }
+        if(filled < total_bytes){
+            memcpy(reinterpret_cast<char*>(bits.stream) + filled, bits.stream, total_bytes - filled);
+        }
+
+        // mask tail bits beyond n_elems * m_width in the last word
+        size_t rem = (n_elems * m_width) & (stream_t::word_bits - 1);
+        if(rem > 0){
+            bits.stream[n_cells - 1] &= stream_t::masks[rem];
+        }
+        if (n_elems>m_size) m_size = n_elems;
     }
 
-    void swap(int_array<word_t>& other){
-        move(std::move(other));
+    void set_to_value(value_type value) {
+        initialize(value, m_size);
     }
 
-    void set_width(uint8_t new_width){
+    void swap(int_array& other) noexcept {
+        std::swap(m_size, other.m_size);
+        std::swap(m_cap, other.m_cap);
+        std::swap(m_width, other.m_width);
+        bits.swap(other.bits);
+    }
+
+    void set_width(const uint8_t new_width){
         assert(new_width<=w_bits);
         m_width = new_width;
     }
 };
 
-typedef int_array<size_t, 1> bit_array;
-#endif //CDT_INT_ARRAY_H
+typedef int_array<uint64_t, 1> bit_array;
+#endif //CDS_INT_ARRAY_H

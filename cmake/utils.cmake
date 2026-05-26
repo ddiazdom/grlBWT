@@ -53,10 +53,10 @@ function(enable_malloc_count_if_requested target_name)
     if(MALLOC_COUNT)
         message(STATUS "Compiling ${target_name} with malloc_count")
         target_sources(${target_name} PRIVATE
-                ${CMAKE_CURRENT_SOURCE_DIR}/external/malloc_count-master/malloc_count.c
+                ${CMAKE_CURRENT_SOURCE_DIR}/include/cds/malloc_count-master/malloc_count.c
         )
         target_include_directories(${target_name} PRIVATE
-                ${CMAKE_CURRENT_SOURCE_DIR}/external/malloc_count-master
+                ${CMAKE_CURRENT_SOURCE_DIR}/include/cds/malloc_count-master
         )
         target_compile_definitions(${target_name} PRIVATE USE_MALLOC_COUNT)
 

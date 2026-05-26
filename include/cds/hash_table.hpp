@@ -2,8 +2,8 @@
 // Created by diego on 05-03-20.
 //
 
-#ifndef CDT_HASH_TABLE_H
-#define CDT_HASH_TABLE_H
+#ifndef CDS_HASH_TABLE_H
+#define CDS_HASH_TABLE_H
 
 #include <iostream>
 #include <cstring>
@@ -17,7 +17,7 @@
 #include "xxHash-dev/xxhash.h"
 #endif
 
-#include "bitstream.h"
+#include "bit_stream.h"
 #include <algorithm>
 #include <type_traits>
 #ifdef __linux__
@@ -149,7 +149,7 @@ private:
 
     typedef hash_table<value_t, val_bits, desc_bits> ht_type;
     typedef size_t                                   buffer_t;
-    typedef bitstream<size_t>                        stream_t;
+    typedef bit_stream<size_t>                        stream_t;
     typedef hash_table_iterator<ht_type>             iterator;
     friend                                           iterator;
 
@@ -830,7 +830,7 @@ private:
 
     typedef buffered_hash_table<value_t, val_bits, desc_bits> ht_type;
     typedef size_t                                            buffer_t;
-    typedef bitstream<size_t>                                 stream_t;
+    typedef bit_stream<size_t>                                 stream_t;
     typedef hash_table_iterator<ht_type>                      iterator;
     friend                                                    iterator;
 
@@ -1678,15 +1678,15 @@ public:
 
         buffer_t tail=0;
         if(tot_bytes>0) {
-            size_t rem = written_bits % bitstream<buffer_t>::word_bits;
+            size_t rem = written_bits % bit_stream<buffer_t>::word_bits;
             if (rem==0) {
                 bytes_to_write = tot_bytes;
                 next_av_bit=1;
             } else {
                 //leave the tail in the buffer
-                size_t n_cells = INT_CEIL(written_bits, bitstream<buffer_t>::word_bits);
+                size_t n_cells = INT_CEIL(written_bits, bit_stream<buffer_t>::word_bits);
                 bytes_to_write = (n_cells-1)*sizeof(buffer_t);
-                tail = data.stream[n_cells-1] & bitstream<buffer_t>::masks[rem];
+                tail = data.stream[n_cells-1] & bit_stream<buffer_t>::masks[rem];
                 next_av_bit = rem+1;
             }
 
@@ -1815,4 +1815,4 @@ public:
 #endif
     }
 };
-#endif //CDT_HASH_TABLE_H
+#endif //CDS_HASH_TABLE_H

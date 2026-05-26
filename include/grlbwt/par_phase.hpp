@@ -4,10 +4,10 @@
 
 #ifndef GRLBWT_PAR_PHASE_H
 #define GRLBWT_PAR_PHASE_H
-#include <cdt/logger.h>
-#include <cdt/utils.h>
-#include <cdt/workspace.h>
-#include <cdt/rle_vbyte_streams.h>
+#include <cds/logger.h>
+#include <cds/utils.h>
+#include <cds/workspace.h>
+#include <cds/rle_vbyte_streams.h>
 #include "LMS_induction.hpp"
 #include "grlbwt_common.h"
 #include "par_strategies.h"
@@ -82,7 +82,7 @@ struct dictionary {
 
     typedef size_t size_type;
     size_t alphabet{};      //alphabet of the dictionary
-    size_t prev_alphabet{};  //size of the previous alphabet
+    size_t prev_alphabet{}; //size of the previous alphabet
     size_t n_phrases{};     //number of LMS phrases in the dictionary
     size_t t_size{};        //size of the text from which the dictionary was generated
     size_t max_sym_freq{};  //maximum symbol frequency in the parse from which the dictionary was created
@@ -114,99 +114,56 @@ struct dictionary {
                                        desc_bv(&is_suffix_bv) {
 
         key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
-        size_t j = 0, k = 0, freq;
-
-        //TODO testing
-        //std::vector<std::vector<size_t>> plain_dict;
-        //
+        size_t j = 0, k = 0;
 
         for (auto const &ptr: mp_map) {
-            //TODO
-            //std::vector<size_t> phrase;
-            //
 
             for (size_t i = key_w.size(ptr); i-- > 0;) {
                 dict[j] = key_w.read(ptr, i);
-                //phrase.push_back(dict[j]);
+                //std::cout<<dict[j]<<" ";
                 d_lim[j++] = false;
             }
-            //plain_dict.emplace_back(phrase);
             d_lim[j - 1] = true;
+            //std::cout<<""<<std::endl;
 
-            freq = 0;
+            size_t freq = 0;
             mp_map.get_value_from(ptr, freq);
             assert(freq <= max_freq);
             freqs[k++] = freq;
         }
 
-        //TODO
-        //std::cout<<"storing the dictionary in plain format, delete this"<<std::endl;
-        //std::sort(plain_dict.begin(), plain_dict.end(), [](auto a, auto b){
-        //    for(size_t i=0;i<std::min(a.size(), b.size()); i++){
-        //        if(a[i]!=b[i]) return a[i]<b[i];
-        //    }
-        //    return a.size()<b.size();
-        //});
-
-        //std::ifstream ifs("serialized_dict_"+std::to_string(t_size), std::ios::in | std::ios::binary);
-        //std::vector<std::vector<size_t>> correct_dict;
-        //for(size_t i=0;i<plain_dict.size();i++){
-        //    std::vector<size_t> correct_phrase;
-        //    load_plain_vector(ifs, correct_phrase);
-        //    if(correct_phrase.size()!=plain_dict[i].size()){
-        //        std::cout<<i<<" -> length corr "<<correct_phrase.size()<<" length malo "<<plain_dict[i].size()<<std::endl;
-        //        std::cout<<"bueno: "<<std::endl;
-        //        for(size_t u=0;u<correct_phrase.size();u++){
-        //            std::cout<<correct_phrase[u]<<" ";
-        //        }
-        //        std::cout<<"malo: "<<std::endl;
-        //        for(size_t u=0;u<plain_dict[i].size();u++){
-        //            std::cout<<plain_dict[i][u]<<" ";
-        //        }
-        //    }
-        //    assert(correct_phrase.size()==plain_dict[i].size());
-        //    for(size_t u=0;u<correct_phrase.size();u++){
-        //        assert(correct_phrase[u]==plain_dict[i][u]);
-        //    }
-        //}
-        //ifs.close();
-        //for(auto const &vector : plain_dict ){
-        //    serialize_plain_vector(ofs, vector);
-        //}
-        //
         assert(j == dict_syms);
     }
 
-    [[nodiscard]] inline bool is_suffix(size_t sym) const {
+    [[nodiscard]] bool is_suffix(size_t sym) const {
         return (*desc_bv)[sym];
     };
 
-    size_type serialize(std::ostream &out, sdsl::structure_tree_node *v = nullptr, std::string name = "") const {
-        sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
-        size_type written_bytes = sdsl::write_member(alphabet, out, child, "alphabet");
-        written_bytes += sdsl::write_member(prev_alphabet, out, child, "p_alpha_size");
-        written_bytes += sdsl::write_member(n_phrases, out, child, "n_phrases");
-        written_bytes += sdsl::write_member(t_size, out, child, "t_size");
-        written_bytes += sdsl::write_member(max_sym_freq, out, child, "max_sym_freq");
-        written_bytes += sdsl::write_member(end_str_dummy, out, child, "end_str_dummy");
-        written_bytes += sdsl::write_member(bwt_dummy, out, child, "bwt_dummy");
-        written_bytes += sdsl::write_member(hocc_dummy, out, child, "hocc_dummy");
-        written_bytes += sdsl::write_member(metasym_dummy, out, child, "metasym_dummy");
-        dict.serialize(out);
-        phrases_has_hocc.serialize(out, child);
+    size_type serialize(std::ostream &out) const {
+        size_type written_bytes = serialize_elm(out, alphabet);
+        written_bytes += serialize_elm(out, prev_alphabet);
+        written_bytes += serialize_elm(out, n_phrases);
+        written_bytes += serialize_elm(out, t_size);
+        written_bytes += serialize_elm(out, max_sym_freq);
+        written_bytes += serialize_elm(out, end_str_dummy);
+        written_bytes += serialize_elm(out, bwt_dummy);
+        written_bytes += serialize_elm(out, hocc_dummy);
+        written_bytes += serialize_elm(out, metasym_dummy);
+        written_bytes += dict.serialize(out);
+        written_bytes += phrases_has_hocc.serialize(out);
         return written_bytes;
     }
 
     void load(std::istream &in) {
-        sdsl::read_member(alphabet, in);
-        sdsl::read_member(prev_alphabet, in);
-        sdsl::read_member(n_phrases, in);
-        sdsl::read_member(t_size, in);
-        sdsl::read_member(max_sym_freq, in);
-        sdsl::read_member(end_str_dummy, in);
-        sdsl::read_member(bwt_dummy, in);
-        sdsl::read_member(hocc_dummy, in);
-        sdsl::read_member(metasym_dummy, in);
+        load_elm(in, alphabet);
+        load_elm(in, prev_alphabet);
+        load_elm(in, n_phrases);
+        load_elm(in, t_size);
+        load_elm(in, max_sym_freq);
+        load_elm(in, end_str_dummy);
+        load_elm(in, bwt_dummy);
+        load_elm(in, hocc_dummy);
+        load_elm(in, metasym_dummy);
         dict.load(in);
         phrases_has_hocc.load(in);
     }
@@ -270,9 +227,9 @@ void produce_grammar(dictionary& dict, sa_type& s_sa,  phrase_map_t& new_phrases
     dict.dict.swap(new_dict);
     dict.n_phrases = s_sa.size();
 
-    sdsl::util::clear(dict.d_lim);
+    clear(dict.d_lim);
     std::string dict_file = TMP_FILE_NAME("dict_lev_"+std::to_string(p_info.p_round));
-    sdsl::store_to_file(dict, dict_file);
+    store_to_file(dict_file, dict);
 }
 
 template<class sa_type>
@@ -292,7 +249,7 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
 
     vector_t ranks(dict.n_phrases, 0, sym_width(dict.dict.size())+1);
     dict.phrases_has_hocc.resize(dict.dict.size());
-    sdsl::util::set_to_value(dict.phrases_has_hocc, false);
+    dict.phrases_has_hocc.set_to_value(0);
 
     size_t u = 0 ;
     while(u<sa.size()) {
@@ -363,11 +320,10 @@ size_t produce_pre_bwt(dictionary &dict, sa_type &sa, phrase_map_t &new_phrases_
     sa.resize(rank);
     dict.phrases_has_hocc.resize(rank);
 
-    sdsl::util::clear(d_lim_rs);
+    clear(d_lim_rs);
     dict.freqs.erase();
     store_to_file(TMP_FILE_NAME("phr_ranks"), ranks);
     ranks.erase();
-    //new_phrases_ht.shrink_databuff();
 
 #ifdef __linux__
     malloc_trim(0);
@@ -492,7 +448,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
         }
         TMP_REMOVE_FILE("phr_ranks");
         std::string suffix_file = TMP_FILE_NAME("suffix_file");
-        sdsl::store_to_file(new_phrase_desc, suffix_file);
+        store_to_file(suffix_file, new_phrase_desc);
     }
 
     LOG_DEBUG("Creating the parse of the text");
@@ -514,7 +470,7 @@ size_t par_round(parse_strategy_t &p_strategy, parsing_info &p_info, bv_t &phras
         //keep track of the phrases that have to be rephrased
         std::string suffix_file = TMP_FILE_NAME("suffix_file");
         bv_t new_phrase_desc;
-        sdsl::load_from_file(new_phrase_desc, suffix_file);
+        load_from_file(suffix_file, new_phrase_desc);
         phrase_desc.swap(new_phrase_desc);
     }
 
@@ -571,7 +527,7 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac) {
     SCOPE_INFO();
     if(n_threads>1){
         LOG_DEBUG("Running with up to "+std::to_string(n_threads)+" working threads");
-        LOG_DEBUG("Using "+report_space((off_t)hbuff_size)+" for the thread hash tables ("+report_space(off_t(hbuff_size/n_threads))+" each)");
+        LOG_DEBUG("Using "+format_space(static_cast<off_t>(hbuff_size))+" for the thread hash tables ("+format_space(static_cast<off_t>(hbuff_size / n_threads))+" each)");
     }
 
     std::string output_file = TMP_FILE_NAME("tmp_output");
@@ -585,7 +541,7 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac) {
     p_info.max_sym_freq = str_coll.max_sym_freq;
     p_info.tot_phrases = str_coll.max_sym + 1;
     p_info.str_ptrs.swap(str_coll.str_ptrs);
-    p_info.str_ptrs.push_back((long) str_coll.n_syms);
+    p_info.str_ptrs.push_back(static_cast<long>(str_coll.n_syms));
     p_info.str_ptrs.shrink_to_fit();
     p_info.longest_str = str_coll.longest_string;
     p_info.active_strings = str_coll.n_strings;
@@ -619,7 +575,7 @@ size_t par_phase(std::string &i_file, size_t n_threads, float hbuff_frac) {
         rename(output_file.c_str(), tmp_i_file.c_str());
     }
 
-    sdsl::util::clear(symbol_desc);
+    clear(symbol_desc);
     TMP_REMOVE_FILE("suffix_file");
     return iter - 2;
 }

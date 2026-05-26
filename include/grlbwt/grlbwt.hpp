@@ -7,7 +7,8 @@
 
 #include "ind_phase.hpp"
 #include "par_phase.hpp"
-#include <cdt/workspace.h>
+#include <cds/logger.h>
+#include <cds/workspace.h>
 
 /***
  *
@@ -22,6 +23,7 @@ template<class sym_type>
 void grl_bwt_algo(std::string &i_file, std::string& o_file, size_t n_threads, float hbuff_frac,
                   const std::string& tmp_ws= SYSTEM_TMP,
                   const log_level log_lvl=log_level::INFO){
+
     Logger::level = log_lvl;
     INIT_TMP_FOLDER(tmp_ws, "grl.bwt", true);
     LOG_INFO("Temporary folder: "+TMP_WORKSPACE);

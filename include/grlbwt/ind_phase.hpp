@@ -6,10 +6,10 @@
 #define GRLBWT_IND_PHASE_HPP
 
 #include "par_phase.hpp"
-#include <cdt/logger.h>
-#include <cdt/workspace.h>
-#include <cdt/memory_handler.hpp>
-#include <cdt/rle_vbyte_streams.h>
+#include <cds/logger.h>
+#include <cds/workspace.h>
+#include <cds/memory_handler.hpp>
+#include <cds/rle_vbyte_streams.h>
 
 #ifdef __linux__
 #include <malloc.h>
@@ -86,7 +86,6 @@ inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &ho
     hocc_buckets.set_width(sym_width(std::max<size_t>(n_runs, 1)));
     hocc_buckets.resize(hocc_rs(dict.phrases_has_hocc.size()) + 1);
 
-    //bwt_buff.close();
     size_t acc = 0;
     ptr = hocc_counts;
     for (size_t i = 0; i < hocc_buckets.size() - 1; i++) {
@@ -97,7 +96,6 @@ inline size_t compute_hocc_size(dictionary &dict, bv_rs_t &hocc_rs, vector_t &ho
     }
     assert(acc == n_runs);
     hocc_buckets.write(hocc_buckets.size() - 1, acc);
-    //free(hocc_counts);
     mem::deallocate(hocc_counts);
     return acc;
 }
@@ -107,12 +105,13 @@ inline void induce_from_prev_bwt(size_t p_round, dictionary &dict, char* hocc, b
     std::string prev_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round + 1));
     rle_vbyte_buff_updater bwt_buff(prev_bwt_f);
 
-    size_t left_sym, pos, rank, dummy_sym = dict.bwt_dummy + 1;
-    uint64_t sym, freq;
-    size_t al_b = INT_CEIL(sym_width(dict.alphabet), 8);
-    size_t fr_b = INT_CEIL(sym_width(dict.max_sym_freq), 8);
-    size_t bps = al_b + fr_b;
+    size_t rank;
+    const size_t dummy_sym = dict.bwt_dummy + 1;
+    const size_t al_b = INT_CEIL(sym_width(dict.alphabet), 8);
+    const size_t fr_b = INT_CEIL(sym_width(dict.max_sym_freq), 8);
+    const size_t bps = al_b + fr_b;
     char *hocc_ptr;
+    uint64_t sym, freq;
 
     LOG_DEBUG("Inducing from the previous BWT");
     while(bwt_buff.has_next()) {
@@ -131,15 +130,15 @@ inline void induce_from_prev_bwt(size_t p_round, dictionary &dict, char* hocc, b
             } else {
                 memcpy(hocc_ptr, &dummy_sym, al_b);
                 memcpy(hocc_ptr + al_b, &freq, fr_b);
-                hocc_buckets[rank]++;
+                ++hocc_buckets[rank];
             }
         }
 
-        pos = 2 * sym + 1;
+        size_t pos = 2 * sym + 1;
         sym = dict.dict.read(pos);
         while (sym >= dict.alphabet) {
             sym -= dict.alphabet;
-            left_sym = dict.dict.read(pos - 1);
+            size_t left_sym = dict.dict.read(pos - 1);
             assert(left_sym < dict.alphabet && dict.phrases_has_hocc[sym]);
 
             rank = hocc_rs(sym);
@@ -154,7 +153,7 @@ inline void induce_from_prev_bwt(size_t p_round, dictionary &dict, char* hocc, b
             } else {
                 memcpy(hocc_ptr, &left_sym, al_b);
                 memcpy(hocc_ptr + al_b, &freq, fr_b);
-                hocc_buckets[rank]++;
+                ++hocc_buckets[rank];
             }
             pos = 2 * sym + 1;
             sym = dict.dict.read(pos);
@@ -165,7 +164,7 @@ inline void induce_from_prev_bwt(size_t p_round, dictionary &dict, char* hocc, b
 
     dict.dict.erase();
     hocc_buckets.erase();
-    sdsl::util::clear(hocc_rs);
+    clear(hocc_rs);
     bwt_buff.close();
 
 #ifdef __linux__
@@ -179,7 +178,7 @@ inline void infer_lvl_bwt(size_t p_round) {
 
     dictionary dict;
     std::string dict_file = "dict_lev_" + std::to_string(p_round);
-    sdsl::load_from_file(dict, TMP_FILE_NAME(dict_file));
+    load_from_file(TMP_FILE_NAME(dict_file), dict);
 
     bv_rs_t hocc_rs(&dict.phrases_has_hocc);
     vector_t hocc_buckets;
@@ -196,16 +195,16 @@ inline void infer_lvl_bwt(size_t p_round) {
     LOG_DEBUG("Assembling the new BWT");
 
     //BWT from the previous round, now updated for the current round
-    std::string prev_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round + 1));
-    rle_vbyte_buff_reader prev_bwt(prev_bwt_f);
+    std::string prev_bwt_f = "bwt_lev_" + std::to_string(p_round + 1);
+    rle_vbyte_buff_reader prev_bwt(TMP_FILE_NAME(prev_bwt_f));
 
     //Preliminary BWT from the parsing phase
-    std::string prelim_bwt_f = TMP_FILE_NAME("pre_bwt_lev_" + std::to_string(p_round));
-    rle_vbyte_buff_reader prelim_bwt(prelim_bwt_f);
+    std::string prelim_bwt_f = "pre_bwt_lev_" + std::to_string(p_round);
+    rle_vbyte_buff_reader prelim_bwt(TMP_FILE_NAME(prelim_bwt_f));
 
     //new BWT
-    std::string new_bwt_f = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round));
-    rle_vbyte_buff_writer new_bwt(new_bwt_f);
+    std::string new_bwt_f = "bwt_lev_" + std::to_string(p_round);
+    rle_vbyte_buff_writer new_bwt(TMP_FILE_NAME(new_bwt_f));
 
     size_t freq=0;
     char *hocc_ptr = hocc;
@@ -253,7 +252,7 @@ inline void infer_lvl_bwt(size_t p_round) {
                         new_bwt.push_back(sym, freq);
                     }
                 }
-            } else {//copy from the bwt i+1
+            } else {//copy from bwt i+1
                 extract_rl_syms(prev_bwt, new_bwt, pbwt_freq);
             }
         } else {// a segment in the preliminary BWT that was already solved
@@ -270,33 +269,29 @@ inline void infer_lvl_bwt(size_t p_round) {
     TMP_REMOVE_FILE(prelim_bwt_f);
 
     LOG_DEBUG("Stats:");
-    LOG_DEBUG("  BWT size (n):                 "+std::to_string(new_bwt.size()));
-    LOG_DEBUG("  Number of runs (r):           "+std::to_string(new_bwt.tot_runs()));
-    LOG_DEBUG("  n/r:                          "+std::to_string(new_bwt.avg_len()));
+    LOG_DEBUG("  BWT size (n):         "+std::to_string(new_bwt.size()));
+    LOG_DEBUG("  Number of runs (r):   "+std::to_string(new_bwt.tot_runs()));
+    LOG_DEBUG("  n/r:                  "+to_string_with_precision(new_bwt.avg_len(), 3));
     mem::deallocate(hocc);
 }
 
 template<class sym_type>
-void parse2bwt_int(dictionary& dict, size_t& p_round) {
+void parse2bwt_int(size_t& p_round) {
 
     std::string parse_file = TMP_FILE_NAME("tmp_input");
     std::ifstream c_vec(parse_file, std::ifstream::binary);
     c_vec.seekg(0, std::ifstream::end);
     size_t tot_bytes = c_vec.tellg();
     c_vec.seekg(0, std::ifstream::beg);
-    //auto *buffer = reinterpret_cast<sym_type *>(malloc(BUFFER_SIZE));
+
     auto *buffer = mem::allocate<sym_type>(BUFFER_SIZE/sizeof(sym_type));
     size_t read_bytes = 0;
-    size_t len = tot_bytes / sizeof(sym_type);
-
-    size_t sb = INT_CEIL(sym_width(std::max(dict.prev_alphabet, dict.alphabet)) + 1, 8);
-    size_t fb = INT_CEIL(sym_width(len) + 1, 8);
 
     std::string bwt_lev_file = TMP_FILE_NAME("bwt_lev_" + std::to_string(p_round+1));
     rle_vbyte_buff_writer bwt_buff(bwt_lev_file);
 
     while (read_bytes < tot_bytes) {
-        c_vec.read((char *) buffer, BUFFER_SIZE);
+        c_vec.read(reinterpret_cast<char *>(buffer), BUFFER_SIZE);
         read_bytes += c_vec.gcount();
         assert((c_vec.gcount() % sizeof(sym_type)) == 0);
 
@@ -312,11 +307,9 @@ void parse2bwt_int(dictionary& dict, size_t& p_round) {
     TMP_REMOVE_FILE("tmp_input");
 
     LOG_DEBUG("Stats:");
-    LOG_DEBUG("  BWT size (n):         "+std::to_string(len));
-    LOG_DEBUG("  Number of runs (r):   "+std::to_string(bwt_buff.size()));
-    LOG_DEBUG("  n/r:                  "+std::to_string(double(len) / double(bwt_buff.size())));
-    LOG_DEBUG("  Bytes per run symbol: "+std::to_string(sb));
-    LOG_DEBUG("  Bytes per run length: "+std::to_string(fb));
+    LOG_DEBUG("  BWT size (n):         "+std::to_string(bwt_buff.size()));
+    LOG_DEBUG("  Number of runs (r):   "+std::to_string(bwt_buff.tot_runs()));
+    LOG_DEBUG("  n/r:                  "+to_string_with_precision(bwt_buff.avg_len(), 3));
 }
 
 inline void parse2bwt(size_t& p_round) {
@@ -327,17 +320,17 @@ inline void parse2bwt(size_t& p_round) {
     TRACE_SCOPE();
     std::string dict_file = "dict_lev_" + std::to_string(p_round);
     dictionary dict;
-    sdsl::load_from_file(dict, TMP_FILE_NAME(dict_file));
+    load_from_file(TMP_FILE_NAME(dict_file), dict);
     size_t bps = sym_width(dict.n_phrases)+1;
 
     if(bps<=8){
-        parse2bwt_int<uint8_t>(dict, p_round);
+        parse2bwt_int<uint8_t>(p_round);
     }else if(bps<=16){
-        parse2bwt_int<uint16_t>(dict, p_round);
+        parse2bwt_int<uint16_t>(p_round);
     } else if(bps<=32){
-        parse2bwt_int<uint32_t>(dict, p_round);
+        parse2bwt_int<uint32_t>(p_round);
     } else{
-        parse2bwt_int<uint64_t>(dict, p_round);
+        parse2bwt_int<uint64_t>(p_round);
     }
     p_round++;
 }

@@ -18,6 +18,33 @@ extern"C"{
 
 KSEQ_INIT(gzFile, gzread)
 
+inline bool check_gzip(const std::string& file){
+    std::ifstream ifs(file, std::ios::binary);
+    char f_bytes[2]={0,0};
+    auto ext = std::filesystem::path(file).extension();
+    ifs.read(f_bytes, 2);
+    ifs.close();
+    return ext==".gz" && f_bytes[0]=='\x1F' && f_bytes[1]=='\x8B';
+}
+
+inline bool is_fastx(const std::string& input_file){
+
+    bool is_gz=check_gzip(input_file);
+    char f_sym;
+
+    //read the first symbol in the file to check if it is in FASTA or FASTQ format
+    if(is_gz){
+        std::cout<<"gzipped files are not supported"<<std::endl;
+        exit(0);
+    }
+
+    std::ifstream ifs(input_file, std::ios::binary);
+    ifs.read(&f_sym, 1);
+    ifs.close();
+
+    return f_sym=='>' || f_sym=='@';
+}
+
 #define insert_run(head, len)\
 if(len>1){\
     len_buffer[u++] = len;\

@@ -2,8 +2,8 @@
 // Created by Diaz, Diego on 28.4.2023.
 //
 
-#ifndef CDT_VBYTE_H
-#define CDT_VBYTE_H
+#ifndef CDS_VBYTE_H
+#define CDS_VBYTE_H
 #include<iostream>
 #include<cassert>
 
@@ -469,4 +469,4 @@ struct inv_vbyte {
         return tmp-ptr+1;
     }
 };
-#endif //CDT_VBYTE_H
+#endif //CDS_VBYTE_H

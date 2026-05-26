@@ -2,17 +2,16 @@
 // Created by diego on 02-09-20.
 //
 
-#ifndef LPG_COMPRESSOR_BITSTREAM_H
-#define LPG_COMPRESSOR_BITSTREAM_H
+#ifndef CDS_BITSTREAM_H
+#define CDS_BITSTREAM_H
 
-#include<iostream>
 #include <limits>
 #include "macros.h"
 #include "cdt_common.hpp"
+#include "memory_handler.hpp"
 
-template<class word_t,
-         uint8_t max_dist=std::numeric_limits<word_t>::digits>
-struct bitstream{
+template<class word_t, uint8_t max_dist=std::numeric_limits<word_t>::digits>
+struct bit_stream{
 
     constexpr static uint8_t word_bits = std::numeric_limits<word_t>::digits;
     constexpr static uint8_t word_shift = __builtin_ctz(word_bits);
@@ -22,39 +21,43 @@ struct bitstream{
     word_t *stream=nullptr;
     size_t stream_size=0;
 
-    bitstream(): stream(nullptr), stream_size(0){};
+    bit_stream(): stream(nullptr){}
 
-    [[nodiscard]] inline size_t n_bits() const {
+    [[nodiscard]] size_t n_bits() const {
         return stream_size<<word_shift;
     }
 
-    inline bitstream<word_t>& swap(bitstream<word_t>& other) {
+    bit_stream& swap(bit_stream& other) noexcept {
         std::swap(stream, other.stream);
         std::swap(stream_size, other.stream_size);
         return *this;
     }
 
-    inline bitstream<word_t>& operator=(bitstream<word_t> const& other){
+    bit_stream& operator=(bit_stream const& other){
         if(&other!=this){
             if(stream_size!=other.stream_size){
-                stream = reinterpret_cast<word_t *>(realloc(stream, other.stream_size*sizeof(word_t)));
+                //stream = reinterpret_cast<word_t *>(realloc(stream, other.stream_size*sizeof(word_t)));
+                stream = mem::reallocate<word_t>(stream, other.stream_size);
                 stream_size = other.stream_size;
             }
             memcpy(stream, other.stream, stream_size*sizeof(word_t));
         }
+        return *this;
     }
 
-    inline void write(size_t i, size_t j, size_t value){
+    void write(size_t i, size_t j, size_t value){
         size_t cell_i = i >> word_shift;
-        size_t i_pos = (i & (word_bits-1UL));
+        size_t i_pos = i & (word_bits-1UL);
 
         if constexpr (max_dist==1){
             stream[cell_i] &= ~(1UL << i_pos);
-            stream[cell_i] |= value << i_pos;
+            stream[cell_i] |= (value & 1UL) << i_pos;
         }else{
             size_t cell_j = j >> word_shift;
+            value &= masks[j-i+1UL];
+
             if(cell_i==cell_j){
-                stream[cell_i] &= ~(masks[(j - i + 1UL)] << i_pos);
+                stream[cell_i] &= ~(masks[j - i + 1UL] << i_pos);
                 stream[cell_i] |= value << i_pos;
             }else{
                 size_t right = word_bits - i_pos;
@@ -65,52 +68,52 @@ struct bitstream{
         }
     }
 
-    inline void write_chunk(const void* source, size_t i, size_t j){
+    void write_chunk(const void* source, size_t i, size_t j){
         size_t tot_bits = j-i+1;
         size_t n_words = INT_CEIL(tot_bits, word_bits);
         size_t left = i & (word_bits - 1UL);
         size_t right = word_bits - left;
         size_t cell_i = i >> word_shift;
 
-        auto tmp_src = reinterpret_cast<const word_t *>(source);
-
-        //TODO use SIMD instructions for this segment
-        for(size_t k=0; k < n_words - 1; k++){
-            stream[cell_i] = (stream[cell_i] & ~(masks[right] << left)) | (tmp_src[k] << left);
-            cell_i++;
-            stream[cell_i] = (stream[cell_i] & ~masks[left]) | (tmp_src[k] >> right);
+        auto tmp_src = static_cast<const word_t *>(source);
+        if (left==0) {
+            memcpy(stream + cell_i, tmp_src, (n_words - 1) * sizeof(word_t));
+        }else {
+            //TODO use SIMD instructions for this segment
+            for(size_t k=0; k < n_words - 1; k++){
+                stream[cell_i] = (stream[cell_i] & ~(masks[right] << left)) | (tmp_src[k] << left);
+                ++cell_i;
+                stream[cell_i] = (stream[cell_i] & ~masks[left]) | (tmp_src[k] >> right);
+            }
+            //
         }
-        //
-
-        size_t read_bits = ((n_words - 1) << word_shift);
-
+        size_t read_bits = (n_words - 1) << word_shift;
         write(i + read_bits, j, (tmp_src[n_words-1] & masks[tot_bits-read_bits]));
     }
 
-    [[nodiscard]] inline size_t read(size_t i, size_t j) const{
+    [[nodiscard]] size_t read(size_t i, size_t j) const {
         if constexpr (max_dist==1){
             return (stream[i>>word_shift] >> (i & (word_bits - 1UL))) & 1UL;
         }else{
             size_t cell_i = i >> word_shift;
-            size_t i_pos = (i & (word_bits - 1UL));
+            size_t i_pos = i & (word_bits - 1UL);
             size_t cell_j = j >> word_shift;
             if(cell_i == cell_j){
                 return (stream[cell_i] >> i_pos) & masks[(j - i + 1UL)];
-            }else{
-                size_t right = word_bits-i_pos;
-                size_t left = 1+(j & (word_bits - 1UL));
-                return ((stream[cell_j] & masks[left]) << right) | ((stream[cell_i] >> i_pos) & masks[right]);
             }
+            size_t right = word_bits-i_pos;
+            size_t left = 1+(j & (word_bits - 1UL));
+            return ((stream[cell_j] & masks[left]) << right) | ((stream[cell_i] >> i_pos) & masks[right]);
         }
     }
 
-    [[nodiscard]] inline size_t pop_count(size_t i, size_t j) const{
+    [[nodiscard]] size_t pop_count(size_t i, size_t j) const{
         size_t cell_i = i >> word_shift;
-        size_t i_pos = (i & (word_bits - 1UL));
+        size_t i_pos = i & (word_bits - 1UL);
         size_t cell_j = j >> word_shift;
         size_t val;
         if(cell_i == cell_j){
-            val = (stream[cell_i] >> i_pos) & masks[(j - i + 1UL)];
+            val = (stream[cell_i] >> i_pos) & masks[j - i + 1UL];
         }else{
             size_t right = word_bits-i_pos;
             size_t left = 1+(j & (word_bits - 1UL));
@@ -119,71 +122,64 @@ struct bitstream{
         return __builtin_popcountll(val);
     }
 
-    inline void read_chunk(void* dst, size_t i, size_t j) const{
+    void read_chunk(void* dst, size_t i, size_t j) const{
         size_t tot_bits = j-i+1;
         size_t n_words = INT_CEIL(tot_bits, word_bits);
         size_t left = i & (word_bits - 1UL);
         size_t right = word_bits - left;
         size_t cell_i = i >> word_shift;
 
-        auto tmp_dst = reinterpret_cast<word_t *>(dst);
+        auto tmp_dst = static_cast<word_t *>(dst);
 
-        //TODO use SIMD instructions for this segment
-        for(size_t k=0; k < n_words - 1; k++){
-            tmp_dst[k] = (stream[cell_i] >> left) & masks[right];
-            tmp_dst[k] |= (stream[++cell_i] & masks[left]) << right;
+        if(left==0) {
+            memcpy(tmp_dst, stream + cell_i, (n_words - 1) * sizeof(word_t));
+        } else {
+            //TODO use SIMD instructions for this segment
+            for(size_t k=0; k < n_words - 1; k++){
+                tmp_dst[k] = (stream[cell_i] >> left) & masks[right];
+                ++cell_i;
+                tmp_dst[k] |= (stream[cell_i] & masks[left]) << right;
+            }
+            //
         }
-        //
 
-        size_t read_bits = ((n_words - 1) << word_shift);
+        size_t read_bits = (n_words - 1) << word_shift;
         tmp_dst[n_words-1] &= ~masks[tot_bits-read_bits];
         tmp_dst[n_words-1] |= read(i + read_bits, j);
     }
 
     //compare a segment of the stream with an external source of bits
-    inline bool compare_chunk(const void* input, size_t i, size_t bits) const {
+    bool compare_chunk(const void* input, size_t i, size_t bits) const {
 
         size_t n_words = INT_CEIL(bits, word_bits);
         size_t left = i & (word_bits - 1UL);
         size_t right = word_bits - left;
         size_t cell_i = i >> word_shift;
 
-        auto tmp_in = reinterpret_cast<const word_t *>(input);
+        auto tmp_in = static_cast<const word_t *>(input);
 
-        //TODO use SIMD instructions for this segment
-        size_t tmp_data;
-        for(size_t k=0; k < n_words - 1; k++){
-            tmp_data = (stream[cell_i] >> left) & masks[right];
-            tmp_data |= (stream[++cell_i] & masks[left]) << right;
-            if(tmp_data != tmp_in[k]) return false;
+        if (left==0) {
+            if (memcmp(stream+cell_i, tmp_in, (n_words - 1) * sizeof(word_t))) return false;
+        } else {
+            //TODO use SIMD instructions for this segment
+            for(size_t k=0; k < n_words - 1; k++){
+                size_t tmp_data = (stream[cell_i] >> left) & masks[right];
+                ++cell_i;
+                tmp_data |= (stream[cell_i] & masks[left]) << right;
+                if(tmp_data != tmp_in[k]) return false;
+            }
+            //
         }
-        //
-        size_t read_bits = ((n_words - 1) << word_shift);
+
+        size_t read_bits = (n_words - 1) << word_shift;
         return (tmp_in[n_words - 1] & masks[(bits-read_bits)]) == read(i + read_bits, i+bits-1);
     }
 
-    //compare a segment of the stream with an external source of bits
-    /*inline bool compare_segment(const uint8_t* input, size_t i, size_t bits) const {
-
-        size_t n_words = INT_CEIL(bits, word_bits);
-        size_t left = i & (word_bits - 1UL);
-        size_t right = word_bits - left;
-
-        for(size_t k=0, cell_i=(i>>word_shift); k < n_words - 1; k+=8, cell_i++){
-            const size_t tmp_data = ((stream[cell_i] >> left) & masks[right]) | ((stream[cell_i+1] & masks[left]) << right);
-            if(memcmp(input+k, &tmp_data, sizeof(size_t))!=0) return false;
-        }
-
-        //size_t cell_i = i >> word_shift;
-        size_t read_bits = ((n_words - 1) << word_shift);
-        //return (tmp_in[n_words - 1] & masks[(bits-read_bits)]) == read(i + read_bits, i+bits-1);
-    }*/
-
     //compare the segment ]a-bits..a] with the segment ]b-bits..b+bits]
     //return the bit_pos (0-based) of the rightmost different bit (return len if the segments are equal)
-    inline size_t inv_com_segments(size_t a, size_t b, size_t& bits) const {
+    [[nodiscard]] size_t inv_com_segments(size_t a, size_t b, const size_t& bits) const {
         size_t n_words = INT_CEIL(bits, word_bits);
-        size_t rem_bits, data_a, data_b, read_bits=0;
+        size_t data_a, data_b, read_bits=0;
 
         if(n_words>1){
 
@@ -211,38 +207,45 @@ struct bitstream{
             }
         }
 
-        rem_bits = bits-read_bits;
+        size_t rem_bits = bits - read_bits;
         data_a = read(a-bits+1, a-read_bits);
         data_b = read(b-bits+1, b-read_bits);
 
         data_a^=data_b;
         if(data_a==0){
             return bits;
-        }else{
-            return read_bits + (rem_bits- ((8*sizeof(unsigned long) - __builtin_clzl(data_a))));
         }
+
+        return read_bits + (rem_bits- ((8*sizeof(unsigned long) - __builtin_clzl(data_a))));
     }
 
     size_type serialize(std::ostream &out) const{
         size_t written_bytes = serialize_elm(out, stream_size);
-        out.write((char *)stream, sizeof(word_t)*stream_size);
+        out.write(reinterpret_cast<char *>(stream), sizeof(word_t)*stream_size);
         return written_bytes + (sizeof(word_t)*stream_size);
     }
 
     void load(std::istream &in){
         load_elm(in, stream_size);
         if(stream==nullptr){
-            stream = (word_t *) malloc(sizeof(word_t)*stream_size);
+            stream = mem::allocate<word_t>(stream_size);
         }else{
-            stream = (word_t *) realloc(stream, sizeof(word_t)*stream_size);
+            stream = mem::reallocate<word_t>(stream, stream_size);
         }
+        in.read(reinterpret_cast<char *>(stream), sizeof(word_t)*stream_size);
+    }
 
-        in.read((char *)stream, sizeof(word_t)*stream_size);
+    static size_t bits2words(const size_t n_bits) {
+        return INT_CEIL(n_bits, word_bits);
+    }
+
+    static size_t bytes2words(const size_t n_bytes) {
+        return INT_CEIL(n_bytes, sizeof(word_t));
     }
 };
 
 template<class word_t, uint8_t max_dist>
-const size_t bitstream<word_t, max_dist>::masks[65]={0x0,
+const size_t bit_stream<word_t, max_dist>::masks[65]={0x0,
                                0x1,0x3, 0x7,0xF,
                                0x1F,0x3F, 0x7F,0xFF,
                                0x1FF,0x3FF, 0x7FF,0xFFF,
@@ -260,4 +263,4 @@ const size_t bitstream<word_t, max_dist>::masks[65]={0x0,
                                0x1FFFFFFFFFFFFFF,0x3FFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFF,
                                0x1FFFFFFFFFFFFFFF,0x3FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF};
 
-#endif //LPG_COMPRESSOR_BITSTREAM_H
+#endif //CDS_BITSTREAM_H

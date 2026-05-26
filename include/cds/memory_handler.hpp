@@ -2,52 +2,12 @@
 // Created by Diego Diaz on 2/10/20.
 //
 
-#ifndef CDT_MEMORY_HANDLER_HPP
-#define CDT_MEMORY_HANDLER_HPP
+#ifndef CDS_MEMORY_HANDLER_HPP
+#define CDS_MEMORY_HANDLER_HPP
 
 #ifdef __linux__
 #include <malloc.h>
 #endif
-
-/*class allocator{
-public:
-    template<class value_t>
-    static value_t *allocate(size_t n_vals, bool init = false, value_t def_val = 0) {
-        auto all_mem = static_cast<value_t *>(malloc(sizeof(value_t) * n_vals));
-        if(all_mem == nullptr) {
-            throw std::runtime_error("error allocating memory");
-        }
-        if(init){
-            for(size_t i=0; i < n_vals;i++) all_mem[i] = def_val;
-        }
-        return all_mem;
-    }
-
-    template<class value_t>
-    static value_t * reallocate(value_t *pointer, size_t old_size, size_t new_size,
-                                bool init = false, value_t def_val = 0) {
-        auto re_all_mem = static_cast<value_t *>(realloc(pointer, sizeof(value_t) * new_size));
-        if(re_all_mem == nullptr) {
-            throw std::runtime_error("error reallocating memory");
-        }
-        if(new_size>old_size && init){
-            for(size_t i=old_size;i<new_size;i++){
-                re_all_mem[i] = def_val;
-            }
-        }
-        return re_all_mem;
-    }
-
-    template<class value_t>
-    static void deallocate(value_t * pointer){
-        if(pointer!= nullptr){
-            free(pointer);
-#ifdef __linux__
-            malloc_trim(0);
-#endif
-        }
-    }
-};*/
 
 struct mem {
 
@@ -132,4 +92,5 @@ template <class T> struct mallocator {
 #endif
     }
 };
+
 #endif

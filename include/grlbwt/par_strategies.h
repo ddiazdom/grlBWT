@@ -7,6 +7,7 @@
 
 #include <thread>
 #include "grlbwt_common.h"
+#include <cds/file_streams.hpp>
 
 struct parsing_info{
     size_t lms_phrases=0; //number of LMS phrases in the current parsing round
@@ -313,7 +314,7 @@ struct mt_parse_strat_t {//multi thread strategy
             size_t tot_bits = (tot_bytes*8)-8;
             size_t key_bits;
             size_t next_bit = 0;
-            auto * key= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
+            auto * key= (uint8_t*) malloc(INT_CEIL(longest_key, bit_stream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
 
             while(next_bit<tot_bits) {
 
@@ -621,19 +622,13 @@ struct st_parse_strat_t {//parse data for single thread
 
         map.shrink_databuff();
         key_wrapper key_w{sym_width(max_symbol), map.description_bits(), map.get_data()};
-        size_t n_syms=0, max_freq=0, freq;
+        size_t n_syms=0, max_freq=0;
         p_info.active_strings = active_strings;
 
         for(auto const &ptr : map){
             n_syms += key_w.size(ptr);
-            freq = 0;
+            size_t freq = 0;
             map.get_value_from(ptr, freq);
-
-            //TODO testing
-            if(freq==0){
-                std::cout<<"here I have a bug at "<<ptr<<" "<<freq<<std::endl;
-            }
-            //
 
             assert(freq>0);
             if(freq>max_freq) max_freq = freq;

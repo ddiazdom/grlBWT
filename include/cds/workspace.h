@@ -2,8 +2,8 @@
 // Created by Diaz, Diego on 9.3.2026.
 //
 
-#ifndef GRLBWT_TMP_FOLDER_H
-#define GRLBWT_TMP_FOLDER_H
+#ifndef CDS_TMP_FOLDER_H
+#define CDS_TMP_FOLDER_H
 #include <string>
 #include <filesystem>
 #include <iostream>
@@ -11,10 +11,10 @@
 struct workspace{
 
     static std::filesystem::path system_tmp();
-    std::string get_file_name(std::string const& prefix) const;
+    [[nodiscard]] std::string get_file_name(std::string const& prefix) const;
     void remove_file(std::string const& prefix) const;
 
-    std::string workspace_folder() const;
+    [[nodiscard]] std::string workspace_folder() const;
 
     static void init(std::string const& base_path= system_tmp(),
                      std::string const& prefix="tmp",
@@ -120,4 +120,4 @@ inline std::string workspace::workspace_folder() const {
 #define TMP_FILE_NAME(prefix) workspace::get_instance().get_file_name(prefix)
 #define TMP_REMOVE_FILE(prefix) workspace::get_instance().remove_file(prefix)
 
-#endif //GRLBWT_TMP_FOLDER_H
+#endif //CDS_TMP_FOLDER_H

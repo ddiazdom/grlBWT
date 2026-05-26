@@ -1,14 +1,14 @@
 //
 // Created by Diaz, Diego on 9.12.2024.
 //
-#ifndef CDT_LOGGER_H
-#define CDT_LOGGER_H
+#ifndef CDS_LOGGER_H
+#define CDS_LOGGER_H
 
 #include <iostream>
 #include <string>
 #include "utils.h"
 #ifdef USE_MALLOC_COUNT
-#include "malloc_count.h"
+#include <malloc_count.h>
 #endif
 
 //code generated with ChatGPT
@@ -26,27 +26,9 @@ enum class log_level {
     TRACE = 4
 };
 
-inline std::string format_delta(double seconds) {
-    std::ostringstream os;
-    if (seconds < 60) {
-        os << std::fixed << std::setprecision(3)<< seconds << "s";
-    } else if (seconds < 3600) {
-        int m = static_cast<int>(seconds) / 60;
-        int s = static_cast<int>(seconds) % 60;
-        os << m << "m"<< std::setw(2) << std::setfill('0') << s << "s";
-    }
-    else {
-        int h = static_cast<int>(seconds) / 3600;
-        int m = (static_cast<int>(seconds) % 3600) / 60;
-        os << h << "h"<< std::setw(2) << std::setfill('0') << m << "m";
-    }
-    return os.str();
-}
-
 // -----------------------------
 // Logger
 // -----------------------------
-
 struct Logger {
 
     static log_level level;
@@ -124,9 +106,9 @@ public:
         auto end = std::chrono::steady_clock::now();
 
         double elapsed = std::chrono::duration<double>(end - start).count();
-        std::string msg = "← " + name + " (" + format_delta(elapsed);
+        std::string msg = "← " + name + " (" + format_time(elapsed);
 #if USE_MALLOC_COUNT
-        msg += ", " + report_space((off_t)malloc_count_peak());
+        msg += ", " + format_space(static_cast<off_t>(malloc_count_peak()));
 #endif
         msg += ")";
         Logger::log(level, msg);
@@ -142,7 +124,6 @@ private:
 // -----------------------------
 // Logging macros
 // -----------------------------
-
 #define TRACE_SCOPE() ScopeLog scope(__FUNCTION__, log_level::TRACE)
 #define DEBUG_SCOPE() ScopeLog scope(__FUNCTION__, log_level::DEBUG)
 #define SCOPE_INFO() ScopeIndent CONCAT(_scopeIndent_, __LINE__)
@@ -152,4 +133,4 @@ private:
 #define LOG_INFO(msg)  Logger::log(log_level::INFO,  msg)
 #define LOG_DEBUG(msg) Logger::log(log_level::DEBUG, msg)
 #define LOG_TRACE(msg) Logger::log(log_level::TRACE, msg)
-#endif //CDT_LOGGER_H
+#endif //CDS_LOGGER_H
