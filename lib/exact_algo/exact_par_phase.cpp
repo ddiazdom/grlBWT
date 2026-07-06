@@ -391,7 +391,7 @@ namespace exact_algo {
         malloc_trim(0);
 #endif
 
-        phrase_map_t &map = p_strategy.map;
+        partitioned_map_t &map = p_strategy.map;
         size_t psize;//<- for the iter stats
         assert(map.size() > 0);
 
@@ -422,25 +422,28 @@ namespace exact_algo {
 
         //reload the hash table
         map.load_data_from_file(ht_file);
-        ws.remove_file("ht_data");
+        map.remove_data_files(ht_file);
 
         {
             std::cout << "    Assigning metasymbols to the LMS phrases" << std::flush;
             start = std::chrono::steady_clock::now();
             bv_t new_phrase_desc(tot_phrases, false);
-            key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
 
             size_t j = 0;
             vector_t ranks;
             std::string ranks_file = ws.get_file("phr_ranks");
             load_from_file(ranks_file, ranks);
-            for (auto const &ptr: map) {
-                size_t val = ranks[j++];
-                map.insert_value_at(ptr, val);
+            //same part order as the dictionary constructor, so ranks[j] lines up
+            for(auto& part: map.parts){
+                key_wrapper key_w{sym_width(p_info.tot_phrases), part.description_bits(), part.get_data()};
+                for (auto const &ptr: part) {
+                    size_t val = ranks[j++];
+                    part.insert_value_at(ptr, val);
 
-                //the first bit marks if the phrase is repeated or not.
-                // We need to shift it to get the real id
-                new_phrase_desc[(val >> 1UL)] = phrase_desc[key_w.read(ptr, 0)];
+                    //the first bit marks if the phrase is repeated or not.
+                    // We need to shift it to get the real id
+                    new_phrase_desc[(val >> 1UL)] = phrase_desc[key_w.read(ptr, 0)];
+                }
             }
             ws.remove_file("phr_ranks");
             std::string suffix_file = ws.get_file("suffix_file");

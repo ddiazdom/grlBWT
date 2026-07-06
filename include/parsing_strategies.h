@@ -284,7 +284,7 @@ struct mt_parse_strat_t {//multi thread strategy
         size_t               end_str{};
         istream_t            ifs;
         std::string          o_file;
-        phrase_map_t&        map;
+        partitioned_map_t&   map;
         buffered_map_t       inner_map;
         std::vector<long>&   str_ptr;
         size_t               max_symbol{};
@@ -294,7 +294,7 @@ struct mt_parse_strat_t {//multi thread strategy
         bool                 use_seg=false;    //true => process a byte segment, not whole strings
 
         thread_worker_data_t(size_t start_, size_t end_, std::string& i_file, std::string& o_file_,
-                             phrase_map_t& map_, std::vector<long>& str_ptr_,
+                             partitioned_map_t& map_, std::vector<long>& str_ptr_,
                              const size_t &hb_size, void *hb_addr,
                              size_t max_symbol_): start_str(start_),
                                                   end_str(end_),
@@ -318,7 +318,7 @@ struct mt_parse_strat_t {//multi thread strategy
 
     std::string         i_file;
     std::string         o_file;
-    phrase_map_t        map;
+    partitioned_map_t   map;
     parsing_info&       p_info;
     std::vector<long>&  str_ptr;
     std::vector<thread_worker_data_t> threads_data;
@@ -329,7 +329,7 @@ struct mt_parse_strat_t {//multi thread strategy
                      parsing_info& p_info_, size_t hbuff_size,
                      size_t n_threads) : i_file(i_file_),
                                          o_file(o_file_),
-                                         map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
+                                         map(std::max<size_t>(1, n_threads), 0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
                                          p_info(p_info_),
                                          str_ptr(p_info.str_ptrs) {
 
@@ -455,112 +455,69 @@ struct mt_parse_strat_t {//multi thread strategy
 
     std::pair<size_t, size_t> join_thread_phrases() {
 
-        size_t dic_bits=0, freq, max_freq=0;
-        std::string file;
+        //Merge the per-thread phrase tables into the global table. The global
+        //table is split into map.n_parts disjoint parts by a hash of the phrase;
+        //each part is filled by its own thread, so no locking is needed. A phrase
+        //always lands in the same part, so frequencies still sum correctly and the
+        //union of the parts is exactly the old single table.
+        size_t P = map.n_parts;
+
+        //flush each thread's local table to disk and record its layout
+        struct dump_t { std::string file; size_t tot_bits, d_bits, value_bits, longest_key, tot_bytes; };
+        std::vector<dump_t> dumps;
+        for(auto const& thread : threads_data) {
+            std::string f = thread.inner_map.dump_file();
+            size_t tot_bytes = std::filesystem::file_size(f);
+            if(tot_bytes==0) continue;
+            dumps.push_back({f, (tot_bytes*8)-8, thread.inner_map.description_bits(),
+                             thread.inner_map.value_bits(), thread.inner_map.longest_key(), tot_bytes});
+        }
 
         if(p_info.p_round>0){
-            map.resize_table(prev_power_of_two(p_info.lms_phrases));
+            size_t per_part = prev_power_of_two(std::max<size_t>(2, p_info.lms_phrases / P));
+            for(auto& m: map.parts) m.resize_table(per_part);
         }
 
-        for(auto const& thread : threads_data) {
-
-            file = thread.inner_map.dump_file();
-            size_t tot_bytes = std::filesystem::file_size(file);
-            if(tot_bytes==0) continue;
-
-            size_t d_bits = thread.inner_map.description_bits();
-            size_t value_bits = thread.inner_map.value_bits();
-            size_t longest_key = thread.inner_map.longest_key();//in bits
-
-            size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, BUFFER_SIZE));
-            //size_t buffer_size = std::max<size_t>(INT_CEIL(longest_key, 8), std::min<size_t>(tot_bytes, 1024));
-            buffer_size = next_power_of_two(buffer_size);
-            i_file_stream<size_t> data_disk_buffer(file, buffer_size);
-
-            //TODO testing
-            //std::ifstream text_i(file, std::ios_base::binary);
-            //bitstream<ht_buff_t> bits;
-            //bits.stream = (ht_buff_t*) malloc(INT_CEIL(tot_bytes,sizeof(ht_buff_t))*sizeof(ht_buff_t));
-            //bits.stream_size = INT_CEIL(tot_bytes, sizeof(ht_buff_t));
-            //text_i.read((char *)bits.stream, std::streamsize(tot_bytes));
-            //auto * key_test= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
-            //
-
-            //there is a region of the file that does not contain data
-            // * * * | * 0 0 0 0 0 0 0 <- tot_bits
-            //             | <- if next_bit falls in this region, the loop is still valid, but there is no more data
-            size_t tot_bits = (tot_bytes*8)-8;
-            size_t key_bits;
-            size_t next_bit = 0;
-            auto * key= (uint8_t*) malloc(INT_CEIL(longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
-
-            while(next_bit<tot_bits) {
-
-                key_bits = data_disk_buffer.read_bits(next_bit, next_bit+d_bits-1);
-
-                //TODO testing
-                //size_t key_bits_test = bits.read(next_bit, next_bit+d_bits-1);
-                //assert(key_bits_test==key_bits);
-                //
-
-                assert(key_bits>0 && key_bits<=longest_key);
-
-                key[INT_CEIL(key_bits, 8)-1] = 0;
-                next_bit+=d_bits;
-                data_disk_buffer.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
-
-                //TODO testing
-                //key_test[INT_CEIL(key_bits_test, 8)-1] = 0;
-                //bits.read_chunk(key_test, next_bit, next_bit+key_bits-1);
-                //assert(memcmp(key, key_test, INT_CEIL(key_bits, 8))==0);
-                //
-
-                next_bit+=key_bits;
-                freq = data_disk_buffer.read_bits(next_bit, next_bit+value_bits-1);
-
-                //TODO testing
-                //size_t freq_test = bits.read(next_bit, next_bit+value_bits-1);
-                //assert(freq_test==freq);
-                //
-                next_bit+=value_bits;
-
-                auto res = map.increment_value(key, key_bits, freq);
-                if(res==freq) dic_bits+=key_bits;
-                freq = res;
-                if(freq>max_freq) max_freq = freq;
-
-                //TODO this work for the opt BWT
-                /*if(!res.second){
-                    flag = (freq & 3UL);
-                    freq>>=1UL;
-
-                    size_t val;
-                    map.get_value_from(res.first, val);
-
-                    flag |= (val & 3UL);
-                    freq += val>>2UL;
-                    assert(flag<=3);
-                    if(freq>max_freq) max_freq = freq;
-
-                    val = (freq << 2UL) | flag;
-                    map.insert_value_at(res.first, val);
-                }else{
-                    freq>>=2UL;
-                    if(freq>max_freq) max_freq = freq;
-                    dic_bits+=key_bits;
-                }*/
-            }
-
-            //TODO testing
-            //text_i.close();
-            //free(bits.stream);
-            //free(key_test);
-            //
-
-            data_disk_buffer.close(true);
-            free(key);
+        //one builder thread per part: read every dump, keep only this part's phrases
+        std::vector<size_t> dic_bits_p(P, 0), max_freq_p(P, 0);
+        std::vector<std::thread> workers(P);
+        for(size_t p=0;p<P;p++){
+            workers[p] = std::thread([&, p](){
+                phrase_map_t& part = map.parts[p];
+                for(auto const& dp : dumps){
+                    size_t buffer_size = next_power_of_two(std::max<size_t>(INT_CEIL(dp.longest_key, 8),
+                                                           std::min<size_t>(dp.tot_bytes, BUFFER_SIZE)));
+                    i_file_stream<size_t> buff(dp.file, buffer_size);
+                    auto * key = (uint8_t*) malloc(INT_CEIL(dp.longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
+                    size_t next_bit=0, key_bits, freq;
+                    while(next_bit<dp.tot_bits){
+                        key_bits = buff.read_bits(next_bit, next_bit+dp.d_bits-1);
+                        assert(key_bits>0 && key_bits<=dp.longest_key);
+                        key[INT_CEIL(key_bits, 8)-1] = 0;
+                        next_bit+=dp.d_bits;
+                        buff.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
+                        next_bit+=key_bits;
+                        freq = buff.read_bits(next_bit, next_bit+dp.value_bits-1);
+                        next_bit+=dp.value_bits;
+                        if(partitioned_map_t::part_of(key, key_bits, P)==p){
+                            size_t res = part.increment_value(key, key_bits, freq);
+                            if(res==freq) dic_bits_p[p]+=key_bits;   //first time this phrase is seen
+                            if(res>max_freq_p[p]) max_freq_p[p]=res;
+                        }
+                    }
+                    buff.close();
+                    free(key);
+                }
+            });
         }
+        for(auto& w: workers) w.join();
+
+        //every part read every dump; remove them now
+        for(auto const& dp: dumps) remove(dp.file.c_str());
+
         map.shrink_databuff();
+        size_t dic_bits=0, max_freq=0;
+        for(size_t p=0;p<P;p++){ dic_bits += dic_bits_p[p]; if(max_freq_p[p]>max_freq) max_freq=max_freq_p[p]; }
         return {dic_bits/ sym_width(p_info.tot_phrases), max_freq};
     }
 
@@ -761,7 +718,7 @@ struct st_parse_strat_t {//parse data for single thread
     std::string         o_file;
     std::string         tmp_o_file;
 
-    phrase_map_t        map;
+    partitioned_map_t   map;
     phrase_map_t&       inner_map;
     parsing_info&       p_info;
     std::vector<long>&  str_ptr;
@@ -776,8 +733,8 @@ struct st_parse_strat_t {//parse data for single thread
     st_parse_strat_t(std::string &i_file_, std::string& o_file_,
                      parsing_info& p_info_): ifs(i_file_, BUFFER_SIZE),
                                              o_file(o_file_),
-                                             map(0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
-                                             inner_map(map),
+                                             map(1, 0.8, sym_width(INT_CEIL(p_info_.longest_str*sym_width(p_info_.tot_phrases),8)*8)),
+                                             inner_map(map.parts[0]),
                                              p_info(p_info_),
                                              str_ptr(p_info.str_ptrs),
                                              text_size(ifs.size()),
@@ -792,7 +749,7 @@ struct st_parse_strat_t {//parse data for single thread
             //n_buckets = next_power_of_two(n_buckets);
             //map.resize_table(n_buckets);
             size_t n_buckets = prev_power_of_two(p_info.lms_phrases);
-            map.resize_table(n_buckets);
+            map.parts[0].resize_table(n_buckets);
         }
     }
 
@@ -809,23 +766,25 @@ struct st_parse_strat_t {//parse data for single thread
         hash_functor<st_parse_strat_t, parser_type>()(*this);
 
         map.shrink_databuff();
-        key_wrapper key_w{sym_width(max_symbol), map.description_bits(), map.get_data()};
         size_t n_syms=0, max_freq=0, freq;
         p_info.active_strings = active_strings;
 
-        for(auto const &ptr : map){
-            n_syms += key_w.size(ptr);
-            freq = 0;
-            map.get_value_from(ptr, freq);
+        for(auto& part : map.parts){
+            key_wrapper key_w{sym_width(max_symbol), part.description_bits(), part.get_data()};
+            for(auto const &ptr : part){
+                n_syms += key_w.size(ptr);
+                freq = 0;
+                part.get_value_from(ptr, freq);
 
-            //TODO testing
-            if(freq==0){
-                std::cout<<"here I have a bug at "<<ptr<<" "<<freq<<std::endl;
+                //TODO testing
+                if(freq==0){
+                    std::cout<<"here I have a bug at "<<ptr<<" "<<freq<<std::endl;
+                }
+                //
+
+                assert(freq>0);
+                if(freq>max_freq) max_freq = freq;
             }
-            //
-
-            assert(freq>0);
-            if(freq>max_freq) max_freq = freq;
         }
         return {n_syms, max_freq};
     }

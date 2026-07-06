@@ -31,7 +31,7 @@ namespace opt_algo {
 
         dictionary() = default;
 
-        dictionary(phrase_map_t &mp_map, size_t dict_syms,
+        dictionary(partitioned_map_t &mp_map, size_t dict_syms,
                    size_t max_freq, bv_t &is_suffix_bv, size_t _t_size, size_t _p_alph_size,
                    size_t _max_sym_freq) : alphabet(is_suffix_bv.size()),
                                            prev_alphabet(_p_alph_size),
@@ -47,24 +47,26 @@ namespace opt_algo {
                                            d_lim(dict_syms, false),
                                            desc_bv(&is_suffix_bv) {
 
-            key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
             size_t j = 0, k = 0, freq;
-            for (auto const &ptr: mp_map) {
-                for (size_t i = key_w.size(ptr); i-- > 0;) {
-                    dict[j] = key_w.read(ptr, i);
-                    d_lim[j++] = false;
+            for(auto& part : mp_map.parts){
+                key_wrapper key_w{sym_width(alphabet), part.description_bits(), part.get_data()};
+                for (auto const &ptr: part) {
+                    for (size_t i = key_w.size(ptr); i-- > 0;) {
+                        dict[j] = key_w.read(ptr, i);
+                        d_lim[j++] = false;
+                    }
+                    d_lim[j - 1] = true;
+
+                    freq = 0;
+                    part.get_value_from(ptr, freq);
+
+                    //For the moment, I won't deal with this problem
+                    assert((freq & 3UL) != 3);
+
+                    if (!(*desc_bv)[dict[j - 1]]) freq >>= 2UL;
+                    assert(freq <= max_freq);
+                    freqs[k++] = freq;
                 }
-                d_lim[j - 1] = true;
-
-                freq = 0;
-                mp_map.get_value_from(ptr, freq);
-
-                //For the moment, I won't deal with this problem
-                assert((freq & 3UL) != 3);
-
-                if (!(*desc_bv)[dict[j - 1]]) freq >>= 2UL;
-                assert(freq <= max_freq);
-                freqs[k++] = freq;
             }
             //std::cout<<"There are "<<cont<<" phrases that cover an entire string"<<std::endl;
             assert(j == dict_syms);
@@ -201,10 +203,9 @@ namespace opt_algo {
             size_t str_len;
             auto phrase2symbol = [&](string_t& phrase){
                 phrase.mask_tail();
-                auto res = data.map.find(phrase.data(), phrase.n_bits());
-                assert(res.second);
                 size_t sym = 0;
-                data.map.get_value_from(res.first, sym);
+                auto found = data.map.key2value(phrase.data(), phrase.n_bits(), sym);
+                assert(found); (void)found;
 
                 if(phrase.size()<str_len){ //when (sym & 1UL) is true, it means there are > 1 copies of a string in the input
                     ofs.push_back(sym);

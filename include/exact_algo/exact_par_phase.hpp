@@ -119,7 +119,7 @@ namespace exact_algo {
 
         dictionary() = default;
 
-        dictionary(phrase_map_t &mp_map, size_t dict_syms,
+        dictionary(partitioned_map_t &mp_map, size_t dict_syms,
                    size_t max_freq, bv_t &is_suffix_bv, size_t _t_size, size_t _p_alph_size,
                    size_t _max_sym_freq) : alphabet(is_suffix_bv.size()),
                                            prev_alphabet(_p_alph_size),
@@ -134,30 +134,34 @@ namespace exact_algo {
                                            d_lim(dict_syms, false),
                                            desc_bv(&is_suffix_bv) {
 
-            key_wrapper key_w{sym_width(alphabet), mp_map.description_bits(), mp_map.get_data()};
             size_t j = 0, k = 0, freq;
 
             //TODO testing
             //std::vector<std::vector<size_t>> plain_dict;
             //
 
-            for (auto const &ptr: mp_map) {
-                //TODO
-                //std::vector<size_t> phrase;
-                //
+            //walk the parts in order so the dictionary layout (and hence the
+            //metasymbol ranks assigned later) is deterministic
+            for(auto& part : mp_map.parts){
+                key_wrapper key_w{sym_width(alphabet), part.description_bits(), part.get_data()};
+                for (auto const &ptr: part) {
+                    //TODO
+                    //std::vector<size_t> phrase;
+                    //
 
-                for (size_t i = key_w.size(ptr); i-- > 0;) {
-                    dict[j] = key_w.read(ptr, i);
-                    //phrase.push_back(dict[j]);
-                    d_lim[j++] = false;
+                    for (size_t i = key_w.size(ptr); i-- > 0;) {
+                        dict[j] = key_w.read(ptr, i);
+                        //phrase.push_back(dict[j]);
+                        d_lim[j++] = false;
+                    }
+                    //plain_dict.emplace_back(phrase);
+                    d_lim[j - 1] = true;
+
+                    freq = 0;
+                    part.get_value_from(ptr, freq);
+                    assert(freq <= max_freq);
+                    freqs[k++] = freq;
                 }
-                //plain_dict.emplace_back(phrase);
-                d_lim[j - 1] = true;
-
-                freq = 0;
-                mp_map.get_value_from(ptr, freq);
-                assert(freq <= max_freq);
-                freqs[k++] = freq;
             }
 
             //TODO

@@ -547,7 +547,7 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
         malloc_trim(0);
 #endif
 
-        phrase_map_t & map = p_strategy.map;
+        partitioned_map_t & map = p_strategy.map;
         size_t psize;//<- for the iter stats
         assert(map.size()>0);
 
@@ -579,26 +579,28 @@ size_t get_pre_bwt2(dictionary &dict, value_type * sa, size_t sa_size, parsing_i
 
         //reload the hash table
         map.load_data_from_file(ht_file);
-        ws.remove_file("ht_data");
+        map.remove_data_files(ht_file);
 
         {
             std::cout<<"    Assigning ranks to the new phrases"<<std::flush;
             start = std::chrono::steady_clock::now();
             bv_t new_phrase_desc(tot_phrases, false);
-            key_wrapper key_w{sym_width(p_info.tot_phrases), map.description_bits(), map.get_data()};
 
             size_t j=0;
             vector_t ranks;
             std::string ranks_file = ws.get_file("phr_ranks");
             load_from_file(ranks_file, ranks);
-            for(auto const& ptr : map){
-                phrase_map_t::val_type val=0;
-                map.get_value_from(ptr, val);
-                val = ranks[j++];
-                map.insert_value_at(ptr, val);
-                //the first bit marks if the phrase is repeated or not.
-                // We need to shift it to get the real id
-                new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
+            for(auto& part: map.parts){
+                key_wrapper key_w{sym_width(p_info.tot_phrases), part.description_bits(), part.get_data()};
+                for(auto const& ptr : part){
+                    phrase_map_t::val_type val=0;
+                    part.get_value_from(ptr, val);
+                    val = ranks[j++];
+                    part.insert_value_at(ptr, val);
+                    //the first bit marks if the phrase is repeated or not.
+                    // We need to shift it to get the real id
+                    new_phrase_desc[(val>>1UL)] = phrase_desc[key_w.read(ptr, 0)];
+                }
             }
             ws.remove_file("phr_ranks");
             std::string suffix_file = ws.get_file("suffix_file");
