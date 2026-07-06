@@ -391,14 +391,18 @@ struct mt_parse_strat_t {//multi thread strategy
         //number of bytes per thread
         //size_t hb_bytes = (buff_cells / thread_ranges.size()) * sizeof(size_t);
 
-        buff_addr = (char *)malloc(hbuff_size);
+        //Give each thread its own dynamic (growable) hash buffer of hb_bytes,
+        //rather than a slice of one shared static block. A static slice cannot
+        //hold a phrase larger than the slice; a dynamic buffer grows to fit such
+        //a phrase (rare, but real for long low-complexity LMS phrases).
+        buff_addr = nullptr;
         size_t k = 0;
         if(!segments.empty()){
             for(auto &sg : segments){
                 std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
                 tmp_o_file.append("_seg_" + std::to_string(k));
                 threads_data.emplace_back((size_t)0, (size_t)0, i_file, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
-                                          buff_addr+(hb_bytes*k), p_info.tot_phrases);
+                                          nullptr, p_info.tot_phrases);
                 threads_data.back().seg = sg;
                 threads_data.back().use_seg = true;
                 k++;
@@ -408,7 +412,7 @@ struct mt_parse_strat_t {//multi thread strategy
                 std::string tmp_o_file = o_file.substr(0, o_file.size() - 5);
                 tmp_o_file.append("_range_" + std::to_string(range.first) + "_" + std::to_string(range.second));
                 threads_data.emplace_back(range.first, range.second, i_file, tmp_o_file, map, p_info.str_ptrs, hb_bytes,
-                                          buff_addr+(hb_bytes*k), p_info.tot_phrases);
+                                          nullptr, p_info.tot_phrases);
                 k++;
             }
         }

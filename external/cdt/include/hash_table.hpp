@@ -1035,15 +1035,27 @@ private:
         //number of bytes used by the data buffer
         size_t used_data_bytes = INT_CEIL(next_av_bit, stream_t::word_bits)*sizeof(buffer_t);
 
-        //number of available bytes
-        size_t av_bytes = max_buffer_bytes-(used_data_bytes + table_bytes);
+        //number of available bytes (underflow-safe: 0 means the buffer is full and
+        //must be dumped rather than grown -- growing here would shrink it below use)
+        size_t av_bytes = (max_buffer_bytes > used_data_bytes + table_bytes)
+                          ? max_buffer_bytes - (used_data_bytes + table_bytes) : 0;
 
         if(bytes_to_fit>av_bytes){
-            if(bytes_to_fit>(max_buffer_bytes/2)){
-                std::cout<<"One of the keys requires more than half the buffer .. consider increasing the buffer size"<<std::endl;
-            }
             data_dumped = true;
             dump_hash();//dump the hash table to disk
+            //After dumping, the data buffer is logically empty. If this single key
+            //is still too big for it (a legitimately long LMS phrase can exceed the
+            //nominal per-thread budget), grow the buffer so the key fits.
+            //If, after dumping, this single key is still too big for the data
+            //buffer (a legitimately long low-complexity LMS phrase can exceed the
+            //nominal per-thread budget), grow the buffer so the key fits.
+            if(bytes_to_fit > data.stream_size*sizeof(buffer_t)){
+                size_t need_bytes = bytes_to_fit + sizeof(buffer_t);
+                data.stream = reinterpret_cast<buffer_t*>(realloc(data.stream, need_bytes));
+                data.stream_size = need_bytes/sizeof(buffer_t);
+                memset(data.stream, 0, need_bytes);
+                if(need_bytes + table_bytes > max_buffer_bytes) max_buffer_bytes = need_bytes + table_bytes;
+            }
         }else{
             //minimum number of bytes we require for inserting the data
             size_t min_data_bytes = used_data_bytes+bytes_to_fit;
@@ -1189,7 +1201,8 @@ public:
             static_buffer = true;
             static_init(buffer_size, buff_addr);
         }
-        assert(static_buffer);
+        //a null buff_addr selects the dynamic (self-owned, growable) buffer, which
+        //unlike the static one can hold a single key bigger than the nominal budget
     }
 
     buffered_hash_table(buffered_hash_table&& other) noexcept{
