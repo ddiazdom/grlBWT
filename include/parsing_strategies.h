@@ -218,6 +218,55 @@ struct lms_parsing{
         }
     }
 
+    // Find ONE cut near `target` with a LOCAL scan, so the whole set of cuts can be
+    // found in parallel instead of by one serial O(n) pass. A cut may be any genuine
+    // LMS firing (the parse is invariant to which firing each segment boundary lands
+    // on), so we only need: (a) a firing at position i in (floor_excl, target], with
+    // (b) parser state that matches what the serial backward scan would have there.
+    // We get (b) by warming up a short distance above `target`: after >=2 symbol
+    // inequalities the fresh-init type/rep window converges to the true value (only
+    // the low 2 bits, which is all the firing test and parse_segment use, matter), so
+    // the first firing captured after convergence carries the correct resume state.
+    // Returns true and fills `out` if a cut was found in this worker's window.
+    static bool find_one_cut(stream_t& ifs, long start_ps, long end_ps,
+                             long target, long floor_excl, seg_state& out) {
+        const long WARMUP = 1L<<16; //symbols of warm-up; correctness relies on the
+                                    //inequality count, not on this being large enough
+        long ws = std::min(end_ps, target + WARMUP);
+        long lo = std::max(start_ps, floor_excl);
+        if(ws <= lo) return false;
+
+        sym_type curr_sym, prev_sym;
+        uint8_t type, rep;
+        long ineqs = 0;
+
+        prev_sym = ifs.read(ws);
+        if constexpr (first_round){ rep = 3U; } else { rep = prev_sym & 1U; prev_sym >>= 1UL; }
+        type = 0;
+
+        for(long i = ws; i-- > lo;){
+            curr_sym = ifs.read(i);
+            if constexpr (!first_round){ rep = (rep << 1UL) | (curr_sym & 1UL); curr_sym >>= 1UL; }
+
+            if(curr_sym != prev_sym){
+                type = (type<<1UL) | (curr_sym < prev_sym);
+                ineqs++;
+                if(ineqs >= 2 && (type & 3U) == 2 && (rep & 3U) == 3U && i <= target){
+                    out.next_i       = i - 1;
+                    out.prev_sym     = curr_sym;
+                    out.boundary_sym = prev_sym;
+                    out.type         = type;
+                    out.rep          = rep;
+                    return true;
+                }
+            } else {
+                type = (type<<1UL) | (type & 1UL);
+            }
+            prev_sym = curr_sym;
+        }
+        return false;
+    }
+
     // Parse ONE segment, emitting phrases via process_phrase in the same order
     // (backward) a serial parse would for that portion of the string.
     inline void parse_segment(stream_t& ifs, const segment& seg, size_t max_symbol,
@@ -345,10 +394,37 @@ struct mt_parse_strat_t {//multi thread strategy
             long start_ps = p_info.str_ptrs[0];
             long end_ps   = p_info.str_ptrs[1]-1;
             std::vector<typename parser_type::seg_state> cuts;
-            {
-                istream_t cut_ifs(i_file, BUFFER_SIZE);
-                parser_type::find_cuts(cut_ifs, start_ps, end_ps, n_threads, cuts);
-                cut_ifs.close();
+            //Find the n_threads-1 cut points with parallel LOCAL scans (one worker
+            //per target) instead of one serial O(n) pass over the whole string --
+            //at pangenome scale that pass was a multi-hour single-threaded preamble.
+            long span = end_ps - start_ps;
+            long step = span / (long)n_threads;
+            if(step > 0){
+                size_t n_cuts = n_threads - 1;
+                std::vector<typename parser_type::seg_state> cand(n_cuts);
+                std::vector<char> found(n_cuts, 0);
+                std::vector<std::thread> cut_workers;
+                cut_workers.reserve(n_cuts);
+                for(size_t w=0; w<n_cuts; w++){
+                    cut_workers.emplace_back([&, w](){
+                        long target     = end_ps - (long)(w+1)*step;
+                        long floor_excl = (w+1<n_cuts) ? (end_ps - (long)(w+2)*step) : start_ps;
+                        istream_t wf(i_file, BUFFER_SIZE);
+                        found[w] = parser_type::find_one_cut(wf, start_ps, end_ps, target, floor_excl, cand[w]) ? 1 : 0;
+                        wf.close();
+                    });
+                }
+                for(auto& t: cut_workers) t.join();
+                //Workers scan disjoint descending windows, so found cuts are already
+                //ordered top-to-bottom. Keep them well spaced: a fixed target grid can
+                //put two cuts adjacent near a window boundary, which would make a
+                //degenerate (empty) segment; dropping a too-close cut just merges its
+                //two segments (still correct, only fewer/larger segments).
+                long min_gap = std::max<long>(2, step/2);
+                for(size_t w=0; w<n_cuts; w++){
+                    if(found[w] && (cuts.empty() || (cuts.back().next_i - cand[w].next_i) >= min_gap))
+                        cuts.push_back(cand[w]);
+                }
             }
             // Build segments top-to-bottom, then store in forward text order
             // (bottom/leftmost first) so the parse concatenation is correct.
