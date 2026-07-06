@@ -17,6 +17,15 @@ namespace exact_algo {
 
         void operator()(parse_data_t& data) {
 
+            if(data.use_seg){//intra-string segment: parse just this byte range
+                parser_t().parse_segment(data.ifs, data.seg, data.max_symbol,
+                    [&](string_t& phrase) -> void {
+                        phrase.mask_tail();
+                        data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
+                    });
+                return;
+            }
+
             //auto hash_phrase = [&](string_t& phrase) -> void {
             //    phrase.mask_tail();
             //    data.inner_map.increment_value(phrase.data(), phrase.n_bits(), 1);
@@ -57,6 +66,13 @@ namespace exact_algo {
                 assert(res);
                 ofs.push_back(sym);
             };
+
+            if(data.use_seg){//intra-string segment
+                parser_t().parse_segment(data.ifs, data.seg, data.max_symbol, phrase2symbol);
+                data.ifs.close();
+                ofs.close();
+                return ofs.size();
+            }
 
             auto init_str = [&](size_t str) -> std::pair<long, long>{
 
