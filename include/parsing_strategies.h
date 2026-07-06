@@ -455,11 +455,13 @@ struct mt_parse_strat_t {//multi thread strategy
 
     std::pair<size_t, size_t> join_thread_phrases() {
 
-        //Merge the per-thread phrase tables into the global table. The global
-        //table is split into map.n_parts disjoint parts by a hash of the phrase;
-        //each part is filled by its own thread, so no locking is needed. A phrase
-        //always lands in the same part, so frequencies still sum correctly and the
-        //union of the parts is exactly the old single table.
+        //Merge the per-thread phrase tables into the global table, which is split
+        //into map.n_parts disjoint parts by a hash of the phrase. Done in two
+        //passes so every byte on disk is read once: (1) split each thread's dump
+        //into one sub-file per part, (2) build each part from its sub-files (one
+        //builder thread per part, no locking). A phrase always lands in the same
+        //part, so frequencies still sum correctly and the union of the parts is
+        //exactly the old single table.
         size_t P = map.n_parts;
 
         //flush each thread's local table to disk and record its layout
@@ -472,48 +474,88 @@ struct mt_parse_strat_t {//multi thread strategy
             dumps.push_back({f, (tot_bytes*8)-8, thread.inner_map.description_bits(),
                              thread.inner_map.value_bits(), thread.inner_map.longest_key(), tot_bytes});
         }
+        size_t D = dumps.size();
 
         if(p_info.p_round>0){
             size_t per_part = prev_power_of_two(std::max<size_t>(2, p_info.lms_phrases / P));
             for(auto& m: map.parts) m.resize_table(per_part);
         }
 
-        //one builder thread per part: read every dump, keep only this part's phrases
-        std::vector<size_t> dic_bits_p(P, 0), max_freq_p(P, 0);
-        std::vector<std::thread> workers(P);
-        for(size_t p=0;p<P;p++){
-            workers[p] = std::thread([&, p](){
-                phrase_map_t& part = map.parts[p];
-                for(auto const& dp : dumps){
-                    size_t buffer_size = next_power_of_two(std::max<size_t>(INT_CEIL(dp.longest_key, 8),
-                                                           std::min<size_t>(dp.tot_bytes, BUFFER_SIZE)));
-                    i_file_stream<size_t> buff(dp.file, buffer_size);
-                    auto * key = (uint8_t*) malloc(INT_CEIL(dp.longest_key, bitstream<ht_buff_t>::word_bits)*sizeof(ht_buff_t));
-                    size_t next_bit=0, key_bits, freq;
-                    while(next_bit<dp.tot_bits){
-                        key_bits = buff.read_bits(next_bit, next_bit+dp.d_bits-1);
-                        assert(key_bits>0 && key_bits<=dp.longest_key);
-                        key[INT_CEIL(key_bits, 8)-1] = 0;
-                        next_bit+=dp.d_bits;
-                        buff.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
-                        next_bit+=key_bits;
-                        freq = buff.read_bits(next_bit, next_bit+dp.value_bits-1);
-                        next_bit+=dp.value_bits;
-                        if(partitioned_map_t::part_of(key, key_bits, P)==p){
-                            size_t res = part.increment_value(key, key_bits, freq);
-                            if(res==freq) dic_bits_p[p]+=key_bits;   //first time this phrase is seen
-                            if(res>max_freq_p[p]) max_freq_p[p]=res;
-                        }
-                    }
-                    buff.close();
-                    free(key);
+        size_t max_key_words = 1;
+        for(auto const& dp: dumps)
+            max_key_words = std::max(max_key_words, INT_CEIL(dp.longest_key, bitstream<ht_buff_t>::word_bits));
+
+        auto sub_name = [&](size_t d, size_t p){ return dumps[d].file + ".p" + std::to_string(p); };
+
+        //--- pass 1: route each dump's phrases into P per-part sub-files ---
+        //  a record is [uint32 key_bits][ceil(key_bits/8) key bytes][uint64 freq]
+        std::vector<std::thread> splitters;
+        splitters.reserve(D);
+        for(size_t d=0; d<D; d++){
+            splitters.emplace_back([&, d](){
+                auto& dp = dumps[d];
+                size_t buffer_size = next_power_of_two(std::max<size_t>(INT_CEIL(dp.longest_key, 8),
+                                                       std::min<size_t>(dp.tot_bytes, BUFFER_SIZE)));
+                i_file_stream<size_t> in(dp.file, buffer_size);
+                std::vector<std::ofstream> out(P);
+                std::vector<std::string> obuf(P);
+                for(size_t p=0;p<P;p++) out[p].open(sub_name(d,p), std::ios::binary);
+                auto * key = (uint8_t*) malloc(max_key_words*sizeof(ht_buff_t));
+                size_t next_bit=0, key_bits; uint64_t freq;
+                while(next_bit<dp.tot_bits){
+                    key_bits = in.read_bits(next_bit, next_bit+dp.d_bits-1);
+                    assert(key_bits>0 && key_bits<=dp.longest_key);
+                    key[INT_CEIL(key_bits, 8)-1] = 0;
+                    next_bit+=dp.d_bits;
+                    in.read_bit_chunk(key, next_bit, next_bit+key_bits-1);
+                    next_bit+=key_bits;
+                    freq = in.read_bits(next_bit, next_bit+dp.value_bits-1);
+                    next_bit+=dp.value_bits;
+                    size_t p = partitioned_map_t::part_of(key, key_bits, P);
+                    uint32_t kb = (uint32_t)key_bits; size_t nbytes = INT_CEIL(key_bits, 8);
+                    obuf[p].append((const char*)&kb, 4);
+                    obuf[p].append((const char*)key, nbytes);
+                    obuf[p].append((const char*)&freq, 8);
+                    if(obuf[p].size() >= (1u<<16)){ out[p].write(obuf[p].data(), obuf[p].size()); obuf[p].clear(); }
                 }
+                for(size_t p=0;p<P;p++){ if(!obuf[p].empty()) out[p].write(obuf[p].data(), obuf[p].size()); out[p].close(); }
+                in.close(true);//delete the dump; its data now lives in the sub-files
+                free(key);
             });
         }
-        for(auto& w: workers) w.join();
+        for(auto& t: splitters) t.join();
 
-        //every part read every dump; remove them now
-        for(auto const& dp: dumps) remove(dp.file.c_str());
+        //--- pass 2: one builder thread per part, reading only its own sub-files ---
+        std::vector<size_t> dic_bits_p(P, 0), max_freq_p(P, 0);
+        std::vector<std::thread> builders;
+        builders.reserve(P);
+        for(size_t p=0;p<P;p++){
+            builders.emplace_back([&, p](){
+                phrase_map_t& part = map.parts[p];
+                auto * key = (uint8_t*) malloc(max_key_words*sizeof(ht_buff_t));
+                for(size_t d=0; d<D; d++){
+                    std::string f = sub_name(d,p);
+                    std::ifstream in(f, std::ios::binary);
+                    in.seekg(0, std::ios::end); std::streamoff sz = in.tellg(); in.seekg(0);
+                    std::vector<char> data((size_t)std::max<std::streamoff>(0, sz));
+                    if(sz>0) in.read(data.data(), sz);
+                    in.close();
+                    size_t off=0, end=(size_t)std::max<std::streamoff>(0, sz);
+                    while(off<end){
+                        uint32_t kb; memcpy(&kb, data.data()+off, 4); off+=4;
+                        size_t nbytes = INT_CEIL(kb, 8);
+                        memcpy(key, data.data()+off, nbytes); off+=nbytes;
+                        uint64_t freq; memcpy(&freq, data.data()+off, 8); off+=8;
+                        size_t res = part.increment_value(key, kb, freq);
+                        if(res==freq) dic_bits_p[p]+=kb;   //first time this phrase is seen
+                        if(res>max_freq_p[p]) max_freq_p[p]=res;
+                    }
+                    remove(f.c_str());
+                }
+                free(key);
+            });
+        }
+        for(auto& t: builders) t.join();
 
         map.shrink_databuff();
         size_t dic_bits=0, max_freq=0;
